@@ -3,6 +3,7 @@ Authentication manager for the ServiceNow MCP server.
 """
 
 import base64
+import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
@@ -94,7 +95,12 @@ class AuthManager:
                 raise ValueError("API key configuration is required")
             
             headers[self.config.api_key.header_name] = self.config.api_key.api_key
-        
+
+        # Merge any extra headers supplied via the environment.
+        raw = os.environ.get("EXTRA_HTTP_HEADERS", "").strip().strip("'\"")
+        if raw:
+            headers.update(json.loads(raw))
+
         return headers
     
     def _get_oauth_token(self):
