@@ -97,7 +97,11 @@ class AuthManager:
             headers[self.config.api_key.header_name] = self.config.api_key.api_key
 
         # Merge any extra headers supplied via the environment.
-        raw = os.environ.get("EXTRA_HTTP_HEADERS", "").strip().strip("'\"")
+        raw = (
+            os.environ.get("SERVICENOW_EXTRA_HTTP_HEADERS")
+            or os.environ.get("EXTRA_HTTP_HEADERS")
+            or ""
+        ).strip().strip("'\"")
         if raw:
             headers.update(json.loads(raw))
 
