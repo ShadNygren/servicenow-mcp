@@ -80,6 +80,14 @@ class ListIncidentsParams(BaseModel):
     assigned_to: Optional[str] = Field(None, description="Filter by assigned user")
     category: Optional[str] = Field(None, description="Filter by category")
     query: Optional[str] = Field(None, description="Search query for incidents")
+    updated_on_after: Optional[str] = Field(
+        None,
+        description="Filter by updated-on time: return incidents updated on or after this time (format: YYYY-MM-DD or YYYY-MM-DD HH:mm:ss)",
+    )
+    updated_on_before: Optional[str] = Field(
+        None,
+        description="Filter by updated-on time: return incidents updated on or before this time (format: YYYY-MM-DD or YYYY-MM-DD HH:mm:ss)",
+    )
 
 
 class GetIncidentByNumberParams(BaseModel):
@@ -504,6 +512,10 @@ def list_incidents(
         filters.append(f"assigned_to={params.assigned_to}")
     if params.category:
         filters.append(f"category={params.category}")
+    if params.updated_on_after:
+        filters.append(f"sys_updated_on>={params.updated_on_after}")
+    if params.updated_on_before:
+        filters.append(f"sys_updated_on<={params.updated_on_before}")
     if params.query:
         filters.append(f"short_descriptionLIKE{params.query}^ORdescriptionLIKE{params.query}")
 

@@ -19,8 +19,11 @@ Retrieves a list of incidents from ServiceNow.
 - `offset` (int, default: 0): Offset for pagination
 - `state` (string, optional): Filter by incident state
 - `assigned_to` (string, optional): Filter by assigned user
+- `assignment_group` (string, optional): Filter by assignment group name
 - `category` (string, optional): Filter by category
 - `query` (string, optional): Search query for incidents
+- `updated_on_after` (string, optional): Filter by updated-on time: incidents updated on or after this time (format: YYYY-MM-DD or YYYY-MM-DD HH:mm:ss)
+- `updated_on_before` (string, optional): Filter by updated-on time: incidents updated on or before this time (format: YYYY-MM-DD or YYYY-MM-DD HH:mm:ss)
 
 **Example:**
 ```python
