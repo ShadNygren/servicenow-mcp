@@ -1,6 +1,7 @@
 """Shared pytest fixtures and session-wide hooks."""
 
 import logging
+import os
 import re
 from typing import List
 
@@ -73,3 +74,24 @@ def _capture_logs_for_redaction_check(caplog):
             + "\nIf this is a test that genuinely needs to assert log content, "
               "scope the assertion narrowly and document why."
         )
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip all integration tests unless SN_INTEGRATION_TESTS=1 is set.
+
+    Tests opt in to the gate by adding ``@pytest.mark.integration`` (or by
+    using fixtures like ``live_config`` / ``pdi_guard`` that depend on a
+    reachable Personal Developer Instance). Default behavior keeps CI fast
+    and PDI-independent.
+
+    Pattern from Flowbie commit 0199475.
+    """
+    if os.getenv("SN_INTEGRATION_TESTS") == "1":
+        return  # Env var set — let integration tests run.
+
+    skip_marker = pytest.mark.skip(
+        reason="Integration tests disabled. Set SN_INTEGRATION_TESTS=1 to enable.",
+    )
+    for item in items:
+        if "integration" in item.keywords:
+            item.add_marker(skip_marker)
