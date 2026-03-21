@@ -799,28 +799,28 @@ def get_tool_definitions(
             create_incident_tool,
             CreateIncidentParams,
             str,
-            "Create a new incident in ServiceNow",
+            "Create a new incident in ServiceNow. Pass assignment_group as a display name string (e.g. 'Network Support') — not a sys_id.",
             "str",
         ),
         "update_incident": (
             update_incident_tool,
             UpdateIncidentParams,
             str,
-            "Update an existing incident in ServiceNow",
+            "Update fields on an existing incident. incident_id accepts either an INC number (e.g. 'INC0012345') or a 32-char hex sys_id. Only pass fields that need to change.",
             "str",
         ),
         "add_comment": (
             add_comment_tool,
             AddCommentParams,
             str,
-            "Add a comment to an incident in ServiceNow",
+            "Add a comment or work note to an incident. Set is_work_note=true for internal work notes visible only to agents; false (default) for customer-visible comments.",
             "str",
         ),
         "resolve_incident": (
             resolve_incident_tool,
             ResolveIncidentParams,
             str,
-            "Resolve an incident in ServiceNow",
+            "Resolve an incident by setting its state to Resolved. Requires a resolution_code and resolution_notes. incident_id accepts an INC number or sys_id.",
             "str",
         ),
         "list_incidents": (
@@ -830,12 +830,12 @@ def get_tool_definitions(
             "List incidents from ServiceNow",
             "json",  # Tool returns list/dict, needs JSON dump
         ),
-        "get_incident_by_number":(
+        "get_incident_by_number": (
             get_incident_by_number_tool,
             GetIncidentByNumberParams,
             str,
-            "Incident details from ServiceNow",
-            "json_dict"
+            "Fetch full details of a single incident by its INC number (e.g. 'INC0012345'). Use this when you have the exact number; use list_incidents to search.",
+            "json_dict",
         ),
         "get_incident_journal": (
             get_incident_journal_tool,
@@ -854,58 +854,58 @@ def get_tool_definitions(
         "list_catalog_items": (
             list_catalog_items_tool,
             ListCatalogItemsParams,
-            str,  # Expects JSON string
-            "List service catalog items.",
-            "json",  # Tool returns list/dict
+            str,
+            "List service catalog items. Use 'query' for free-text name search; use 'category' for exact category filter. Defaults to active items only.",
+            "json",
         ),
         "get_catalog_item": (
             get_catalog_item_tool,
             GetCatalogItemParams,
-            str,  # Expects JSON string
-            "Get a specific service catalog item.",
-            "json_dict",  # Tool returns Pydantic model
+            str,
+            "Fetch full details of a single catalog item by its sys_id or catalog item ID. Use list_catalog_items to find the ID first.",
+            "json_dict",
         ),
         "list_catalog_categories": (
             list_catalog_categories_tool,
             ListCatalogCategoriesParams,
-            str,  # Expects JSON string
-            "List service catalog categories.",
-            "json",  # Tool returns list/dict
+            str,
+            "List service catalog categories. Use 'query' for partial name search. Defaults to active categories only.",
+            "json",
         ),
         "create_catalog_category": (
             create_catalog_category_tool,
             CreateCatalogCategoryParams,
-            str,  # Expects JSON string
-            "Create a new service catalog category.",
-            "json_dict",  # Tool returns Pydantic model
+            str,
+            "Create a new category in the service catalog.",
+            "json_dict",
         ),
         "update_catalog_category": (
             update_catalog_category_tool,
             UpdateCatalogCategoryParams,
-            str,  # Expects JSON string
-            "Update an existing service catalog category.",
-            "json_dict",  # Tool returns Pydantic model
+            str,
+            "Update an existing catalog category. Requires the category sys_id; use list_catalog_categories to find it.",
+            "json_dict",
         ),
         "move_catalog_items": (
             move_catalog_items_tool,
             MoveCatalogItemsParams,
-            str,  # Expects JSON string
-            "Move catalog items to a different category.",
-            "json_dict",  # Tool returns Pydantic model
+            str,
+            "Move one or more catalog items to a different category. Provide item sys_ids and the target category sys_id.",
+            "json_dict",
         ),
         "get_optimization_recommendations": (
             get_optimization_recommendations_tool,
             OptimizationRecommendationsParams,
-            str,  # Expects JSON string
-            "Get optimization recommendations for the service catalog.",
-            "json",  # Tool returns list/dict
+            str,
+            "Analyse the service catalog and return optimization recommendations (unused items, duplicates, missing descriptions, etc.).",
+            "json",
         ),
         "update_catalog_item": (
             update_catalog_item_tool,
             UpdateCatalogItemParams,
-            str,  # Expects JSON string
-            "Update a service catalog item.",
-            "json",  # Tool returns Pydantic model
+            str,
+            "Update fields on an existing catalog item. Requires the item sys_id; only pass fields that need to change.",
+            "json",
         ),
         "create_catalog_item": (
             create_catalog_item_tool,
@@ -918,23 +918,23 @@ def get_tool_definitions(
         "create_catalog_item_variable": (
             create_catalog_item_variable_tool,
             CreateCatalogItemVariableParams,
-            Dict[str, Any],  # Expects dict
-            "Create a new catalog item variable",
-            "dict",  # Tool returns Pydantic model
+            Dict[str, Any],
+            "Add a new input variable (question) to a catalog item. Requires the catalog item sys_id.",
+            "dict",
         ),
         "list_catalog_item_variables": (
             list_catalog_item_variables_tool,
             ListCatalogItemVariablesParams,
-            Dict[str, Any],  # Expects dict
-            "List catalog item variables",
-            "dict",  # Tool returns Pydantic model
+            Dict[str, Any],
+            "List all input variables defined on a catalog item. Requires the catalog item sys_id.",
+            "dict",
         ),
         "update_catalog_item_variable": (
             update_catalog_item_variable_tool,
             UpdateCatalogItemVariableParams,
-            Dict[str, Any],  # Expects dict
-            "Update a catalog item variable",
-            "dict",  # Tool returns Pydantic model
+            Dict[str, Any],
+            "Update an existing catalog item variable. Requires both the catalog item sys_id and the variable sys_id.",
+            "dict",
         ),
         "delete_catalog_item_variable": (
             delete_catalog_item_variable_tool,
@@ -955,228 +955,228 @@ def get_tool_definitions(
             create_change_request_tool,
             CreateChangeRequestParams,
             str,
-            "Create a new change request in ServiceNow",
+            "Create a new change request (normal, standard, or emergency). Pass assignment_group as a display name string.",
             "str",
         ),
         "update_change_request": (
             update_change_request_tool,
             UpdateChangeRequestParams,
             str,
-            "Update an existing change request in ServiceNow",
+            "Update fields on an existing change request. change_id accepts a CHG number or sys_id. Only pass fields that need to change.",
             "str",
         ),
         "list_change_requests": (
             list_change_requests_tool,
             ListChangeRequestsParams,
-            str,  # Expects JSON string
-            "List change requests from ServiceNow",
-            "json",  # Tool returns list/dict
+            str,
+            "List change requests with optional filters. Use 'state', 'type', 'category', 'assignment_group', or 'timeframe' for structured filters. Use 'query' only for raw ServiceNow encoded query strings.",
+            "json",
         ),
         "get_change_request_details": (
             get_change_request_details_tool,
             GetChangeRequestDetailsParams,
-            str,  # Expects JSON string
-            "Get detailed information about a specific change request",
-            "json",  # Tool returns list/dict
+            str,
+            "Fetch full details of a single change request by its CHG number or sys_id.",
+            "json",
         ),
         "add_change_task": (
             add_change_task_tool,
             AddChangeTaskParams,
-            str,  # Expects JSON string
-            "Add a task to a change request",
-            "json_dict",  # Tool returns Pydantic model
+            str,
+            "Add a sub-task to an existing change request. change_id accepts a CHG number or sys_id.",
+            "json_dict",
         ),
         "submit_change_for_approval": (
             submit_change_for_approval_tool,
             SubmitChangeForApprovalParams,
             str,
-            "Submit a change request for approval",
-            "str",  # Tool returns simple message
+            "Move a change request into the approval workflow. change_id accepts a CHG number or sys_id.",
+            "str",
         ),
         "approve_change": (
             approve_change_tool,
             ApproveChangeParams,
             str,
-            "Approve a change request",
-            "str",  # Tool returns simple message
+            "Record an approval decision on a change request. change_id accepts a CHG number or sys_id.",
+            "str",
         ),
         "reject_change": (
             reject_change_tool,
             RejectChangeParams,
             str,
-            "Reject a change request",
-            "str",  # Tool returns simple message
+            "Reject a change request and record the reason. change_id accepts a CHG number or sys_id.",
+            "str",
         ),
         # Workflow Management Tools
         "list_workflows": (
             list_workflows_tool,
             ListWorkflowsParams,
-            str,  # Expects JSON string
-            "List workflows from ServiceNow",
-            "json",  # Tool returns list/dict
+            str,
+            "List ServiceNow workflows. Use 'query' for name search and 'active' to filter by status.",
+            "json",
         ),
         "get_workflow_details": (
             get_workflow_details_tool,
             GetWorkflowDetailsParams,
-            str,  # Expects JSON string
-            "Get detailed information about a specific workflow",
-            "json",  # Tool returns list/dict
+            str,
+            "Fetch full details of a single workflow by its sys_id.",
+            "json",
         ),
         "list_workflow_versions": (
             list_workflow_versions_tool,
             ListWorkflowVersionsParams,
-            str,  # Expects JSON string
-            "List workflow versions from ServiceNow",
-            "json",  # Tool returns list/dict
+            str,
+            "List all published versions of a workflow. Requires the workflow sys_id.",
+            "json",
         ),
         "get_workflow_activities": (
             get_workflow_activities_tool,
             GetWorkflowActivitiesParams,
-            str,  # Expects JSON string
-            "Get activities for a specific workflow",
-            "json",  # Tool returns list/dict
+            str,
+            "List all activities (steps) in a specific workflow version. Requires the workflow sys_id.",
+            "json",
         ),
         "create_workflow": (
             create_workflow_tool,
             CreateWorkflowParams,
-            str,  # Expects JSON string
-            "Create a new workflow in ServiceNow",
-            "json_dict",  # Tool returns Pydantic model
+            str,
+            "Create a new workflow in ServiceNow.",
+            "json_dict",
         ),
         "update_workflow": (
             update_workflow_tool,
             UpdateWorkflowParams,
-            str,  # Expects JSON string
-            "Update an existing workflow in ServiceNow",
-            "json_dict",  # Tool returns Pydantic model
+            str,
+            "Update an existing workflow's metadata. Requires the workflow sys_id. To change activities use add/update/delete_workflow_activity.",
+            "json_dict",
         ),
         "activate_workflow": (
             activate_workflow_tool,
             ActivateWorkflowParams,
             str,
-            "Activate a workflow in ServiceNow",
-            "str",  # Tool returns simple message
+            "Activate (publish) a workflow so it can be triggered. Requires the workflow sys_id.",
+            "str",
         ),
         "deactivate_workflow": (
             deactivate_workflow_tool,
             DeactivateWorkflowParams,
             str,
-            "Deactivate a workflow in ServiceNow",
-            "str",  # Tool returns simple message
+            "Deactivate a workflow to prevent it from being triggered. Requires the workflow sys_id.",
+            "str",
         ),
         "add_workflow_activity": (
             add_workflow_activity_tool,
             AddWorkflowActivityParams,
-            str,  # Expects JSON string
-            "Add a new activity to a workflow in ServiceNow",
-            "json_dict",  # Tool returns Pydantic model
+            str,
+            "Add a new activity (step) to a workflow. Requires the workflow sys_id and activity type.",
+            "json_dict",
         ),
         "update_workflow_activity": (
             update_workflow_activity_tool,
             UpdateWorkflowActivityParams,
-            str,  # Expects JSON string
-            "Update an existing activity in a workflow",
-            "json_dict",  # Tool returns Pydantic model
+            str,
+            "Update an existing workflow activity. Requires both the workflow sys_id and the activity sys_id.",
+            "json_dict",
         ),
         "delete_workflow_activity": (
             delete_workflow_activity_tool,
             DeleteWorkflowActivityParams,
             str,
-            "Delete an activity from a workflow",
-            "str",  # Tool returns simple message
+            "Delete an activity from a workflow. Requires both the workflow sys_id and the activity sys_id.",
+            "str",
         ),
         "reorder_workflow_activities": (
             reorder_workflow_activities_tool,
             ReorderWorkflowActivitiesParams,
             str,
-            "Reorder activities in a workflow",
-            "str",  # Tool returns simple message
+            "Change the execution order of activities within a workflow. Requires the workflow sys_id and an ordered list of activity sys_ids.",
+            "str",
         ),
         # Changeset Management Tools
         "list_changesets": (
             list_changesets_tool,
             ListChangesetsParams,
-            str,  # Expects JSON string
-            "List changesets from ServiceNow",
-            "json",  # Tool returns list/dict
+            str,
+            "List developer changesets (source control batches) in ServiceNow. Filter by state or developer.",
+            "json",
         ),
         "get_changeset_details": (
             get_changeset_details_tool,
             GetChangesetDetailsParams,
-            str,  # Expects JSON string
-            "Get detailed information about a specific changeset",
-            "json",  # Tool returns list/dict
+            str,
+            "Fetch full details of a single changeset including all files it contains. Requires the changeset sys_id.",
+            "json",
         ),
         "create_changeset": (
             create_changeset_tool,
             CreateChangesetParams,
-            str,  # Expects JSON string
-            "Create a new changeset in ServiceNow",
-            "json_dict",  # Tool returns Pydantic model
+            str,
+            "Create a new developer changeset for grouping configuration changes before commit.",
+            "json_dict",
         ),
         "update_changeset": (
             update_changeset_tool,
             UpdateChangesetParams,
-            str,  # Expects JSON string
-            "Update an existing changeset in ServiceNow",
-            "json_dict",  # Tool returns Pydantic model
+            str,
+            "Update an existing changeset's metadata. Requires the changeset sys_id.",
+            "json_dict",
         ),
         "commit_changeset": (
             commit_changeset_tool,
             CommitChangesetParams,
             str,
-            "Commit a changeset in ServiceNow",
-            "str",  # Tool returns simple message
+            "Commit a changeset to the local update set. Requires the changeset sys_id.",
+            "str",
         ),
         "publish_changeset": (
             publish_changeset_tool,
             PublishChangesetParams,
             str,
-            "Publish a changeset in ServiceNow",
-            "str",  # Tool returns simple message
+            "Publish a committed changeset to make it available for deployment. Requires the changeset sys_id.",
+            "str",
         ),
         "add_file_to_changeset": (
             add_file_to_changeset_tool,
             AddFileToChangesetParams,
             str,
-            "Add a file to a changeset in ServiceNow",
-            "str",  # Tool returns simple message
+            "Add a configuration file/record to an existing changeset. Requires the changeset sys_id and the file sys_id.",
+            "str",
         ),
         # Script Include Tools
         "list_script_includes": (
             list_script_includes_tool,
             ListScriptIncludesParams,
-            Dict[str, Any],  # Expects dict
-            "List script includes from ServiceNow",
-            "raw_dict",  # Tool returns raw dict
+            Dict[str, Any],
+            "List server-side Script Include records. Use 'query' to search by name.",
+            "raw_dict",
         ),
         "get_script_include": (
             get_script_include_tool,
             GetScriptIncludeParams,
-            Dict[str, Any],  # Expects dict
-            "Get a specific script include from ServiceNow",
-            "raw_dict",  # Tool returns raw dict
+            Dict[str, Any],
+            "Fetch the full script body of a specific Script Include by its sys_id or name.",
+            "raw_dict",
         ),
         "create_script_include": (
             create_script_include_tool,
             CreateScriptIncludeParams,
-            ScriptIncludeResponse,  # Expects Pydantic model
-            "Create a new script include in ServiceNow",
-            "raw_pydantic",  # Tool returns Pydantic model
+            ScriptIncludeResponse,
+            "Create a new server-side Script Include record with the provided JavaScript body.",
+            "raw_pydantic",
         ),
         "update_script_include": (
             update_script_include_tool,
             UpdateScriptIncludeParams,
-            ScriptIncludeResponse,  # Expects Pydantic model
-            "Update an existing script include in ServiceNow",
-            "raw_pydantic",  # Tool returns Pydantic model
+            ScriptIncludeResponse,
+            "Update the script body or metadata of an existing Script Include. Requires the sys_id.",
+            "raw_pydantic",
         ),
         "delete_script_include": (
             delete_script_include_tool,
             DeleteScriptIncludeParams,
-            str,  # Expects JSON string
-            "Delete a script include in ServiceNow",
-            "json_dict",  # Tool returns Pydantic model
+            str,
+            "Permanently delete a Script Include record. Requires the sys_id. This cannot be undone.",
+            "json_dict",
         ),
         # Natural-language tools (gated to nl_power_user package by default)
         "natural_language_search": (
@@ -1219,130 +1219,128 @@ def get_tool_definitions(
         "create_knowledge_base": (
             create_knowledge_base_tool,
             CreateKnowledgeBaseParams,
-            str,  # Expects JSON string
-            "Create a new knowledge base in ServiceNow",
-            "json_dict",  # Tool returns Pydantic model
+            str,
+            "Create a new knowledge base in ServiceNow.",
+            "json_dict",
         ),
         "list_knowledge_bases": (
             list_knowledge_bases_tool,
             ListKnowledgeBasesParams,
-            Dict[str, Any],  # Expects dict
-            "List knowledge bases from ServiceNow",
-            "raw_dict",  # Tool returns raw dict
+            Dict[str, Any],
+            "List knowledge bases. Use 'query' for name search; use 'active' to filter by status.",
+            "raw_dict",
         ),
-        # Use the passed-in implementations for aliased KB category tools
         "create_category": (
-            create_kb_category_tool_impl,  # Use passed function
+            create_kb_category_tool_impl,
             CreateKBCategoryParams,
-            str,  # Expects JSON string
-            "Create a new category in a knowledge base",
-            "json_dict",  # Tool returns Pydantic model
+            str,
+            "Create a new category inside a knowledge base. Requires the knowledge base sys_id.",
+            "json_dict",
         ),
         "create_article": (
             create_article_tool,
             CreateArticleParams,
-            str,  # Expects JSON string
-            "Create a new knowledge article",
-            "json_dict",  # Tool returns Pydantic model
+            str,
+            "Create a new knowledge article in draft state. Requires the knowledge base sys_id. Use publish_article to make it live.",
+            "json_dict",
         ),
         "update_article": (
             update_article_tool,
             UpdateArticleParams,
-            str,  # Expects JSON string
-            "Update an existing knowledge article",
-            "json_dict",  # Tool returns Pydantic model
+            str,
+            "Update an existing knowledge article's content or metadata. Requires the article sys_id.",
+            "json_dict",
         ),
         "publish_article": (
             publish_article_tool,
             PublishArticleParams,
-            str,  # Expects JSON string
-            "Publish a knowledge article",
-            "json_dict",  # Tool returns Pydantic model
+            str,
+            "Publish a knowledge article to make it visible to end users. Requires the article sys_id.",
+            "json_dict",
         ),
         "list_articles": (
             list_articles_tool,
             ListArticlesParams,
-            Dict[str, Any],  # Expects dict
-            "List knowledge articles",
-            "raw_dict",  # Tool returns raw dict
+            Dict[str, Any],
+            "List knowledge articles. Filter by 'knowledge_base' sys_id, 'category' sys_id, 'workflow_state' (draft/published/retired), or free-text 'query'.",
+            "raw_dict",
         ),
         "get_article": (
             get_article_tool,
             GetArticleParams,
-            Dict[str, Any],  # Expects dict
-            "Get a specific knowledge article by ID",
-            "raw_dict",  # Tool returns raw dict
+            Dict[str, Any],
+            "Fetch the full content of a specific knowledge article by its sys_id.",
+            "raw_dict",
         ),
-        # Use the passed-in implementations for aliased KB category tools
         "list_categories": (
-            list_kb_categories_tool_impl,  # Use passed function
+            list_kb_categories_tool_impl,
             ListKBCategoriesParams,
-            Dict[str, Any],  # Expects dict
-            "List categories in a knowledge base",
-            "raw_dict",  # Tool returns raw dict
+            Dict[str, Any],
+            "List categories within a knowledge base. Filter by 'knowledge_base' sys_id or 'parent_category' sys_id for sub-categories.",
+            "raw_dict",
         ),
         # User Management Tools
         "create_user": (
             create_user_tool,
             CreateUserParams,
-            Dict[str, Any],  # Expects dict
-            "Create a new user in ServiceNow",
-            "raw_dict",  # Tool returns raw dict
+            Dict[str, Any],
+            "Create a new user record in ServiceNow.",
+            "raw_dict",
         ),
         "update_user": (
             update_user_tool,
             UpdateUserParams,
-            Dict[str, Any],  # Expects dict
-            "Update an existing user in ServiceNow",
+            Dict[str, Any],
+            "Update an existing user record. Requires the user sys_id. Only pass fields that need to change.",
             "raw_dict",
         ),
         "get_user": (
             get_user_tool,
             GetUserParams,
-            Dict[str, Any],  # Expects dict
-            "Get a specific user in ServiceNow",
+            Dict[str, Any],
+            "Fetch a specific user by sys_id, username, or email. Provide only one identifier.",
             "raw_dict",
         ),
         "list_users": (
             list_users_tool,
             ListUsersParams,
-            Dict[str, Any],  # Expects dict
-            "List users in ServiceNow",
+            Dict[str, Any],
+            "List users with optional filters. Use 'query' for partial match on name, username, or email. Use 'department' or 'active' for exact filters.",
             "raw_dict",
         ),
         "create_group": (
             create_group_tool,
             CreateGroupParams,
-            Dict[str, Any],  # Expects dict
-            "Create a new group in ServiceNow",
+            Dict[str, Any],
+            "Create a new user group in ServiceNow.",
             "raw_dict",
         ),
         "update_group": (
             update_group_tool,
             UpdateGroupParams,
-            Dict[str, Any],  # Expects dict
-            "Update an existing group in ServiceNow",
+            Dict[str, Any],
+            "Update an existing group's metadata. Requires the group sys_id.",
             "raw_dict",
         ),
         "add_group_members": (
             add_group_members_tool,
             AddGroupMembersParams,
-            Dict[str, Any],  # Expects dict
-            "Add members to an existing group in ServiceNow",
+            Dict[str, Any],
+            "Add one or more users to a group. Requires the group sys_id and a list of user sys_ids.",
             "raw_dict",
         ),
         "remove_group_members": (
             remove_group_members_tool,
             RemoveGroupMembersParams,
-            Dict[str, Any],  # Expects dict
-            "Remove members from an existing group in ServiceNow",
+            Dict[str, Any],
+            "Remove one or more users from a group. Requires the group sys_id and a list of user sys_ids.",
             "raw_dict",
         ),
         "list_groups": (
             list_groups_tool,
             ListGroupsParams,
-            Dict[str, Any],  # Expects dict
-            "List groups from ServiceNow with optional filtering",
+            Dict[str, Any],
+            "List user groups. Use 'query' for partial match on group name or description. Use 'type' or 'active' for exact filters.",
             "raw_dict",
         ),
         # Story Management Tools
@@ -1350,42 +1348,42 @@ def get_tool_definitions(
             create_story_tool,
             CreateStoryParams,
             str,
-            "Create a new story in ServiceNow",
+            "Create a new agile story in ServiceNow. Requires a parent epic sys_id.",
             "str",
         ),
         "update_story": (
             update_story_tool,
             UpdateStoryParams,
             str,
-            "Update an existing story in ServiceNow",
+            "Update an existing story's fields. Requires the story sys_id. Only pass fields that need to change.",
             "str",
         ),
         "list_stories": (
             list_stories_tool,
             ListStoriesParams,
-            str,  # Expects JSON string
-            "List stories from ServiceNow",
-            "json",  # Tool returns list/dict
+            str,
+            "List agile stories. Filter by sprint, epic, state, or assigned user sys_id.",
+            "json",
         ),
         "list_story_dependencies": (
             list_story_dependencies_tool,
             ListStoryDependenciesParams,
-            str,  # Expects JSON string
-            "List story dependencies from ServiceNow",
-            "json",  # Tool returns list/dict
+            str,
+            "List dependencies (blockers/dependents) for a specific story. Requires the story sys_id.",
+            "json",
         ),
         "create_story_dependency": (
             create_story_dependency_tool,
             CreateStoryDependencyParams,
             str,
-            "Create a dependency between two stories in ServiceNow",
+            "Create a dependency link between two stories. Provide the sys_ids of both the dependent and blocking story.",
             "str",
         ),
         "delete_story_dependency": (
             delete_story_dependency_tool,
             DeleteStoryDependencyParams,
             str,
-            "Delete a story dependency in ServiceNow",
+            "Remove a dependency link between two stories. Requires the dependency record sys_id.",
             "str",
         ),
         # Epic Management Tools
@@ -1393,66 +1391,66 @@ def get_tool_definitions(
             create_epic_tool,
             CreateEpicParams,
             str,
-            "Create a new epic in ServiceNow",
+            "Create a new agile epic in ServiceNow.",
             "str",
         ),
         "update_epic": (
             update_epic_tool,
             UpdateEpicParams,
             str,
-            "Update an existing epic in ServiceNow",
+            "Update an existing epic's fields. Requires the epic sys_id. Only pass fields that need to change.",
             "str",
         ),
         "list_epics": (
             list_epics_tool,
             ListEpicsParams,
-            str,  # Expects JSON string
-            "List epics from ServiceNow",
-            "json",  # Tool returns list/dict
+            str,
+            "List agile epics. Filter by project, state, or assigned user.",
+            "json",
         ),
         # Scrum Task Management Tools
         "create_scrum_task": (
             create_scrum_task_tool,
             CreateScrumTaskParams,
             str,
-            "Create a new scrum task in ServiceNow",
+            "Create a new scrum task linked to a story. Requires the parent story sys_id.",
             "str",
         ),
         "update_scrum_task": (
             update_scrum_task_tool,
             UpdateScrumTaskParams,
             str,
-            "Update an existing scrum task in ServiceNow",
+            "Update an existing scrum task. Requires the task sys_id. Only pass fields that need to change.",
             "str",
         ),
         "list_scrum_tasks": (
             list_scrum_tasks_tool,
             ListScrumTasksParams,
-            str,  # Expects JSON string
-            "List scrum tasks from ServiceNow",
-            "json",  # Tool returns list/dict
+            str,
+            "List scrum tasks. Filter by parent story, sprint, state, or assigned user.",
+            "json",
         ),
         # Project Management Tools
         "create_project": (
             create_project_tool,
             CreateProjectParams,
             str,
-            "Create a new project in ServiceNow",
+            "Create a new project in ServiceNow.",
             "str",
         ),
         "update_project": (
             update_project_tool,
             UpdateProjectParams,
             str,
-            "Update an existing project in ServiceNow",
+            "Update an existing project's fields. Requires the project sys_id. Only pass fields that need to change.",
             "str",
         ),
         "list_projects": (
             list_projects_tool,
             ListProjectsParams,
-            str,  # Expects JSON string
-            "List projects from ServiceNow",
-            "json",  # Tool returns list/dict
+            str,
+            "List projects. Filter by state, manager, or use 'query' for name search.",
+            "json",
         ),
         # Service Catalog Task (SCTASK) Tools
         "get_sctask": (
