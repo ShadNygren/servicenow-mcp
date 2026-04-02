@@ -31,8 +31,8 @@ class CreateStoryParams(BaseModel):
     epic: Optional[str] = Field(None, description="Epic that the story belongs to. It requires the System ID of the epic.")
     project: Optional[str] = Field(None, description="Project that the story belongs to. It requires the System ID of the project.")
     work_notes: Optional[str] = Field(None, description="Work notes to add to the story. Used for adding notes and comments to a story")
-    planned_start_date: Optional[str] = Field(None, description="Planned start date (YYYY-MM-DD HH:MM:SS)")
-    planned_end_date: Optional[str] = Field(None, description="Planned end date (YYYY-MM-DD HH:MM:SS)")
+    start_date: Optional[str] = Field(None, description="Planned start date (YYYY-MM-DD HH:MM:SS)")
+    end_date: Optional[str] = Field(None, description="Planned end date (YYYY-MM-DD HH:MM:SS)")
 
 class UpdateStoryParams(BaseModel):
     """Parameters for updating a story."""
@@ -48,8 +48,8 @@ class UpdateStoryParams(BaseModel):
     epic: Optional[str] = Field(None, description="Epic that the story belongs to. It requires the System ID of the epic.")
     project: Optional[str] = Field(None, description="Project that the story belongs to. It requires the System ID of the project.")
     work_notes: Optional[str] = Field(None, description="Work notes to add to the story. Used for adding notes and comments to a story")
-    planned_start_date: Optional[str] = Field(None, description="Planned start date (YYYY-MM-DD HH:MM:SS)")
-    planned_end_date: Optional[str] = Field(None, description="Planned end date (YYYY-MM-DD HH:MM:SS)")
+    start_date: Optional[str] = Field(None, description="Planned start date (YYYY-MM-DD HH:MM:SS)")
+    end_date: Optional[str] = Field(None, description="Planned end date (YYYY-MM-DD HH:MM:SS)")
 
 class ListStoriesParams(BaseModel):
     """Parameters for listing stories."""
@@ -133,10 +133,10 @@ def create_story(
         data["project"] = validated_params.project
     if validated_params.work_notes:
         data["work_notes"] = validated_params.work_notes
-    if validated_params.planned_start_date:
-        data["planned_start_date"] = validated_params.planned_start_date
-    if validated_params.planned_end_date:
-        data["planned_end_date"] = validated_params.planned_end_date
+    if validated_params.start_date:
+        data["start_date"] = validated_params.start_date
+    if validated_params.end_date:
+        data["end_date"] = validated_params.end_date
 
     # Get the instance URL
     instance_url = _get_instance_url(auth_manager, server_config)
@@ -230,10 +230,10 @@ def update_story(
         data["assigned_to"] = validated_params.assigned_to
     if validated_params.work_notes:
         data["work_notes"] = validated_params.work_notes
-    if validated_params.planned_start_date:
-        data["planned_start_date"] = validated_params.planned_start_date
-    if validated_params.planned_end_date:
-        data["planned_end_date"] = validated_params.planned_end_date
+    if validated_params.start_date:
+        data["start_date"] = validated_params.start_date
+    if validated_params.end_date:
+        data["end_date"] = validated_params.end_date
 
     # Get the instance URL
     instance_url = _get_instance_url(auth_manager, server_config)
