@@ -133,6 +133,9 @@ from servicenow_mcp.tools.syslog_tools import (
 from servicenow_mcp.tools.bulk_tools import (
     execute_bulk_operations,
 )
+from servicenow_mcp.tools.ui_policy_tools import (
+    create_ui_policy,
+)
 # from servicenow_mcp.tools.problem_tools import create_problem, update_problem
 # from servicenow_mcp.tools.request_tools import create_request, update_request
 
@@ -263,6 +266,8 @@ __all__ = [
     # Bulk operations
     "execute_bulk_operations",
 
+    # UI Policy tools
+    "create_ui_policy",
 
     # Future tools
     # "create_problem",

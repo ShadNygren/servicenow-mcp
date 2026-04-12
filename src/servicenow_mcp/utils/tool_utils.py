@@ -392,6 +392,12 @@ from servicenow_mcp.tools.bulk_tools import BulkOperationsParams
 from servicenow_mcp.tools.bulk_tools import (
     execute_bulk_operations as execute_bulk_operations_tool,
 )
+from servicenow_mcp.tools.ui_policy_tools import (
+    CreateUIPolicyParams,
+)
+from servicenow_mcp.tools.ui_policy_tools import (
+    create_ui_policy as create_ui_policy_tool,
+)
 
 # Define a type alias for the Pydantic models or dataclasses used for params
 ParamsModel = Type[Any]  # Use Type[Any] for broader compatibility initially
@@ -1123,6 +1129,14 @@ def get_tool_definitions(
                 "same order with per-request status codes and parsed response bodies."
             ),
             "raw_dict",
+        ),
+        # UI Policy Tools
+        "create_ui_policy": (
+            create_ui_policy_tool,
+            CreateUIPolicyParams,
+            Dict[str, Any],
+            "Create a UI policy that controls field behaviour (mandatory/visible/read-only) on a ServiceNow form",
+            "dict",
         ),
     }
     return tool_definitions
