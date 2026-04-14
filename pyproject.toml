@@ -87,3 +87,16 @@ addopts = "--ignore=examples"
 # Include config files in the package for uvx/pip installations
 [tool.hatch.build.targets.wheel.force-include]
 "src/servicenow_mcp/config/tool_packages.yaml" = "servicenow_mcp/config/tool_packages.yaml"
+
+[tool.coverage.run]
+omit = [
+    "src/servicenow_mcp/cli.py",
+    "src/servicenow_mcp/server.py",
+    "src/servicenow_mcp/server_sse.py",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.4",
+    "pytest-cov>=6.0.0",
+]
