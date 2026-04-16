@@ -196,6 +196,7 @@ from servicenow_mcp.tools.knowledge_base import (
 from servicenow_mcp.tools.script_include_tools import (
     CreateScriptIncludeParams,
     DeleteScriptIncludeParams,
+    ExecuteScriptIncludeParams,
     GetScriptIncludeParams,
     ListScriptIncludesParams,
     ScriptIncludeResponse,
@@ -206,6 +207,9 @@ from servicenow_mcp.tools.script_include_tools import (
 )
 from servicenow_mcp.tools.script_include_tools import (
     delete_script_include as delete_script_include_tool,
+)
+from servicenow_mcp.tools.script_include_tools import (
+    execute_script_include as execute_script_include_tool,
 )
 from servicenow_mcp.tools.script_include_tools import (
     get_script_include as get_script_include_tool,
@@ -826,6 +830,20 @@ def get_tool_definitions(
                 "Looks up the record by number and applies the parsed updates."
             ),
             "raw_pydantic",
+        ),
+        # Registered but NOT in any default package — see SECURITY note in
+        # config/tool_packages.yaml. Issue #43 finding #1.
+        "execute_script_include": (
+            execute_script_include_tool,
+            ExecuteScriptIncludeParams,
+            Dict[str, Any],
+            (
+                "Execute a method on a ServiceNow Script Include and return its result. "
+                "Resolves the script include by name or sys_id, then calls the specified "
+                "method with optional positional arguments via the server-side scripting "
+                "eval endpoint."
+            ),
+            "raw_dict",
         ),
         # Knowledge Base Tools
         "create_knowledge_base": (
