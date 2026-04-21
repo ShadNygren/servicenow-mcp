@@ -13,7 +13,15 @@ from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.utils.config import ServerConfig
-from servicenow_mcp.utils.helpers import _get_headers, _get_instance_url, _unwrap_and_validate_params
+from servicenow_mcp.utils.helpers import (
+    _build_sysparm_params,
+    _get_headers,
+    _get_instance_url,
+    _join_query_parts,
+    _paginated_list_response,
+    _unwrap_and_validate_params,
+    validate_servicenow_datetime,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -118,28 +126,23 @@ def list_syslog_entries(
     if validated.created_before:
         query_parts.append(f"sys_created_on<={validated.created_before}")
 
-    query_params: Dict[str, Any] = {
-        "sysparm_limit": validated.limit,
-        "sysparm_offset": validated.offset,
-        "sysparm_display_value": "true",
-        "sysparm_exclude_reference_link": "true",
-        "sysparm_fields": ",".join(SYSLOG_FIELDS),
-        "sysparm_orderby": validated.order_by or "DESCsys_created_on",
-    }
-    if query_parts:
-        query_params["sysparm_query"] = "^".join(query_parts)
+    query_params = _build_sysparm_params(
+        validated.limit,
+        validated.offset,
+        query=_join_query_parts(query_parts),
+        exclude_reference_link=True,
+        order_by=validated.order_by or "DESCsys_created_on",
+        fields=",".join(SYSLOG_FIELDS),
+    )
 
     url = f"{instance_url}/api/now/table/{SYSLOG_TABLE}"
     try:
         response = requests.get(url, headers=headers, params=query_params)
         response.raise_for_status()
-        records = response.json().get("result", [])
-        entries = [_format_syslog_entry(r) for r in records]
-        return {
-            "success": True,
-            "entries": entries,
-            "count": len(entries),
-        }
+        entries = [_format_syslog_entry(r) for r in response.json().get("result", [])]
+        return _paginated_list_response(
+            entries, validated.limit, validated.offset, "entries",
+        )
     except requests.exceptions.RequestException as e:
         logger.error("Error listing syslog entries: %s", e)
         return {"success": False, "message": f"Error listing syslog entries: {str(e)}"}
