@@ -375,6 +375,10 @@ from servicenow_mcp.tools.syslog_tools import (
     list_syslog_entries as list_syslog_entries_tool,
     get_syslog_entry as get_syslog_entry_tool,
 )
+from servicenow_mcp.tools.bulk_tools import BulkOperationsParams
+from servicenow_mcp.tools.bulk_tools import (
+    execute_bulk_operations as execute_bulk_operations_tool,
+)
 
 # Define a type alias for the Pydantic models or dataclasses used for params
 ParamsModel = Type[Any]  # Use Type[Any] for broader compatibility initially
@@ -1072,6 +1076,19 @@ def get_tool_definitions(
             str,
             "Retrieve a single syslog entry by its sys_id",
             "json",
+        ),
+        # Bulk Operations
+        "execute_bulk_operations": (
+            execute_bulk_operations_tool,
+            BulkOperationsParams,
+            Dict[str, Any],
+            (
+                "Execute up to 100 ServiceNow API calls in a single HTTP round-trip "
+                "using the ServiceNow Batch API. Each request specifies a method, "
+                "relative URL path, and optional body. Results are returned in the "
+                "same order with per-request status codes and parsed response bodies."
+            ),
+            "raw_dict",
         ),
     }
     return tool_definitions
