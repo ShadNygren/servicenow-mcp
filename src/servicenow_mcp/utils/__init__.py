@@ -17,6 +17,8 @@ from servicenow_mcp.utils.helpers import (
     _get_instance_url,
     _join_query_parts,
     _paginated_list_response,
+    _redact_headers,
+    _truncate_body,
     _unwrap_and_validate_params,
 )
 
@@ -33,5 +35,7 @@ __all__ = [
     "_get_instance_url",
     "_join_query_parts",
     "_paginated_list_response",
+    "_redact_headers",
+    "_truncate_body",
     "_unwrap_and_validate_params",
 ]
