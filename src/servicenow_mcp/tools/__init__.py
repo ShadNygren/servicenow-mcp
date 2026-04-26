@@ -141,6 +141,12 @@ from servicenow_mcp.tools.ui_policy_tools import (
 from servicenow_mcp.tools.user_criteria_tools import (
     create_user_criteria,
 )
+from servicenow_mcp.tools.cmdb_tools import (
+    create_ci,
+    get_ci,
+    list_cis,
+    update_ci,
+)
 # from servicenow_mcp.tools.problem_tools import create_problem, update_problem
 # from servicenow_mcp.tools.request_tools import create_request, update_request
 
@@ -278,6 +284,12 @@ __all__ = [
 
     # User Criteria tools
     "create_user_criteria",
+
+    # CMDB tools
+    "list_cis",
+    "get_ci",
+    "create_ci",
+    "update_ci",
 
     # Future tools
     # "create_problem",

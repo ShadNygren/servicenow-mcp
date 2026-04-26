@@ -410,6 +410,18 @@ from servicenow_mcp.tools.user_criteria_tools import (
 from servicenow_mcp.tools.user_criteria_tools import (
     create_user_criteria as create_user_criteria_tool,
 )
+from servicenow_mcp.tools.cmdb_tools import (
+    CreateCIParams,
+    GetCIParams,
+    ListCIsParams,
+    UpdateCIParams,
+)
+from servicenow_mcp.tools.cmdb_tools import (
+    create_ci as create_ci_tool,
+    get_ci as get_ci_tool,
+    list_cis as list_cis_tool,
+    update_ci as update_ci_tool,
+)
 
 # Define a type alias for the Pydantic models or dataclasses used for params
 ParamsModel = Type[Any]  # Use Type[Any] for broader compatibility initially
@@ -1178,6 +1190,43 @@ def get_tool_definitions(
             Dict[str, Any],
             "Create a User Criteria record that controls who can see or request Service Catalog items based on role, group, department, company, location, or a custom script",
             "dict",
+        ),
+        # CMDB Tools
+        "list_cis": (
+            list_cis_tool,
+            ListCIsParams,
+            Dict[str, Any],
+            (
+                "List CMDB configuration items (CIs) from ServiceNow with optional "
+                "filters for CI class, name, operational status, and environment. "
+                "Supports pagination."
+            ),
+            "raw_dict",
+        ),
+        "get_ci": (
+            get_ci_tool,
+            GetCIParams,
+            Dict[str, Any],
+            "Retrieve a single CMDB configuration item by its sys_id",
+            "raw_dict",
+        ),
+        "create_ci": (
+            create_ci_tool,
+            CreateCIParams,
+            Dict[str, Any],
+            (
+                "Create a new CMDB configuration item. Specify ci_class to create "
+                "in a specific class table (e.g. cmdb_ci_server). Defaults to the "
+                "base cmdb_ci table."
+            ),
+            "raw_dict",
+        ),
+        "update_ci": (
+            update_ci_tool,
+            UpdateCIParams,
+            Dict[str, Any],
+            "Update an existing CMDB configuration item by its sys_id",
+            "raw_dict",
         ),
     }
     return tool_definitions
