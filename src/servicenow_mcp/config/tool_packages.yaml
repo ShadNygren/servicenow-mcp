@@ -187,6 +187,10 @@ system_administrator:
   - create_ci_relationship
   - delete_ci_relationship
   - list_ci_relationship_types
+  # Asset Management
+  - list_assets
+  - get_asset
+  - update_asset
 
 full:
   # Incident Management
@@ -292,6 +296,10 @@ full:
   - create_ci_relationship
   - delete_ci_relationship
   - list_ci_relationship_types
+  # Asset Management
+  - list_assets
+  - get_asset
+  - update_asset
   # Story Management
   - create_story
   - update_story
