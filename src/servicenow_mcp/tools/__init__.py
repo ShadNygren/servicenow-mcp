@@ -155,6 +155,7 @@ from servicenow_mcp.tools.cmdb_relationship_tools import (
     list_ci_relationship_types,
 )
 from servicenow_mcp.tools.asset_tools import (
+    create_asset,
     list_assets,
     get_asset,
     update_asset,
@@ -311,6 +312,7 @@ __all__ = [
     "list_ci_relationship_types",
 
     # Asset management tools
+    "create_asset",
     "list_assets",
     "get_asset",
     "update_asset",
