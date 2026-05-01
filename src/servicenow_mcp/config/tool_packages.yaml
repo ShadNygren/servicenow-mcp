@@ -193,6 +193,9 @@ system_administrator:
   - list_assets
   - get_asset
   - update_asset
+  # Contract Management
+  - list_asset_contracts
+  - get_asset_contract
 
 full:
   # Incident Management
@@ -304,6 +307,9 @@ full:
   - list_assets
   - get_asset
   - update_asset
+  # Contract Management
+  - list_asset_contracts
+  - get_asset_contract
   # Story Management
   - create_story
   - update_story
