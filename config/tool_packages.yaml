@@ -8,6 +8,15 @@
 
 none: []
 
+# Natural-language shortcuts. Useful as a power-user quick path but
+# overlap with the more precise structured tools (list_incidents,
+# update_incident), so they're opt-in via this dedicated package and
+# NOT included in 'full' by default. The parser is rule-based regex
+# (see src/servicenow_mcp/utils/nl.py) — no LLM at the server layer.
+nl_power_user:
+  - natural_language_search
+  - natural_language_update
+
 service_desk:
   # Incident Management
   - create_incident

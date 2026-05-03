@@ -203,6 +203,16 @@ from servicenow_mcp.tools.script_include_tools import (
 from servicenow_mcp.tools.script_include_tools import (
     update_script_include as update_script_include_tool,
 )
+from servicenow_mcp.tools.nl_tools import (
+    NaturalLanguageSearchParams,
+    NaturalLanguageUpdateParams,
+)
+from servicenow_mcp.tools.nl_tools import (
+    natural_language_search as natural_language_search_tool,
+)
+from servicenow_mcp.tools.nl_tools import (
+    natural_language_update as natural_language_update_tool,
+)
 from servicenow_mcp.tools.user_tools import (
     AddGroupMembersParams,
     CreateGroupParams,
@@ -713,6 +723,29 @@ def get_tool_definitions(
             str,  # Expects JSON string
             "Delete a script include in ServiceNow",
             "json_dict",  # Tool returns Pydantic model
+        ),
+        # Natural-language tools (gated to nl_power_user package by default)
+        "natural_language_search": (
+            natural_language_search_tool,
+            NaturalLanguageSearchParams,
+            str,
+            (
+                "Search ServiceNow records using a natural-language phrase "
+                "like 'find incidents about SAP with high priority'. "
+                "Returns up to 10 records."
+            ),
+            "raw_pydantic",
+        ),
+        "natural_language_update": (
+            natural_language_update_tool,
+            NaturalLanguageUpdateParams,
+            str,
+            (
+                "Update a record using a natural-language phrase like "
+                "'close incident INC0010003 with resolution: fixed the issue'. "
+                "Looks up the record by number and applies the parsed updates."
+            ),
+            "raw_pydantic",
         ),
         # Knowledge Base Tools
         "create_knowledge_base": (
