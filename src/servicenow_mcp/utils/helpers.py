@@ -254,6 +254,37 @@ def _make_request(
 T = TypeVar("T", bound=BaseModel)
 
 
+def _format_http_error(e: Exception) -> str:
+    """Extract a readable message from a requests exception.
+
+    For HTTPError (raised by raise_for_status()), tries to parse the ServiceNow
+    JSON error body which typically contains ``error.message`` and
+    ``error.detail``. Falls back to ``str(e)`` for network errors or responses
+    that cannot be parsed as JSON.
+
+    Pulled forward from torkian commit 2f3f80c (Phase-5 error-message rollout
+    deferred). Ports just the helper to unblock bulk_tools.py without taking
+    the full per-tool error-message rewrite that depends on Phase-5 tools.
+    """
+    if isinstance(e, requests.HTTPError) and e.response is not None:
+        status = e.response.status_code
+        try:
+            body = e.response.json()
+            err = body.get("error", {})
+            if isinstance(err, dict):
+                msg = err.get("message", "")
+                detail = err.get("detail", "")
+                if msg and detail:
+                    return f"HTTP {status}: {msg} — {detail}"
+                if msg:
+                    return f"HTTP {status}: {msg}"
+        except Exception:
+            pass
+        raw = e.response.text
+        return f"HTTP {status}: {raw[:300]}" if raw else f"HTTP {status}"
+    return str(e)
+
+
 def _unwrap_and_validate_params(
     params: Any,
     model_class: Type[T],
