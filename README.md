@@ -497,11 +497,14 @@ SERVICENOW_PASSWORD=your-password
 
 ### OAuth Authentication
 
+The recommended OAuth flow is **client_credentials**. Username and password are no longer required — the server only needs `SERVICENOW_CLIENT_ID` and `SERVICENOW_CLIENT_SECRET`. Username/password are now used only as a fallback to the legacy password grant when both are set, and the password grant is deprecated by the [OAuth Best Current Practice](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-security-topics) (Issue [#43](https://github.com/echelon-ai-labs/servicenow-mcp/issues/43) finding #2).
+
 ```
 SERVICENOW_AUTH_TYPE=oauth
 SERVICENOW_CLIENT_ID=your-client-id
 SERVICENOW_CLIENT_SECRET=your-client-secret
-SERVICENOW_TOKEN_URL=https://your-instance.service-now.com/oauth_token.do
+SERVICENOW_TOKEN_URL=https://your-instance.service-now.com/oauth_token.do  # optional; auto-derived from instance URL
+SERVICENOW_RESOURCE_URL=...  # optional, for Azure AD-backed flows that require a `resource` parameter
 ```
 
 ### API Key Authentication
@@ -509,6 +512,15 @@ SERVICENOW_TOKEN_URL=https://your-instance.service-now.com/oauth_token.do
 ```
 SERVICENOW_AUTH_TYPE=api_key
 SERVICENOW_API_KEY=your-api-key
+```
+
+### Optional environment variables
+
+These apply across all authentication methods.
+
+```
+SERVICENOW_API_PATH=api          # default; override for instances behind a gateway with a non-standard mount
+SERVICENOW_EXTRA_HTTP_HEADERS={"X-Tenant-Id": "acme"}    # JSON dict; merged into every request
 ```
 
 ## Development
