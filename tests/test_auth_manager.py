@@ -1,0 +1,139 @@
+"""
+Tests for the AuthManager OAuth token caching and refresh-on-expiry logic.
+
+Validates the type-safe datetime expiry handling that avoids the
+datetime-vs-float TypeError seen in upstream michaelbuckner code.
+"""
+
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch, MagicMock
+
+import pytest
+import requests
+
+from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.config import (
+    AuthConfig,
+    AuthType,
+    OAuthConfig,
+)
+
+
+def _oauth_config():
+    return AuthConfig(
+        type=AuthType.OAUTH,
+        oauth=OAuthConfig(
+            client_id="cid",
+            client_secret="csec",
+            username="u",
+            password="p",
+        ),
+    )
+
+
+def _mock_token_response(access_token: str = "tok-1", expires_in: int = 1800):
+    response = MagicMock(spec=requests.Response)
+    response.status_code = 200
+    response.json.return_value = {
+        "access_token": access_token,
+        "token_type": "Bearer",
+        "expires_in": expires_in,
+    }
+    return response
+
+
+def test_token_expiry_stored_as_timezone_aware_datetime():
+    """Token expiry must be a timezone-aware UTC datetime, never an epoch float."""
+    manager = AuthManager(_oauth_config(), instance_url="https://dev.example.com")
+    with patch("servicenow_mcp.auth.auth_manager.requests.post", return_value=_mock_token_response()):
+        manager.get_headers()
+
+    assert isinstance(manager.token_expiry, datetime)
+    assert manager.token_expiry.tzinfo is not None, "token_expiry must be timezone-aware"
+    # Sanity: expiry is in the future.
+    assert manager.token_expiry > datetime.now(timezone.utc)
+
+
+def test_token_not_refetched_while_valid():
+    """Within the validity window, get_headers reuses the cached token."""
+    manager = AuthManager(_oauth_config(), instance_url="https://dev.example.com")
+    with patch("servicenow_mcp.auth.auth_manager.requests.post", return_value=_mock_token_response()) as post:
+        manager.get_headers()
+        manager.get_headers()
+        manager.get_headers()
+    assert post.call_count == 1, "Token endpoint should only be hit once while token is valid"
+
+
+def test_token_refetched_when_expired():
+    """When the cached token is past its expiry (minus safety margin), get_headers refetches."""
+    manager = AuthManager(_oauth_config(), instance_url="https://dev.example.com")
+    with patch("servicenow_mcp.auth.auth_manager.requests.post", return_value=_mock_token_response("tok-1")) as post:
+        manager.get_headers()
+        # Force expiry into the past.
+        manager.token_expiry = datetime.now(timezone.utc) - timedelta(seconds=1)
+        post.return_value = _mock_token_response("tok-2")
+        headers = manager.get_headers()
+
+    assert post.call_count == 2, "Expired token must trigger a second token fetch"
+    assert manager.token == "tok-2"
+    assert headers["Authorization"] == "Bearer tok-2"
+
+
+def test_token_refetched_within_safety_margin():
+    """A token that expires within the 30s safety margin is treated as expired."""
+    manager = AuthManager(_oauth_config(), instance_url="https://dev.example.com")
+    with patch("servicenow_mcp.auth.auth_manager.requests.post", return_value=_mock_token_response("tok-1")) as post:
+        manager.get_headers()
+        # Set expiry to 10s in the future — inside the 30s safety margin.
+        manager.token_expiry = datetime.now(timezone.utc) + timedelta(seconds=10)
+        post.return_value = _mock_token_response("tok-2")
+        manager.get_headers()
+
+    assert post.call_count == 2
+    assert manager.token == "tok-2"
+
+
+def test_repeated_refresh_does_not_raise_typeerror():
+    """Regression test for michaelbuckner's datetime-vs-float bug.
+
+    Their implementation compared datetime.now() (datetime) to
+    self.token_expiry (sometimes datetime, sometimes float from .timestamp()),
+    which raised TypeError after the first refresh. This test loops three
+    refreshes to catch any reintroduction of that mistake.
+    """
+    manager = AuthManager(_oauth_config(), instance_url="https://dev.example.com")
+    with patch("servicenow_mcp.auth.auth_manager.requests.post", return_value=_mock_token_response("tok-1")) as post:
+        for i in range(3):
+            manager.get_headers()
+            manager.token_expiry = datetime.now(timezone.utc) - timedelta(seconds=1)
+            post.return_value = _mock_token_response(f"tok-{i+2}")
+        # Final call uses the still-valid token from the loop's last refetch.
+        manager.token_expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+        manager.get_headers()
+
+
+def test_force_refresh_clears_cache():
+    """refresh_token() forces an unconditional refetch, even if the cached token is valid."""
+    manager = AuthManager(_oauth_config(), instance_url="https://dev.example.com")
+    with patch("servicenow_mcp.auth.auth_manager.requests.post", return_value=_mock_token_response("tok-1")) as post:
+        manager.get_headers()
+        post.return_value = _mock_token_response("tok-2")
+        manager.refresh_token()
+
+    assert post.call_count == 2
+    assert manager.token == "tok-2"
+
+
+def test_default_lifetime_when_expires_in_missing():
+    """If the token response omits expires_in, fall back to the default lifetime."""
+    response = MagicMock(spec=requests.Response)
+    response.status_code = 200
+    response.json.return_value = {"access_token": "tok-1", "token_type": "Bearer"}
+    manager = AuthManager(_oauth_config(), instance_url="https://dev.example.com")
+    with patch("servicenow_mcp.auth.auth_manager.requests.post", return_value=response):
+        manager.get_headers()
+
+    assert manager.token_expiry is not None
+    # Should be roughly _TOKEN_DEFAULT_LIFETIME_SECONDS (1800) in the future.
+    seconds_until_expiry = (manager.token_expiry - datetime.now(timezone.utc)).total_seconds()
+    assert 1700 < seconds_until_expiry < 1800

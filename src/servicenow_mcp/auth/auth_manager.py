@@ -5,6 +5,7 @@ Authentication manager for the ServiceNow MCP server.
 import base64
 import logging
 import os
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
 import requests
@@ -15,19 +16,28 @@ from servicenow_mcp.utils.config import AuthConfig, AuthType
 
 logger = logging.getLogger(__name__)
 
+# Refresh OAuth tokens this many seconds before their stated expiry, to
+# avoid losing a request to clock skew or in-flight expiry.
+_TOKEN_REFRESH_SAFETY_MARGIN = timedelta(seconds=30)
+
+# Default token lifetime if the OAuth response omits expires_in. ServiceNow
+# defaults to 1800s (30min) for access tokens; we mirror that here.
+_TOKEN_DEFAULT_LIFETIME_SECONDS = 1800
+
 
 class AuthManager:
     """
     Authentication manager for ServiceNow API.
-    
+
     This class handles authentication with the ServiceNow API using
-    different authentication methods.
+    different authentication methods. For OAuth, tokens are cached with
+    their stated expiry and refreshed automatically before they expire.
     """
-    
+
     def __init__(self, config: AuthConfig, instance_url: str = None):
         """
         Initialize the authentication manager.
-        
+
         Args:
             config: Authentication configuration.
             instance_url: ServiceNow instance URL.
@@ -36,6 +46,11 @@ class AuthManager:
         self.instance_url = instance_url
         self.token: Optional[str] = None
         self.token_type: Optional[str] = None
+        # Timezone-aware UTC datetime — never an epoch float, never a naive
+        # datetime. michaelbuckner's implementation mixed datetime and float
+        # which crashed with TypeError on the second refresh.
+        self.token_expiry: Optional[datetime] = None
+        self.refresh_token_value: Optional[str] = None
     
     @staticmethod
     def _extract_oauth_error_code(response: requests.Response) -> str:
@@ -69,9 +84,9 @@ class AuthManager:
             headers["Authorization"] = f"Basic {encoded}"
         
         elif self.config.type == AuthType.OAUTH:
-            if not self.token:
+            if self._oauth_token_is_expired():
                 self._get_oauth_token()
-            
+
             headers["Authorization"] = f"{self.token_type} {self.token}"
         
         elif self.config.type == AuthType.API_KEY:
@@ -119,9 +134,7 @@ class AuthManager:
         logger.info("OAuth client_credentials response status: %s", response.status_code)
 
         if response.status_code == 200:
-            token_data = response.json()
-            self.token = token_data.get("access_token")
-            self.token_type = token_data.get("token_type", "Bearer")
+            self._store_token_response(response.json())
             return
 
         client_credentials_error = self._extract_oauth_error_code(response)
@@ -140,9 +153,7 @@ class AuthManager:
             logger.info("OAuth password grant response status: %s", response.status_code)
 
             if response.status_code == 200:
-                token_data = response.json()
-                self.token = token_data.get("access_token")
-                self.token_type = token_data.get("token_type", "Bearer")
+                self._store_token_response(response.json())
                 return
 
             password_error = self._extract_oauth_error_code(response)
@@ -158,7 +169,37 @@ class AuthManager:
             "no username/password configured for password-grant fallback."
         )
     
+    def _oauth_token_is_expired(self) -> bool:
+        """True if there is no cached OAuth token, or it is within the safety
+        margin of expiry."""
+        if not self.token:
+            return True
+        if self.token_expiry is None:
+            # Token cached but no expiry recorded — assume valid (legacy path,
+            # for token responses that omit expires_in).
+            return False
+        return datetime.now(timezone.utc) >= self.token_expiry - _TOKEN_REFRESH_SAFETY_MARGIN
+
+    def _store_token_response(self, token_data: dict) -> None:
+        """Cache an OAuth token-endpoint response, including a timezone-aware
+        UTC expiry derived from expires_in (or the default lifetime)."""
+        self.token = token_data.get("access_token")
+        self.token_type = token_data.get("token_type", "Bearer")
+        expires_in = token_data.get("expires_in", _TOKEN_DEFAULT_LIFETIME_SECONDS)
+        self.token_expiry = datetime.now(timezone.utc) + timedelta(seconds=int(expires_in))
+        # OAuth servers may or may not return a refresh_token; store if present.
+        refresh = token_data.get("refresh_token")
+        if refresh:
+            self.refresh_token_value = refresh
+
     def refresh_token(self):
-        """Refresh the OAuth token if using OAuth authentication."""
+        """Force-refresh the OAuth token by clearing the cache and re-fetching.
+
+        Useful from a 401-retry handler after a south-bound ServiceNow request
+        fails: clear the cached token so the next get_headers() call refetches
+        unconditionally.
+        """
         if self.config.type == AuthType.OAUTH:
-            self._get_oauth_token() 
+            self.token = None
+            self.token_expiry = None
+            self._get_oauth_token()
