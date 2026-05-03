@@ -437,6 +437,36 @@ from servicenow_mcp.tools.widget_tools import (
     get_widget as get_widget_tool,
     update_widget as update_widget_tool,
 )
+from servicenow_mcp.tools.case_tools import (
+    GetCaseByNumberParams,
+    ListCasesParams,
+    SearchCasesParams,
+)
+from servicenow_mcp.tools.case_tools import (
+    get_case_by_number as get_case_by_number_tool,
+    list_cases as list_cases_tool,
+    search_cases as search_cases_tool,
+)
+from servicenow_mcp.tools.csm_tools import (
+    GetCaseHistoryParams,
+    GetCasesByAccountParams,
+    GetCasesByIntegrationParams,
+    GetCasesByLocationParams,
+    GetCasesByProductParams,
+    ListAccountsParams,
+    ListLocationsParams,
+    ListProductsParams,
+)
+from servicenow_mcp.tools.csm_tools import (
+    get_case_history as get_case_history_tool,
+    get_cases_by_account as get_cases_by_account_tool,
+    get_cases_by_integration as get_cases_by_integration_tool,
+    get_cases_by_location as get_cases_by_location_tool,
+    get_cases_by_product as get_cases_by_product_tool,
+    list_accounts as list_accounts_tool,
+    list_locations as list_locations_tool,
+    list_products as list_products_tool,
+)
 from servicenow_mcp.tools.cmdb_relationship_tools import (
     CreateCIRelationshipParams,
     DeleteCIRelationshipParams,
@@ -1317,6 +1347,86 @@ def get_tool_definitions(
             Dict[str, Any],
             "Get Service Portal widget(s) by sys_id (exact) or by name (contains)",
             "raw_dict",
+        ),
+        # Customer Service Case Tools (CSM)
+        "list_cases": (
+            list_cases_tool,
+            ListCasesParams,
+            str,
+            "List customer service cases from ServiceNow with optional filters",
+            "json",
+        ),
+        "get_case_by_number": (
+            get_case_by_number_tool,
+            GetCaseByNumberParams,
+            str,
+            "Get a customer service case by its CS number",
+            "json_dict",
+        ),
+        "search_cases": (
+            search_cases_tool,
+            SearchCasesParams,
+            str,
+            "Search customer service cases by text in description fields",
+            "json",
+        ),
+        # CSM Reference Data
+        "list_accounts": (
+            list_accounts_tool,
+            ListAccountsParams,
+            str,
+            "List customer accounts from ServiceNow (customer_account table)",
+            "json",
+        ),
+        "list_locations": (
+            list_locations_tool,
+            ListLocationsParams,
+            str,
+            "List locations from ServiceNow (cmn_location table)",
+            "json",
+        ),
+        "list_products": (
+            list_products_tool,
+            ListProductsParams,
+            str,
+            "List sold products from ServiceNow (sn_install_base_sold_product table)",
+            "json",
+        ),
+        # CSM Case Correlation
+        "get_cases_by_account": (
+            get_cases_by_account_tool,
+            GetCasesByAccountParams,
+            str,
+            "Get customer service cases for a specific account/customer",
+            "json",
+        ),
+        "get_cases_by_location": (
+            get_cases_by_location_tool,
+            GetCasesByLocationParams,
+            str,
+            "Get customer service cases for a specific location/venue",
+            "json",
+        ),
+        "get_cases_by_product": (
+            get_cases_by_product_tool,
+            GetCasesByProductParams,
+            str,
+            "Get customer service cases filtered by product type",
+            "json",
+        ),
+        "get_cases_by_integration": (
+            get_cases_by_integration_tool,
+            GetCasesByIntegrationParams,
+            str,
+            "Get customer service cases involving a specific integration/vendor",
+            "json",
+        ),
+        "get_case_history": (
+            get_case_history_tool,
+            GetCaseHistoryParams,
+            str,
+            "Get full comment and work note timeline for a customer service case",
+            "json_dict",
         ),
         # CMDB Relationship Tools
         "list_ci_relationships": (

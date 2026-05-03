@@ -18,6 +18,11 @@ nl_power_user:
   - natural_language_update
 
 service_desk:
+  # Customer Service Management (CSM)
+  - list_cases
+  - get_case_by_number
+  - search_cases
+  - get_case_history
   # Incident Management
   - create_incident
   - update_incident
@@ -209,6 +214,18 @@ system_administrator:
   - update_asset_contract
 
 full:
+  # CSM (Customer Service Management)
+  - list_cases
+  - get_case_by_number
+  - search_cases
+  - list_accounts
+  - list_locations
+  - list_products
+  - get_cases_by_account
+  - get_cases_by_location
+  - get_cases_by_product
+  - get_cases_by_integration
+  - get_case_history
   # Incident Management
   - create_incident
   - update_incident
