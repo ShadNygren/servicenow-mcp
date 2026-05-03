@@ -45,10 +45,11 @@ from servicenow_mcp.tools.changeset_tools import (
 from servicenow_mcp.tools.incident_tools import (
     add_comment,
     create_incident,
+    get_incident_by_number,
+    get_incident_journal,
     list_incidents,
     resolve_incident,
     update_incident,
-    get_incident_by_number,
 )
 from servicenow_mcp.tools.knowledge_base import (
     create_article,
@@ -178,7 +179,8 @@ __all__ = [
     "resolve_incident",
     "list_incidents",
     "get_incident_by_number",
-    
+    "get_incident_journal",
+
     # Catalog tools
     "create_catalog_item",
     "list_catalog_items",

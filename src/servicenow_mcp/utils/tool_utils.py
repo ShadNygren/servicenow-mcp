@@ -132,10 +132,11 @@ from servicenow_mcp.tools.changeset_tools import (
 from servicenow_mcp.tools.incident_tools import (
     AddCommentParams,
     CreateIncidentParams,
+    GetIncidentByNumberParams,
+    GetIncidentJournalParams,
     ListIncidentsParams,
     ResolveIncidentParams,
     UpdateIncidentParams,
-    GetIncidentByNumberParams,
 )
 from servicenow_mcp.tools.incident_tools import (
     add_comment as add_comment_tool,
@@ -154,6 +155,9 @@ from servicenow_mcp.tools.incident_tools import (
 )
 from servicenow_mcp.tools.incident_tools import (
     get_incident_by_number as get_incident_by_number_tool,
+)
+from servicenow_mcp.tools.incident_tools import (
+    get_incident_journal as get_incident_journal_tool,
 )
 from servicenow_mcp.tools.knowledge_base import (
     CreateArticleParams,
@@ -531,6 +535,19 @@ def get_tool_definitions(
             str,
             "Incident details from ServiceNow",
             "json_dict"
+        ),
+        "get_incident_journal": (
+            get_incident_journal_tool,
+            GetIncidentJournalParams,
+            str,
+            (
+                "Fetch the work_notes and comments timeline for an incident. "
+                "Resolves the incident number to sys_id, then queries "
+                "sys_journal_field for chronologically-ordered journal entries. "
+                "Useful when the LLM needs the full conversation history on a ticket. "
+                "Closes echelon Issue #52."
+            ),
+            "json_dict",
         ),
         # Catalog Tools
         "list_catalog_items": (

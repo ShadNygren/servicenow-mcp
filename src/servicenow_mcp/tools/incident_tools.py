@@ -88,6 +88,24 @@ class GetIncidentByNumberParams(BaseModel):
     incident_number: str = Field(..., description="The number of the incident to fetch")
 
 
+class GetIncidentJournalParams(BaseModel):
+    """Parameters for fetching an incident's journal (work_notes + comments)."""
+
+    incident_number: str = Field(..., description="The incident number, e.g. 'INC0010001'")
+    fields: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Journal fields to include. Defaults to ['work_notes', 'comments']. "
+            "Pass ['work_notes'] for internal-only or ['comments'] for "
+            "customer-visible only."
+        ),
+    )
+    limit: int = Field(
+        100,
+        description="Maximum number of journal entries to return (default 100)",
+    )
+
+
 class IncidentResponse(BaseModel):
     """Response from incident operations."""
 
@@ -617,3 +635,116 @@ def get_incident_by_number(
             "success": False,
             "message": f"Failed to fetch incident: {str(e)}",
         }
+
+
+def get_incident_journal(
+    config: ServerConfig,
+    auth_manager: AuthManager,
+    params: GetIncidentJournalParams,
+) -> dict:
+    """Fetch the work_notes and comments timeline for an incident.
+
+    ServiceNow stores work_notes and comments as journal fields in
+    the ``sys_journal_field`` table, not as columns on the incident
+    record itself. The Table API doesn't surface them by default;
+    callers have historically had to either query journal fields
+    explicitly or include ``sysparm_display_value=all`` and parse
+    the journal stream from the response.
+
+    This tool wraps the explicit query path: look up the incident's
+    sys_id by number, then query ``sys_journal_field`` for that
+    record_id with the requested journal fields.
+
+    Closes Issue #52
+    (https://github.com/echelon-ai-labs/servicenow-mcp/issues/52).
+    """
+    fields = params.fields or ["work_notes", "comments"]
+
+    # Step 1: resolve incident number to sys_id.
+    incident_url = f"{config.api_url}/table/incident"
+    try:
+        lookup = requests.get(
+            incident_url,
+            headers=auth_manager.get_headers(),
+            params={
+                "sysparm_query": f"number={params.incident_number}",
+                "sysparm_limit": "1",
+                "sysparm_fields": "sys_id,number",
+            },
+            timeout=config.timeout,
+        )
+    except requests.RequestException as e:
+        logger.error(f"Failed to look up incident: {e}")
+        return {
+            "success": False,
+            "message": f"Failed to look up incident: {e}",
+        }
+
+    if lookup.status_code != 200:
+        return {
+            "success": False,
+            "message": f"Incident lookup returned {lookup.status_code}",
+        }
+
+    matches = lookup.json().get("result", [])
+    if not matches:
+        return {
+            "success": False,
+            "message": f"Incident not found: {params.incident_number}",
+        }
+    sys_id = matches[0].get("sys_id")
+    if not sys_id:
+        return {
+            "success": False,
+            "message": f"Incident {params.incident_number} returned no sys_id",
+        }
+
+    # Step 2: query journal entries for that sys_id, ordered chronologically.
+    fields_filter = "^OR".join(f"element={f}" for f in fields)
+    journal_query = f"name=incident^element_id={sys_id}^({fields_filter})"
+    try:
+        journal_response = requests.get(
+            f"{config.api_url}/table/sys_journal_field",
+            headers=auth_manager.get_headers(),
+            params={
+                "sysparm_query": f"{journal_query}^ORDERBYsys_created_on",
+                "sysparm_limit": str(params.limit),
+                "sysparm_fields": (
+                    "sys_id,sys_created_on,sys_created_by,element,value"
+                ),
+            },
+            timeout=config.timeout,
+        )
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch journal: {e}")
+        return {
+            "success": False,
+            "message": f"Failed to fetch journal: {e}",
+        }
+
+    if journal_response.status_code != 200:
+        return {
+            "success": False,
+            "message": f"Journal query returned {journal_response.status_code}",
+        }
+
+    raw_entries = journal_response.json().get("result", [])
+    entries = [
+        {
+            "sys_id": e.get("sys_id"),
+            "field": e.get("element"),
+            "created_on": e.get("sys_created_on"),
+            "created_by": e.get("sys_created_by"),
+            "text": e.get("value"),
+        }
+        for e in raw_entries
+    ]
+
+    return {
+        "success": True,
+        "incident_number": params.incident_number,
+        "incident_sys_id": sys_id,
+        "fields_queried": fields,
+        "count": len(entries),
+        "entries": entries,
+    }

@@ -25,6 +25,7 @@ service_desk:
   - resolve_incident
   - list_incidents
   - get_incident_by_number
+  - get_incident_journal
   # Service Catalog Tasks
   - get_sctask
   - list_sctasks
@@ -211,6 +212,7 @@ full:
   - resolve_incident
   - list_incidents
   - get_incident_by_number
+  - get_incident_journal
   # Catalog (Core)
   # - list_catalogs  # TODO: not yet implemented
   - list_catalog_items
