@@ -73,11 +73,15 @@ class ResolveIncidentParams(BaseModel):
 
 class ListIncidentsParams(BaseModel):
     """Parameters for listing incidents."""
-    
+
     limit: int = Field(10, description="Maximum number of incidents to return")
     offset: int = Field(0, description="Offset for pagination")
     state: Optional[str] = Field(None, description="Filter by incident state")
-    assigned_to: Optional[str] = Field(None, description="Filter by assigned user")
+    assigned_to: Optional[str] = Field(None, description="Filter by assigned user (sys_id or username)")
+    assignment_group: Optional[str] = Field(
+        None,
+        description="Filter by assignment group name (matches assignment_group.name)",
+    )
     category: Optional[str] = Field(None, description="Filter by category")
     query: Optional[str] = Field(None, description="Search query for incidents")
     updated_on_after: Optional[str] = Field(
@@ -87,6 +91,14 @@ class ListIncidentsParams(BaseModel):
     updated_on_before: Optional[str] = Field(
         None,
         description="Filter by updated-on time: return incidents updated on or before this time (format: YYYY-MM-DD or YYYY-MM-DD HH:mm:ss)",
+    )
+    opened_after: Optional[str] = Field(
+        None,
+        description="Filter by opened-at time: return incidents opened on or after this time (format: YYYY-MM-DD or YYYY-MM-DD HH:mm:ss)",
+    )
+    opened_before: Optional[str] = Field(
+        None,
+        description="Filter by opened-at time: return incidents opened on or before this time (format: YYYY-MM-DD or YYYY-MM-DD HH:mm:ss)",
     )
 
 
@@ -510,12 +522,18 @@ def list_incidents(
         filters.append(f"state={params.state}")
     if params.assigned_to:
         filters.append(f"assigned_to={params.assigned_to}")
+    if params.assignment_group:
+        filters.append(f"assignment_group.name={params.assignment_group}")
     if params.category:
         filters.append(f"category={params.category}")
     if params.updated_on_after:
         filters.append(f"sys_updated_on>={params.updated_on_after}")
     if params.updated_on_before:
         filters.append(f"sys_updated_on<={params.updated_on_before}")
+    if params.opened_after:
+        filters.append(f"opened_at>={params.opened_after}")
+    if params.opened_before:
+        filters.append(f"opened_at<={params.opened_before}")
     if params.query:
         filters.append(f"short_descriptionLIKE{params.query}^ORdescriptionLIKE{params.query}")
 
@@ -540,6 +558,9 @@ def list_incidents(
             assigned_to = incident_data.get("assigned_to")
             if isinstance(assigned_to, dict):
                 assigned_to = assigned_to.get("display_value")
+            assignment_group = incident_data.get("assignment_group")
+            if isinstance(assignment_group, dict):
+                assignment_group = assignment_group.get("display_value")
             incidents.append({
                 "sys_id": incident_data.get("sys_id"),
                 "number": incident_data.get("number"),
@@ -548,8 +569,10 @@ def list_incidents(
                 "state": incident_data.get("state"),
                 "priority": incident_data.get("priority"),
                 "assigned_to": assigned_to,
+                "assignment_group": assignment_group,
                 "category": incident_data.get("category"),
                 "subcategory": incident_data.get("subcategory"),
+                "opened_at": incident_data.get("opened_at"),
                 "created_on": incident_data.get("sys_created_on"),
                 "updated_on": incident_data.get("sys_updated_on"),
             })
