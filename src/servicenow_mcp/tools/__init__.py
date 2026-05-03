@@ -152,6 +152,10 @@ from servicenow_mcp.tools.case_tools import (
     list_cases,
     search_cases,
 )
+from servicenow_mcp.tools.scripted_rest_tools import (
+    create_scripted_rest_api,
+    create_scripted_rest_resource,
+)
 from servicenow_mcp.tools.csm_tools import (
     get_case_history,
     get_cases_by_account,
@@ -328,6 +332,10 @@ __all__ = [
     "get_widget",
     "create_widget",
     "update_widget",
+
+    # Scripted REST API tools (sys_ws_definition + sys_ws_operation)
+    "create_scripted_rest_api",
+    "create_scripted_rest_resource",
 
     # CSM (Customer Service Management) tools
     "list_cases",

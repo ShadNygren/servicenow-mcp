@@ -137,6 +137,9 @@ platform_developer:
   - get_widget
   - create_widget
   - update_widget
+  # Scripted REST API
+  - create_scripted_rest_api
+  - create_scripted_rest_resource
   # Changesets
   - list_changesets
   - get_changeset_details
@@ -323,6 +326,9 @@ full:
   - get_widget
   - create_widget
   - update_widget
+  # Scripted REST API
+  - create_scripted_rest_api
+  - create_scripted_rest_resource
   # CMDB
   - list_cis
   - get_ci

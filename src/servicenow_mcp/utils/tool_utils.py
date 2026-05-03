@@ -447,6 +447,15 @@ from servicenow_mcp.tools.case_tools import (
     list_cases as list_cases_tool,
     search_cases as search_cases_tool,
 )
+from servicenow_mcp.tools.scripted_rest_tools import (
+    CreateScriptedRestApiParams,
+    CreateScriptedRestResourceParams,
+    ScriptedRestResponse,
+)
+from servicenow_mcp.tools.scripted_rest_tools import (
+    create_scripted_rest_api as create_scripted_rest_api_tool,
+    create_scripted_rest_resource as create_scripted_rest_resource_tool,
+)
 from servicenow_mcp.tools.csm_tools import (
     GetCaseHistoryParams,
     GetCasesByAccountParams,
@@ -1347,6 +1356,29 @@ def get_tool_definitions(
             Dict[str, Any],
             "Get Service Portal widget(s) by sys_id (exact) or by name (contains)",
             "raw_dict",
+        ),
+        # Scripted REST API Tools
+        "create_scripted_rest_api": (
+            create_scripted_rest_api_tool,
+            CreateScriptedRestApiParams,
+            ScriptedRestResponse,
+            (
+                "Create a Scripted REST API service definition (sys_ws_definition). "
+                "Returns the namespace + service id; pair with create_scripted_rest_resource "
+                "to add operations (HTTP method + relative path + script body)."
+            ),
+            "raw_pydantic",
+        ),
+        "create_scripted_rest_resource": (
+            create_scripted_rest_resource_tool,
+            CreateScriptedRestResourceParams,
+            ScriptedRestResponse,
+            (
+                "Create an operation on an existing Scripted REST API service "
+                "(sys_ws_operation). Defines an HTTP method, relative URL path, "
+                "and the server-side script body that handles requests."
+            ),
+            "raw_pydantic",
         ),
         # Customer Service Case Tools (CSM)
         "list_cases": (
