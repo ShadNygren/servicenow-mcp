@@ -93,16 +93,13 @@ class AuthManager:
             raise ValueError("OAuth configuration is required")
         oauth_config = self.config.oauth
 
-        # Determine token URL
+        # Determine token URL — derive from instance_url so custom domains
+        # (e.g. instances on `.example.com` instead of `.service-now.com`) work.
         token_url = oauth_config.token_url
         if not token_url:
             if not self.instance_url:
                 raise ValueError("Instance URL is required for OAuth authentication")
-            instance_parts = self.instance_url.split(".")
-            if len(instance_parts) < 2:
-                raise ValueError(f"Invalid instance URL: {self.instance_url}")
-            instance_name = instance_parts[0].split("//")[-1]
-            token_url = f"https://{instance_name}.service-now.com/oauth_token.do"
+            token_url = f"{self.instance_url.rstrip('/')}/oauth_token.do"
 
         # Prepare Authorization header
         auth_str = f"{oauth_config.client_id}:{oauth_config.client_secret}"
