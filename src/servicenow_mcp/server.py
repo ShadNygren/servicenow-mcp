@@ -21,6 +21,7 @@ from servicenow_mcp.tools.knowledge_base import (
 from servicenow_mcp.tools.knowledge_base import (
     list_categories as list_kb_categories_tool,
 )
+from servicenow_mcp.resources.schema import SchemaResources
 from servicenow_mcp.utils.config import ServerConfig
 from servicenow_mcp.utils.tool_utils import get_tool_definitions
 
@@ -110,13 +111,18 @@ class ServiceNowMCP:
             create_kb_category_tool, list_kb_categories_tool
         )
 
+        # Schema-discovery resources (servicenow://tables, servicenow://schema/{table}, ...)
+        self.schema_resources = SchemaResources(self.config, self.auth_manager)
+
         self._register_handlers()
 
     def _register_handlers(self):
-        """Register the list_tools and call_tool handlers."""
+        """Register the list_tools, call_tool, and resource handlers."""
         self.mcp_server.list_tools()(self._list_tools_impl)
         self.mcp_server.call_tool()(self._call_tool_impl)
-        logger.info("Registered list_tools and call_tool handlers.")
+        self.mcp_server.list_resources()(self._list_resources_impl)
+        self.mcp_server.read_resource()(self._read_resource_impl)
+        logger.info("Registered list_tools, call_tool, and resource handlers.")
 
     def _load_package_config(self):
         """Load tool package definitions from the YAML configuration file."""
@@ -286,6 +292,48 @@ class ServiceNowMCP:
 
         # Return a list with a TextContent object
         return [types.TextContent(type="text", text=serialized_string)]
+
+    async def _list_resources_impl(self) -> List[types.Resource]:
+        """Advertise the schema-discovery resources.
+
+        These let the LLM read the connected instance's data model
+        directly, instead of guessing field names. Per-table sample and
+        schema URIs use template form (RFC 6570), but the low-level MCP
+        server expects concrete URIs in list_resources(); we expose the
+        templates as resources with the placeholder visible so clients
+        can substitute. read_resource() handles the substituted URIs.
+        """
+        return [
+            types.Resource(
+                uri="servicenow://tables",
+                name="ServiceNow tables",
+                description="List of tables in the connected ServiceNow instance.",
+                mimeType="application/json",
+            ),
+            types.Resource(
+                uri="servicenow://tables/{table}",
+                name="ServiceNow table records (template)",
+                description=(
+                    "Sample records (limit 10) from the named table. "
+                    "Substitute {table} with a table name."
+                ),
+                mimeType="application/json",
+            ),
+            types.Resource(
+                uri="servicenow://schema/{table}",
+                name="ServiceNow table schema (template)",
+                description=(
+                    "Column metadata for the named table from sys_dictionary. "
+                    "Substitute {table} with a table name."
+                ),
+                mimeType="application/json",
+            ),
+        ]
+
+    async def _read_resource_impl(self, uri) -> str:
+        """Resolve a schema-discovery URI and return the JSON body."""
+        # The low-level server passes either str or pydantic AnyUrl; coerce.
+        return self.schema_resources.read(str(uri))
 
     def _list_tool_packages_impl(self) -> Dict[str, Any]:
         """Implementation logic for the list_tool_packages tool."""
