@@ -76,13 +76,19 @@ knowledge_author:
   - get_article
 
 platform_developer:
-  # Script Includes
+  # Script Includes (read-only — write/execute tools omitted by default; see SECURITY note below)
   - list_script_includes
   - get_script_include
-  - create_script_include
-  - update_script_include
-  - delete_script_include
-  - execute_script_include
+  # SECURITY (Issue #43 finding #1, mcpscan.ai 2025-09-09):
+  # The following four tools together form an arbitrary-code-execution sink on the
+  # ServiceNow instance. They remain registered and available — but are NOT included
+  # in any default package. Opt in by defining your own package in this file (or via
+  # MCP_TOOL_PACKAGE_CONFIG_PATH) AND enforcing a human-in-the-loop approval flow.
+  # Do not re-add to platform_developer or full without that gate.
+  # - create_script_include
+  # - update_script_include
+  # - delete_script_include
+  # - execute_script_include
   # Workflows
   - list_workflows
   - get_workflow_details
@@ -203,13 +209,13 @@ full:
   - commit_changeset
   - publish_changeset
   - add_file_to_changeset
-  # Script Include
+  # Script Include (read-only — see SECURITY note in platform_developer above)
   - list_script_includes
   - get_script_include
-  - create_script_include
-  - update_script_include
-  - delete_script_include
-  - execute_script_include
+  # - create_script_include       # see SECURITY note in platform_developer
+  # - update_script_include       # see SECURITY note in platform_developer
+  # - delete_script_include       # see SECURITY note in platform_developer
+  # - execute_script_include      # see SECURITY note in platform_developer
   # Knowledge Base
   - create_knowledge_base
   - list_knowledge_bases
