@@ -100,13 +100,44 @@ Order matters — earlier items are infrastructure for later items.
 4. **README rewrite** — comprehensive, with deployment guide, security warnings, install paths, all tool packages documented.
 5. **`torkian c12aaec`** — PR / issue templates, CONTRIBUTING.md, SECURITY.md.
 
-### Phase 7 — Future / deferred
+### Phase 7 — Streamable HTTP transport migration
 
-- **`chan4lk/streamable-http` branch** — SSE → Streamable-HTTP migration (out of scope for current phases per original playbook constraints).
+The MCP spec deprecates SSE in favor of Streamable HTTP (single endpoint that supports both request/response and server-pushed streaming over chunked HTTP). Echelon's `server_sse.py` already uses FastMCP — this phase is a transport upgrade *within* FastMCP, not a framework switch.
+
+1. Implement Streamable HTTP endpoint via `mcp.server.fastmcp.FastMCP` Streamable HTTP support.
+2. Carry forward all security middleware from the hardening branch and Phase 6 (Host/Origin allowlist, loopback default, bearer token, ApiKey).
+3. Keep the existing SSE endpoint as `/sse` (deprecated) for one release cycle to avoid breaking existing clients; remove in a later release. Document the deprecation in README.
+4. Reference implementation: `chan4lk/servicenow-mcp` `streamable-http` branch (`1d2b689`) — predates the current spec, so use as guidance only, not a direct port.
+5. Tests covering both endpoints during the transition.
+
+### Phase 8 — Unify on FastMCP, retire `tool_utils.py` registry
+
+After Phase 7, both transports are FastMCP-based, but `cli.py` still uses `mcp.server.lowlevel.Server` and tool registration goes through the ~980-line `tool_utils.py` registry that maps strings to factory functions. This phase commits to FastMCP-everywhere.
+
+1. Migrate `cli.py` (stdio entry point) from `mcp.server.lowlevel.Server` to FastMCP.
+2. Replace `tool_utils.py` with `@mcp.tool()` decorators on each tool. Schemas auto-generate from Pydantic parameter models.
+3. Reimplement `MCP_TOOL_PACKAGE` filtering as decorator-time registration into named groups (e.g., `@mcp.tool(packages=["service_desk", "full"])`), with package selection happening at server startup before tools are exposed.
+4. Adding a new tool becomes: drop a file in `tools/<domain>/`, decorate the function. No central registry edit.
+5. **Why this is post-Phase 7, not part of it:** Phase 7 is a transport change (small, focused, urgent because SSE is deprecated). Phase 8 is a registration-pattern change that touches every tool file. Splitting reduces blast radius and lets us ship Streamable HTTP support without waiting on the registry rewrite.
+
+**Why FastMCP-everywhere is the right end state:**
+
+| Concern | Status |
+|---|---|
+| CVE / patching cadence | No differential — `lowlevel.Server` and FastMCP ship in the same `mcp` Python SDK and patches cover both. Confirmed during Phase 1 planning. |
+| ServiceNow-specific features requiring low-level | None observed. ServiceNow tools are just HTTP requests; both interfaces handle this fine. |
+| Custom `tool_utils.py` registry maintenance | Eliminated in Phase 8 — decorators replace it. |
+| `MCP_TOOL_PACKAGE` filtering | Reimplementable as decorator metadata; design shape is preserved. |
+| Compatibility with cherry-picked fork code | Cherry-picks land in Phases 2-6 against the current low-level shape; Phase 8 migrates all of them at once with a coordinated rewrite. |
+
+### Phase 9 — Async refactor (`requests` → `httpx.AsyncClient`)
+
+FastMCP supports sync tools (runs them in a threadpool), so async refactoring is **not** coupled to Phase 8. After Phase 8 lands, migrate every tool's HTTP client from sync `requests` to `httpx.AsyncClient`, with one shared client per process and connection pooling. Touches every tool file in `tools/`. Meaningful perf win for HTTP transports under concurrent load. Removes the awkward sync-under-async footgun in echelon's current SSE server.
+
+### Phase 10+ — Future / deferred
+
 - **Full MCP-spec OAuth 2.1 north-bound** (Resource Server, JWT validation, JWKS, audience binding per RFC 8707, `/.well-known/oauth-protected-resource` per RFC 9728).
 - **RFC 8693 token exchange (OBO)** for end-user attribution to ServiceNow.
-- **Async refactor (`requests` → `httpx.AsyncClient`)** — touches every tool module.
-- **Auto-discovery tool registry** (`pkgutil.iter_modules` + decorator) — retire monolithic `tool_utils.py`.
 - **Pluggable secret stores** (`secrets/vault.py`, `secrets/aws_secrets.py`).
 - **OS keyring integration** for credential storage (addresses Issue #43 finding #3 fully).
 
@@ -127,11 +158,15 @@ Our fork serves as the de-facto reviewed-and-tested version while we advocate up
 
 These are not open questions — explicitly deferred:
 
-- **Do not refactor `requests` → `httpx.AsyncClient`.** Phase 7.
+- **Do not refactor `requests` → `httpx.AsyncClient`.** Phase 9.
 - **Do not migrate SSE → Streamable HTTP.** Phase 7.
-- **Do not implement full MCP-spec OAuth 2.1 north-bound.** Phase 7. Static-bearer-token floor (from `fix/sse-auth-hardening`) is the current ceiling.
+- **Do not migrate stdio from low-level to FastMCP.** Phase 8.
+- **Do not retire `tool_utils.py` registry.** Phase 8.
+- **Do not implement full MCP-spec OAuth 2.1 north-bound.** Phase 10. Static-bearer-token floor (from `fix/sse-auth-hardening`) is the current ceiling.
 - **Commit cadence is small and atomic.** Push after each milestone.
 - **Stay MIT.** Don't relicense.
+- **Stay on the official `mcp` Python SDK** (the package on PyPI named `mcp`). Do not switch to the standalone `fastmcp` 2.x package by jlowin without explicit user direction — committed during Phase 1 planning.
+- **End-state architecture is FastMCP-everywhere** (Phase 8). Don't roll our own registry, don't fork the MCP SDK, don't switch frameworks mid-project.
 - **anilvaranasi.** Reviewed only — no code copied. Their repo has no LICENSE file.
 
 ## Architectural orientation
