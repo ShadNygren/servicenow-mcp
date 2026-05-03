@@ -15,6 +15,7 @@ from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.utils.config import (
     AuthConfig,
     AuthType,
+    BasicAuthConfig,
     OAuthConfig,
 )
 
@@ -144,6 +145,50 @@ def test_client_credentials_only_no_username_password():
     assert post.call_count == 1
     sent_data = post.call_args[1]["data"]
     assert sent_data == {"grant_type": "client_credentials"}
+
+
+def test_extra_http_headers_env_var_merged_into_headers(monkeypatch):
+    """Phase 3.3: SERVICENOW_EXTRA_HTTP_HEADERS env var (JSON dict) is
+    merged into every get_headers() call. Useful for corporate proxies
+    and trace headers without monkey-patching the auth manager."""
+    monkeypatch.setenv(
+        "SERVICENOW_EXTRA_HTTP_HEADERS",
+        '{"X-Tenant-Id": "acme", "X-Trace-Id": "abc123"}',
+    )
+    config = AuthConfig(
+        type=AuthType.BASIC,
+        basic=BasicAuthConfig(username="u", password="p"),
+    )
+    headers = AuthManager(config).get_headers()
+    assert headers.get("X-Tenant-Id") == "acme"
+    assert headers.get("X-Trace-Id") == "abc123"
+    # Standard headers still present
+    assert headers["Accept"] == "application/json"
+
+
+def test_extra_http_headers_legacy_env_var_still_works(monkeypatch):
+    """The original EXTRA_HTTP_HEADERS env var (without SERVICENOW_ prefix)
+    remains supported as a fallback for backward compatibility."""
+    monkeypatch.delenv("SERVICENOW_EXTRA_HTTP_HEADERS", raising=False)
+    monkeypatch.setenv("EXTRA_HTTP_HEADERS", '{"X-Legacy": "yes"}')
+    config = AuthConfig(
+        type=AuthType.BASIC,
+        basic=BasicAuthConfig(username="u", password="p"),
+    )
+    headers = AuthManager(config).get_headers()
+    assert headers.get("X-Legacy") == "yes"
+
+
+def test_extra_http_headers_namespaced_takes_precedence(monkeypatch):
+    """When both env vars are set, SERVICENOW_EXTRA_HTTP_HEADERS wins."""
+    monkeypatch.setenv("SERVICENOW_EXTRA_HTTP_HEADERS", '{"X-Source": "namespaced"}')
+    monkeypatch.setenv("EXTRA_HTTP_HEADERS", '{"X-Source": "legacy"}')
+    config = AuthConfig(
+        type=AuthType.BASIC,
+        basic=BasicAuthConfig(username="u", password="p"),
+    )
+    headers = AuthManager(config).get_headers()
+    assert headers.get("X-Source") == "namespaced"
 
 
 def test_resource_url_added_to_client_credentials_request():
