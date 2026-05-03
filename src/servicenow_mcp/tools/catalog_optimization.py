@@ -8,7 +8,6 @@ slow fulfillment times, and poor descriptions.
 
 import logging
 import random
-from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 import requests
