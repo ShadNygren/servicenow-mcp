@@ -187,6 +187,29 @@ Echelon's tool packaging (`MCP_TOOL_PACKAGE` env var + `config/tool_packages.yam
 5. **`tool_packages.yaml` not bundled in pip wheels.** PR #46 has the canonical fix.
 6. **Default Dockerfile binds 0.0.0.0.** Issue #43 finding #4. Fixed by `fix/sse-auth-hardening`.
 
+## Testing against a live ServiceNow instance (PDI)
+
+ServiceNow provides free, fully functional Personal Developer Instances (PDIs) — dedicated sandboxes at URLs like `https://dev12345.service-now.com`. These are the right testing target for integration tests and end-to-end validation.
+
+**Setup.**
+1. Sign up at [developer.servicenow.com](https://developer.servicenow.com).
+2. Request an instance (the dashboard has a "Request Instance" action). Provisioning takes a few minutes.
+3. Note the admin password and instance URL — you'll need them for `SERVICENOW_INSTANCE_URL`, `SERVICENOW_USERNAME`, `SERVICENOW_PASSWORD`.
+4. **Keep the instance active** — log in at least once every 10 days, or it will be reclaimed.
+
+**What's installed by default.** PDIs ship with the standard ITSM stack pre-activated (incident, change, problem, knowledge, catalog, CMDB, sys_user, etc.). Some specialized plugins (Agile 2.0, Service Portal extensions, AI Agent platform) need explicit activation via the Plugins UI in the instance.
+
+**Testing flow.**
+- **Unit tests** (the default `pytest` run) use mocks via `respx` and never hit a real instance.
+- **Integration tests** (Phase 4 — Flowbie `0199475` gate): set `SN_INTEGRATION_TESTS=1` to enable. The gate skips them by default so CI doesn't depend on PDI availability.
+- **MCP Inspector** ([github.com/modelcontextprotocol/inspector](https://github.com/modelcontextprotocol/inspector)) — the official debugging UI for MCP servers. Run our server locally, connect Inspector to it, exercise tools manually against the PDI.
+- **Claude Desktop** — point `claude_desktop_config.json` at the local server (see install-path notes for Issue #49). Real end-to-end test with the real LLM.
+- **REST API Explorer** — built into the PDI itself at `/now/nav/ui/classic/params/target/sys_rest_message.do`. Use it to verify your auth + query syntax before debugging from the MCP layer.
+
+**Auth recommendation for PDI testing.** Use basic auth (admin username/password) for local development — simplest path. OAuth is worth testing later but introduces an extra moving part you don't need while building.
+
+**Future: PDI fixture pattern.** Flowbie's `8eb4be5` commit (in our Phase 4 cherry-pick list) introduces a `live_config` + `pdi_guard` fixture pair that gates integration tests on a configured PDI being reachable. After Phase 4 lands, that's the canonical pattern for new integration tests in this repo.
+
 ## Commands
 
 Standard development commands:
