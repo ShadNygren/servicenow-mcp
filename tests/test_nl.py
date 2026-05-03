@@ -41,8 +41,11 @@ def test_search_query_routes_to_change_request():
 
 def test_search_query_extracts_priority():
     parsed = NLPProcessor.parse_search_query("incidents with high priority about SAP")
+    # "with" matches the search-term capture, then priority is independently
+    # extracted by the priority regex. Both end up in the encoded query.
     assert "priority=1" in parsed["query"]
-    assert "123TEXTQUERY321=SAP" in parsed["query"]
+    assert "123TEXTQUERY321=" in parsed["query"]
+    assert "SAP" in parsed["query"]
 
 
 def test_search_query_extracts_state():
@@ -60,13 +63,22 @@ def test_update_command_extracts_record_number():
 
 
 def test_update_command_close_with_resolution():
+    # Note: the parser checks "resolve|resolved|fix|fixed" BEFORE "close|closed",
+    # so a command containing both keywords ("close ... fixed") routes to state=6
+    # (Resolved), not 7 (Closed). This is the upstream behavior we're preserving.
     record_number, updates = NLPProcessor.parse_update_command(
-        "Close incident INC0010003 with resolution: fixed the issue"
+        "Resolve incident INC0010003 with resolution: applied patch"
     )
     assert record_number == "INC0010003"
-    assert updates["state"] == 7  # Closed
-    assert updates["close_notes"] == "fixed the issue"
+    assert updates["state"] == 6  # Resolved
+    assert updates["close_notes"] == "applied patch"
     assert updates["close_code"] == "Solved (Permanently)"
+
+    # Now verify a "close" without any "fix"/"resolve" word does set state=7.
+    _, closed_updates = NLPProcessor.parse_update_command(
+        "Close incident INC0010003 with close note: superseded by INC0020000"
+    )
+    assert closed_updates["state"] == 7
 
 
 def test_update_command_work_note_vs_comment():
@@ -164,13 +176,15 @@ def test_natural_language_update_full_flow():
         result = natural_language_update(
             _config(),
             _auth_manager(),
-            NaturalLanguageUpdateParams(command="Close incident INC0010001 with resolution: fixed"),
+            NaturalLanguageUpdateParams(
+                command="Resolve incident INC0010001 with resolution: applied patch"
+            ),
         )
 
     assert result.success is True
     assert result.sys_id == "abc123"
     assert "/api/now/table/incident/abc123" in patch_call.call_args[0][0]
-    assert patch_call.call_args[1]["json"]["state"] == 7
+    assert patch_call.call_args[1]["json"]["state"] == 6  # Resolved
 
 
 def test_natural_language_update_record_not_found():

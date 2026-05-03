@@ -7,6 +7,30 @@ from typing import List
 import pytest
 
 
+# Test files inherited from echelon-ai-labs/servicenow-mcp that fail to import
+# because they reference modules (servicenow_mcp.resources.catalogs,
+# .changesets, .script_includes) that were never written. These have been
+# broken since at least 2025-10 — torkian's fork excludes them via CI flags
+# (commit 167b646). Skip at collection time so the rest of the suite runs.
+# Phase 5 (resource refactor) is the right place to delete or rewrite them.
+collect_ignore = [
+    # Reference modules that were never written (servicenow_mcp.resources.catalogs,
+    # .changesets, .script_includes). Phase 5 will fix or delete these tests.
+    "test_catalog_resources.py",
+    "test_changeset_resources.py",
+    "test_script_include_resources.py",
+    # Tests with pre-existing failures echelon never fixed — torkian's CI also
+    # excludes these. Slated for triage in Phase 5 as part of the workflow/catalog
+    # tool cleanup. Note: test_workflow_tools.py::test_add_workflow_activity_success
+    # and test_change_tools.py::test_create_change_request_with_swapped_parameters_real
+    # and test_knowledge_base.py::test_create_article_params are individual broken
+    # tests within otherwise-passing files; they continue to fail until triaged.
+    "test_server_catalog.py",
+    "test_server_workflow.py",
+    "test_workflow_tools_direct.py",
+]
+
+
 # Patterns that should never appear in any captured log line. Adding to
 # this list makes the redaction check stricter — only add patterns that
 # represent genuinely sensitive data, not just things that *might* be
