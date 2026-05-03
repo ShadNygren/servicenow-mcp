@@ -159,8 +159,26 @@ class TestGetOAuthToken(unittest.TestCase):
         with self.assertRaises(ValueError, msg="Instance URL is required"):
             manager._get_oauth_token()
 
-    def test_invalid_instance_url_raises(self):
-        """Lines 100-101: instance_url with too few parts raises ValueError."""
+    @patch("requests.post")
+    def test_unusual_instance_url_does_not_raise_pre_request(self, mock_post):
+        """After Phase 1.3, instance URLs are no longer pattern-validated.
+
+        Echelon's main split instance_url on '.' and required at least two
+        parts, then rebuilt as `https://{first}.service-now.com/...`.  That
+        broke any non-`*.service-now.com` deployment (custom domains, on-prem,
+        gov clouds, dev hosts). Phase 1.3 removed the validation and uses
+        instance_url directly.
+
+        This test verifies the pre-request validation is gone — an
+        instance_url like `https://localhost` (which would have failed the
+        old pre-validation) now reaches the HTTP layer. We mock the HTTP
+        response to fail cleanly so the test stays hermetic.
+        """
+        bad_response = MagicMock()
+        bad_response.status_code = 401
+        bad_response.json.return_value = {"error": "invalid_client"}
+        mock_post.return_value = bad_response
+
         config = AuthConfig(
             type=AuthType.OAUTH,
             oauth=OAuthConfig(
@@ -172,8 +190,12 @@ class TestGetOAuthToken(unittest.TestCase):
             ),
         )
         manager = AuthManager(config, instance_url="https://localhost")
-        with self.assertRaises(ValueError, msg="Invalid instance URL"):
+        # Should not raise ValueError pre-request; gets to the HTTP layer.
+        with self.assertRaises(ValueError) as ctx:
             manager._get_oauth_token()
+        # The ValueError now comes from the OAuth grant failure path, not
+        # from URL pre-validation. Verify the URL was constructed correctly.
+        self.assertIn("https://localhost/oauth_token.do", mock_post.call_args[0])
 
     @patch("requests.post")
     def test_both_grants_fail_raises_value_error(self, mock_post):
