@@ -1,40 +1,58 @@
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/osomai-servicenow-mcp-badge.png)](https://mseep.ai/app/osomai-servicenow-mcp)
-
 # ServiceNow MCP Server
 
-A Model Completion Protocol (MCP) server implementation for ServiceNow, allowing Claude to interact with ServiceNow instances.
+A Model Context Protocol (MCP) server for ServiceNow. Lets Claude (and any MCP-compatible client) read ServiceNow data and execute actions through the ServiceNow Table and REST APIs.
 
-<a href="https://glama.ai/mcp/servers/@osomai/servicenow-mcp">
-  <img width="380" height="200" src="https://glama.ai/mcp/servers/@osomai/servicenow-mcp/badge" alt="ServiceNow Server MCP server" />
-</a>
+## Fork notice
 
-## Overview
+This is a maintained fork of [`echelon-ai-labs/servicenow-mcp`](https://github.com/echelon-ai-labs/servicenow-mcp), integrating the upstream `fix/sse-auth-hardening` branch and patterns from related forks. Upstream has been effectively dormant since October 2025 — this fork serves as the de-facto reviewed-and-tested version.
 
-This project implements an MCP server that enables Claude to connect to ServiceNow instances, retrieve data, and perform actions through the ServiceNow API. It serves as a bridge between Claude and ServiceNow, allowing for seamless integration.
+The architectural rationale, fork survey, and PR/issue analysis live in:
+- [`ANALYSIS_OF_EXISTING_OPEN_SOURCE_SERVICENOW_MCP_SERVERS.md`](ANALYSIS_OF_EXISTING_OPEN_SOURCE_SERVICENOW_MCP_SERVERS.md)
+- [`ANALYSIS_OF_ECHELON_AI_LABS_SERVICENOW_MCP_FORKS.md`](ANALYSIS_OF_ECHELON_AI_LABS_SERVICENOW_MCP_FORKS.md)
+- [`ANALYSIS_OF_ECHELON_AI_LABS_PRS_AND_ISSUES.md`](ANALYSIS_OF_ECHELON_AI_LABS_PRS_AND_ISSUES.md)
 
-## Features
+License is MIT (matching all upstream sources). See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE) for per-component attribution.
 
-- Connect to ServiceNow instances using various authentication methods (Basic, OAuth, API Key)
-- Query ServiceNow records and tables
-- Create, update, and delete ServiceNow records
-- Execute ServiceNow scripts and workflows
-- Access and query the ServiceNow Service Catalog
-- Analyze and optimize the ServiceNow Service Catalog
-- Debug mode for troubleshooting
-- Support for both stdio and Server-Sent Events (SSE) communication
+## Security notice
+
+Before deploying this server, read these:
+
+1. **Default packages do NOT expose `execute_script_include` and the script-management write/delete tools.** Together, those tools form an arbitrary-code-execution sink on the connected ServiceNow instance — an LLM with access to them can write and run Glide scripts in your tenant. They remain registered in code; opt in only behind a human-in-the-loop approval flow. (Issue [#43 finding #1](https://github.com/echelon-ai-labs/servicenow-mcp/issues/43), addressed in this fork.)
+
+2. **OAuth password grant is supported but discouraged.** It requires the server to handle plaintext ServiceNow user credentials — the OAuth Best Current Practice deprecates it. Prefer the `client_credentials` grant. The server still supports password grant for environments that have it as a hard requirement.
+
+3. **Never put your ServiceNow password in `claude_desktop_config.json` directly.** Configure credentials via environment variables loaded at runtime instead. Plaintext passwords in user-readable JSON files are a real exfiltration risk if your machine is shared, your shell history is logged, or your dotfiles are synced.
+
+4. **HTTP transport binds to loopback by default** (since the `fix/sse-auth-hardening` merge). To expose the server to a non-loopback interface, pass `--allow-remote` AND set `MCP_AUTH_TOKEN` — without both, the server refuses to bind. Bearer-token, Host-allowlist, and Origin-allowlist defenses are all on by default.
+
+5. **Phase 7 will deprecate SSE in favor of Streamable HTTP.** The MCP spec has moved on. SSE will remain available for one release cycle after Streamable HTTP lands.
+
+## Quick start with a ServiceNow Personal Developer Instance (PDI)
+
+ServiceNow provides free, fully-featured developer instances at `https://devXXXXX.service-now.com`. Best testing target.
+
+1. **Sign up** at [developer.servicenow.com](https://developer.servicenow.com) and click "Request Instance" — provisioning takes a few minutes.
+2. **Save the admin password and instance URL.** You'll need them for `SERVICENOW_INSTANCE_URL`, `SERVICENOW_USERNAME`, `SERVICENOW_PASSWORD`.
+3. **Log in at least once every 10 days** — idle instances are reclaimed.
+4. **The standard ITSM stack ships pre-activated** (incident, change, problem, knowledge, catalog, CMDB, sys_user). Specialized plugins (Agile 2.0, AI Agent platform, Service Portal extensions) need explicit activation.
+
+For local testing during development:
+- Use **basic auth** (admin user/pass) — simplest path.
+- Run [**MCP Inspector**](https://github.com/modelcontextprotocol/inspector) against the local server to exercise tools manually.
+- Use the PDI's built-in **REST API Explorer** to validate auth and query syntax before debugging from the MCP layer.
 
 ## Installation
 
 ### Prerequisites
 
 - Python 3.11 or higher
-- A ServiceNow instance with appropriate access credentials
+- A ServiceNow instance with appropriate access credentials (a free PDI is fine)
 
 ### Setup
 
 1. Clone this repository:
    ```
-   git clone https://github.com/echelon-ai-labs/servicenow-mcp.git
+   git clone https://github.com/ShadNygren/servicenow-mcp.git
    cd servicenow-mcp
    ```
 
@@ -308,7 +326,10 @@ This command will register the ServiceNow MCP server with Claude and configure i
 
 To configure the ServiceNow MCP server in Claude Desktop:
 
-1. Edit the Claude Desktop configuration file at `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or the appropriate path for your OS:
+1. Edit the Claude Desktop configuration file:
+   - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+   - **Linux:** `~/.config/Claude/claude_desktop_config.json`
 
 ```json
 {
@@ -330,7 +351,9 @@ To configure the ServiceNow MCP server in Claude Desktop:
 }
 ```
 
-2. Restart Claude Desktop to apply the changes
+2. Restart Claude Desktop to apply the changes.
+
+**Why the absolute path to the venv's `python`?** Claude Desktop launches the MCP server outside any virtualenv you have activated in your shell. Pointing `command` at `python` (or `python3`) directly will run a different interpreter than the one where you `pip install`-ed this package, and the MCP server will fail to import its dependencies. This is the most common installation issue (see [echelon Issue #49](https://github.com/echelon-ai-labs/servicenow-mcp/issues/49)) — using the absolute path to `.venv/bin/python` (or the equivalent for your platform) bypasses it. After Phase 3 ships uvx-compatible packaging (PR #46), you'll be able to skip the venv entirely and use `"command": "uvx", "args": ["servicenow-mcp"]` instead.
 
 ### Example Usage with Claude
 

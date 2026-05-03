@@ -1,0 +1,109 @@
+ShadNygren/servicenow-mcp
+=========================
+
+This project is a maintained fork of `echelon-ai-labs/servicenow-mcp`
+that integrates fixes and features from related forks and from the
+`michaelbuckner/servicenow-mcp` project.
+
+The whole work is distributed under the MIT License (see LICENSE).
+The original copyright notices of all upstream MIT-licensed
+components are preserved here.
+
+
+-----------------------------------------------------------------------
+Component: base server (entire src/ tree, except as noted below)
+Source:    https://github.com/echelon-ai-labs/servicenow-mcp
+Baseline:  main @ 06250607 (2025-10-03)
+Hardening: fix/sse-auth-hardening @ c77861e6 (2026-04-26), merged in
+License:   MIT
+-----------------------------------------------------------------------
+
+Copyright (c) 2025 100x Technology Inc
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+-----------------------------------------------------------------------
+Component: NLPProcessor (src/servicenow_mcp/utils/nl.py)
+           and natural-language tools (src/servicenow_mcp/tools/nl_tools.py
+           is derivative work, MIT-licensed under this combined work)
+Source:    https://github.com/michaelbuckner/servicenow-mcp
+Baseline:  master @ 39e0910 (mcp_server_servicenow/nlp.py)
+License:   MIT
+-----------------------------------------------------------------------
+
+Copyright (c) 2025 Michael Buckner
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+-----------------------------------------------------------------------
+Reviewed only — no code copied
+-----------------------------------------------------------------------
+
+The following project was reviewed during the design phase. It does
+NOT have a LICENSE file and therefore retains all-rights-reserved by
+default under copyright law. We deliberately did not copy any code or
+substantive expression from it; it is mentioned here for completeness:
+
+  https://github.com/anilvaranasi/ServiceNowMCPServer
+
+
+-----------------------------------------------------------------------
+Forks consulted for cherry-picks
+-----------------------------------------------------------------------
+
+The fork-survey analysis (ANALYSIS_OF_ECHELON_AI_LABS_SERVICENOW_MCP_FORKS.md)
+identifies commits from the following MIT-licensed forks of
+echelon-ai-labs/servicenow-mcp as cherry-pick candidates for future
+phases of this project. Each commit cherry-picked into this repo
+preserves its original author via git history. As of Phase 1, no code
+from these forks has been merged yet:
+
+  - https://github.com/torkian/servicenow-mcp           (90 ahead, MIT)
+  - https://github.com/Flowbie/servicenow-mcp          (194 ahead, MIT)
+  - https://github.com/nathanolds22/servicenow-mcp       (2 ahead, MIT)
+  - https://github.com/ericstarkey/servicenow-mcp        (2 ahead, MIT)
+  - https://github.com/chan4lk/servicenow-mcp           (3 + branch, MIT)
+  - https://github.com/klapom/servicenow-mcp            (13 ahead, MIT)
+  - https://github.com/patricebechard/servicenow-mcp     (4 ahead, MIT)
+  - https://github.com/russ430/servicenow-mcp            (4 ahead, MIT)
+  - https://github.com/dobromirmontauk/servicenow-mcp    (4 ahead, MIT)
+  - https://github.com/haim-nizri/servicenow-mcp         (3 ahead, MIT)
+  - https://github.com/clguo-tw/servicenow-mcp           (2 ahead, MIT)
+  - https://github.com/natedolor/servicenow-mcp          (1 ahead, MIT)
+
+Open PRs at echelon-ai-labs/servicenow-mcp may also be the eventual
+upstream source for some commits — see ANALYSIS_OF_ECHELON_AI_LABS_PRS_AND_ISSUES.md.
