@@ -116,7 +116,20 @@ def test_server_config():
     assert config.debug is False
     assert config.timeout == 30
     assert config.api_url == "https://example.service-now.com/api/now"
-    
+    assert config.api_path == "api"  # Default
+
+    # Phase 3.1: configurable api_path (PR #51) — for instances behind a
+    # gateway or with a non-standard API mount.
+    config_custom_path = ServerConfig(
+        instance_url="https://example.service-now.com",
+        auth=AuthConfig(
+            type=AuthType.BASIC,
+            basic=BasicAuthConfig(username="user", password="pass"),
+        ),
+        api_path="api/v2",
+    )
+    assert config_custom_path.api_url == "https://example.service-now.com/api/v2/now"
+
     config = ServerConfig(
         instance_url="https://example.service-now.com",
         auth=AuthConfig(

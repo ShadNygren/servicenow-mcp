@@ -134,6 +134,7 @@ def create_config(args) -> ServerConfig:
 
     # Instance URL validation
     instance_url = args.instance_url
+    api_path = os.getenv("SERVICENOW_API_PATH", "api")
     if not instance_url:
         # Attempt to load from .env if not provided via args/env vars directly in parse_args
         instance_url = os.getenv("SERVICENOW_INSTANCE_URL")
@@ -163,17 +164,23 @@ def create_config(args) -> ServerConfig:
         final_auth_config = AuthConfig(type=auth_type, basic=basic_cfg)
 
     elif auth_type == AuthType.OAUTH:
-        # Simplified - assuming password grant for now based on previous args
+        # client_credentials is the recommended (and primary) OAuth grant
+        # since Phase 3.1; password grant remains as a fallback when the
+        # legacy username+password env vars are set, but is deprecated by
+        # OAuth Best Current Practice — see Issue #43 finding #2.
         client_id = args.client_id or os.getenv("SERVICENOW_CLIENT_ID")
         client_secret = args.client_secret or os.getenv("SERVICENOW_CLIENT_SECRET")
-        username = args.username or os.getenv("SERVICENOW_USERNAME")  # Needed for password grant
-        password = args.password or os.getenv("SERVICENOW_PASSWORD")  # Needed for password grant
+        username = args.username or os.getenv("SERVICENOW_USERNAME")
+        password = args.password or os.getenv("SERVICENOW_PASSWORD")
         token_url = args.token_url or os.getenv("SERVICENOW_TOKEN_URL")
+        resource_url = os.getenv("SERVICENOW_RESOURCE_URL")  # Azure AD-style flows
 
-        if not client_id or not client_secret or not username or not password:
+        if not client_id or not client_secret:
             raise ValueError(
-                "Client ID, client secret, username, and password are required for OAuth password grant"
-                " (--client-id/SERVICENOW_CLIENT_ID, etc.)"
+                "OAuth requires client_id and client_secret "
+                "(--client-id/SERVICENOW_CLIENT_ID, --client-secret/SERVICENOW_CLIENT_SECRET). "
+                "Username and password are optional and only used for the deprecated "
+                "password grant fallback."
             )
         if not token_url:
             # Attempt to construct default if not provided
@@ -187,6 +194,7 @@ def create_config(args) -> ServerConfig:
             username=username,
             password=password,
             token_url=token_url,
+            resource_url=resource_url,
         )
         # Create the main AuthConfig wrapper
         final_auth_config = AuthConfig(type=auth_type, oauth=oauth_cfg)
@@ -228,6 +236,7 @@ def create_config(args) -> ServerConfig:
         # Include other server config fields if they exist on ServerConfig model
         debug=args.debug,
         timeout=args.timeout,
+        api_path=api_path,
         script_execution_api_resource_path=script_execution_api_resource_path,
     )
 

@@ -124,11 +124,17 @@ class AuthManager:
             "Content-Type": "application/x-www-form-urlencoded"
         }
 
-        # Try client_credentials grant first
+        # Try client_credentials grant first — recommended path. Falls back
+        # to password grant only if username+password configured (deprecated
+        # by OAuth Best Current Practice; see Issue #43 finding #2).
         data_client_credentials = {
             "grant_type": "client_credentials"
         }
-        
+        if oauth_config.resource_url:
+            # Azure AD-backed ServiceNow and some on-prem AS implementations
+            # require a `resource` parameter naming the audience.
+            data_client_credentials["resource"] = oauth_config.resource_url
+
         logger.info("Attempting OAuth client_credentials grant")
         response = requests.post(token_url, headers=headers, data=data_client_credentials)
         logger.info("OAuth client_credentials response status: %s", response.status_code)

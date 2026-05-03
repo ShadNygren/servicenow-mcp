@@ -124,6 +124,50 @@ def test_force_refresh_clears_cache():
     assert manager.token == "tok-2"
 
 
+def test_client_credentials_only_no_username_password():
+    """Phase 3.1 / Issue #43 finding #2: client_credentials should work
+    without username/password configured."""
+    config = AuthConfig(
+        type=AuthType.OAUTH,
+        oauth=OAuthConfig(
+            client_id="cid",
+            client_secret="csec",
+            # username and password deliberately omitted
+        ),
+    )
+    manager = AuthManager(config, instance_url="https://dev.example.com")
+    with patch("servicenow_mcp.auth.auth_manager.requests.post", return_value=_mock_token_response("tok-cc")) as post:
+        manager.get_headers()
+
+    assert manager.token == "tok-cc"
+    # Verify only client_credentials grant was attempted
+    assert post.call_count == 1
+    sent_data = post.call_args[1]["data"]
+    assert sent_data == {"grant_type": "client_credentials"}
+
+
+def test_resource_url_added_to_client_credentials_request():
+    """Azure AD-style flows: when resource_url is set, it goes into the
+    client_credentials request body as the `resource` parameter."""
+    config = AuthConfig(
+        type=AuthType.OAUTH,
+        oauth=OAuthConfig(
+            client_id="cid",
+            client_secret="csec",
+            resource_url="https://api.example.com",
+        ),
+    )
+    manager = AuthManager(config, instance_url="https://dev.example.com")
+    with patch("servicenow_mcp.auth.auth_manager.requests.post", return_value=_mock_token_response()) as post:
+        manager.get_headers()
+
+    sent_data = post.call_args[1]["data"]
+    assert sent_data == {
+        "grant_type": "client_credentials",
+        "resource": "https://api.example.com",
+    }
+
+
 def test_default_lifetime_when_expires_in_missing():
     """If the token response omits expires_in, fall back to the default lifetime."""
     response = MagicMock(spec=requests.Response)
