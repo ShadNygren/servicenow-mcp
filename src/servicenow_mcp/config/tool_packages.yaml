@@ -128,6 +128,10 @@ platform_developer:
   # General UI Policies
   - create_ui_policy
   - create_ui_policy_action
+  # Service Portal Widgets (sp_widget)
+  - get_widget
+  - create_widget
+  - update_widget
   # Changesets
   - list_changesets
   - get_changeset_details
@@ -298,6 +302,10 @@ full:
   # UI Policy
   - create_ui_policy
   - create_ui_policy_action
+  # Service Portal Widgets (sp_widget)
+  - get_widget
+  - create_widget
+  - update_widget
   # CMDB
   - list_cis
   - get_ci

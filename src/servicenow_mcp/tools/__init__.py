@@ -142,6 +142,11 @@ from servicenow_mcp.tools.ui_policy_tools import (
 from servicenow_mcp.tools.user_criteria_tools import (
     create_user_criteria,
 )
+from servicenow_mcp.tools.widget_tools import (
+    create_widget,
+    get_widget,
+    update_widget,
+)
 from servicenow_mcp.tools.cmdb_tools import (
     create_ci,
     get_ci,
@@ -303,6 +308,11 @@ __all__ = [
     # UI Policy tools
     "create_ui_policy",
     "create_ui_policy_action",
+
+    # Service Portal widget tools
+    "get_widget",
+    "create_widget",
+    "update_widget",
 
     # User Criteria tools
     "create_user_criteria",

@@ -426,6 +426,17 @@ from servicenow_mcp.tools.cmdb_tools import (
     list_cis as list_cis_tool,
     update_ci as update_ci_tool,
 )
+from servicenow_mcp.tools.widget_tools import (
+    CreateWidgetParams,
+    GetWidgetParams,
+    UpdateWidgetParams,
+    WidgetResponse,
+)
+from servicenow_mcp.tools.widget_tools import (
+    create_widget as create_widget_tool,
+    get_widget as get_widget_tool,
+    update_widget as update_widget_tool,
+)
 from servicenow_mcp.tools.cmdb_relationship_tools import (
     CreateCIRelationshipParams,
     DeleteCIRelationshipParams,
@@ -1283,6 +1294,28 @@ def get_tool_definitions(
             UpdateCIParams,
             Dict[str, Any],
             "Update an existing CMDB configuration item by its sys_id",
+            "raw_dict",
+        ),
+        # Service Portal Widget Tools (sp_widget)
+        "create_widget": (
+            create_widget_tool,
+            CreateWidgetParams,
+            WidgetResponse,
+            "Create a new Service Portal widget in ServiceNow",
+            "raw_pydantic",
+        ),
+        "update_widget": (
+            update_widget_tool,
+            UpdateWidgetParams,
+            WidgetResponse,
+            "Update an existing Service Portal widget in ServiceNow",
+            "raw_pydantic",
+        ),
+        "get_widget": (
+            get_widget_tool,
+            GetWidgetParams,
+            Dict[str, Any],
+            "Get Service Portal widget(s) by sys_id (exact) or by name (contains)",
             "raw_dict",
         ),
         # CMDB Relationship Tools
