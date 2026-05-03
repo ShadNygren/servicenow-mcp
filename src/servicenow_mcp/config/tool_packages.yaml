@@ -56,13 +56,13 @@ catalog_builder:
   - create_catalog_item_variable
   - list_catalog_item_variables
   - update_catalog_item_variable
-  # - delete_catalog_item_variable  # TODO: not yet implemented
+  - delete_catalog_item_variable
   - create_catalog_variable_choice
   # Basic Scripting (UI Policy & User Criteria)
   - create_ui_policy
   - create_ui_policy_action
   - create_user_criteria
-  # - create_user_criteria_condition  # TODO: not yet implemented
+  - create_user_criteria_condition
   # Optimization
   - get_optimization_recommendations
 
@@ -202,7 +202,7 @@ full:
   - create_catalog_item_variable
   - list_catalog_item_variables
   - update_catalog_item_variable
-  # - delete_catalog_item_variable  # TODO: not yet implemented
+  - delete_catalog_item_variable
   - create_catalog_variable_choice
   # Change Management
   - create_change_request
@@ -266,7 +266,7 @@ full:
   - get_syslog_entry
   # Catalog Criteria
   - create_user_criteria
-  # - create_user_criteria_condition  # TODO: not yet implemented
+  - create_user_criteria_condition
   # UI Policy
   - create_ui_policy
   - create_ui_policy_action
