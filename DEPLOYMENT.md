@@ -279,8 +279,8 @@ General pattern:
 
 Specific guides for a few platforms:
 
-- **Cloud Run** — see PR #36 in upstream echelon for a worked example (we don't ship Cloud-Run-specific code in this repo because it's tied to one vendor; the recipe is small and generic).
-- **AWS App Runner / ECS Fargate** — point at the image, set env vars, use `/health` as the health-check path. ALB terminates TLS.
+- **Google Cloud Platform** — see [`docs/deploying-to-gcp.md`](docs/deploying-to-gcp.md) for the full Cloud Run recipe (Secret Manager integration, private endpoints, IAM, monitoring).
+- **AWS** — see [`docs/deploying-to-aws.md`](docs/deploying-to-aws.md) for a side-by-side comparison of the six AWS targets (Bedrock AgentCore Runtime, App Runner, ECS Fargate, EKS, Lambda + LWA, EC2) with deployment recipes for each. **AgentCore Runtime is the recommended target on AWS** — AWS designed it specifically for hosting MCP servers, with native protocol support and managed OAuth 2.0 inbound auth.
 - **Fly.io / Render** — set `MCP_ALLOW_REMOTE=1` in `fly.toml` / `render.yaml`, add `MCP_AUTH_TOKEN` to secrets.
 
 ### What we deliberately don't ship

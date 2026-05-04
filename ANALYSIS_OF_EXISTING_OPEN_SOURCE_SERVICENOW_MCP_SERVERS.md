@@ -583,3 +583,176 @@ git push
   5. RFC 8693 token exchange (`southbound/obo.py`) so ServiceNow sees end-user identity when both axes are OAuth-enabled.
   6. Auto-discovery tool registry (`pkgutil.iter_modules` + decorator) to retire the monolithic `tool_utils.py`.
   7. Pluggable secret stores (`secrets/vault.py`, `secrets/aws_secrets.py`).
+
+---
+
+## Addendum: 2026-05 — Additional ServiceNow MCP servers discovered after the initial sweep
+
+The original analysis above covered three implementations (`echelon-ai-labs`, `michaelbuckner`, `anilvaranasi`) and a 200-fork sweep documented in `ANALYSIS_OF_ALL_ECHELON_FORKS.md`. After Phase 7 landed and v0.7.0 shipped (2026-05-04), a fresh competitive search surfaced **six additional implementations** that did not appear in the original review — including, most significantly, an **official ServiceNow-built MCP server** that ships inside the platform itself.
+
+This addendum documents what was found, how each compares, and where our fork stands in the new landscape.
+
+### 1. Official ServiceNow Now Assist MCP Server (Zurich Patch 4)
+
+**What it is.** A first-party MCP server built into the ServiceNow platform itself, released as part of the Zurich Patch 4 update. Configurable via the ServiceNow "MCP Server Console" UI inside an instance.
+
+**Shape — different from ours.** This server exposes **Now Assist skills and custom-built skills (NASK)** as MCP tools to *external* AI agents. ServiceNow becomes a tool *provider* over MCP, exposing its proprietary AI capabilities. Our server does the inverse: it exposes *the ServiceNow REST API surface* (incidents, changes, catalog, CMDB, etc.) as MCP tools to external AI agents that need to operate the platform.
+
+| Aspect | Official Now Assist MCP | Our `ShadNygren/servicenow-mcp` |
+|---|---|---|
+| Direction | ServiceNow → external agent (skill provider) | external agent → ServiceNow (operator) |
+| Tools | Now Assist skills + NASK custom skills | 211 ServiceNow REST API operations |
+| Transport | Streamable HTTP (and SSE) | Streamable HTTP (only) |
+| Auth | OAuth 2.0 (in-instance) | Bearer + Host/Origin allowlist |
+| Hosting | Inside a ServiceNow instance | External container (any Docker host) |
+| License | Proprietary | MIT |
+| Requirements | Zurich Patch 4 + Now Assist licensing | Free; runs anywhere |
+
+**These are complementary, not competing.** A complete ServiceNow + AI integration in 2026 likely uses both: our server for instance operations + the official Now Assist MCP for invoking ServiceNow's bundled AI skills.
+
+**Reference:** [ServiceNow Community FAQ on enabling MCP and A2A](https://www.servicenow.com/community/now-assist-articles/enable-mcp-and-a2a-for-your-agentic-workflows-with-faqs-updated/ta-p/3373907), [MCP Client docs](https://www.servicenow.com/docs/r/intelligent-experiences/mcp-client.html).
+
+### 2. `aartiq/servicenow-mcp` (TypeScript)
+
+**What it is.** A TypeScript MCP server claiming **400+ ServiceNow tools** organized into 14 role-based packages. Initial public release in 2026.
+
+**Strengths.**
+- Largest claimed tool count of any ServiceNow MCP server.
+- Full TypeScript stack with type definitions throughout.
+- 14 role-based personas — extending the same idea echelon pioneered.
+- Five-tier permission model (Read always on; Write, CMDB Write, Scripting, Now Assist each gated by explicit env vars).
+- Both Basic and OAuth 2.0 (client_credentials + password grant) supported.
+- ATF integration mentioned (Automated Test Framework).
+- MIT licensed.
+
+**Weaknesses.**
+- **stdio transport only** — no HTTP, no remote deployment, no cloud hosting.
+- **No transport-layer hardening** — no Host allowlist, no Origin allowlist, no bearer token gate, no loopback default. (Less critical because no HTTP transport exists in the first place — but means a future HTTP migration starts from zero.)
+- **Very early-stage** — only 8 commits, 21 GitHub stars, 21 forks on the main branch.
+- **400+ tool claim is likely metadata-driven auto-generation** across ServiceNow's table set rather than 400 hand-curated, semantically distinct tools. (Same design pattern as Happy Platform below; the count is comparable to "all CRUD operations across all sys_db_object tables".)
+- TypeScript ecosystem cuts it off from the dominant Python AI/ML tooling stack.
+
+**Comparison with us.** Similar role-package philosophy, dramatically more raw tools (if you accept auto-generation parity), but **no production HTTP transport**, much less mature, much smaller community.
+
+**Reference:** [aartiq/servicenow-mcp on GitHub](https://github.com/aartiq/servicenow-mcp).
+
+### 3. `Happy-Technologies-LLC/happy-platform-mcp` (Node.js)
+
+**What it is.** A multi-instance Node.js MCP server with **53 hand-written tools plus 480+ auto-generated tools** spanning 160+ ServiceNow tables. Most actively maintained competitor I found.
+
+**Strengths.**
+- **Multi-instance support** — connect simultaneously to multiple ServiceNow environments (dev/test/prod) from a single MCP server instance with per-instance credentials. Genuine differentiator that's not in our server.
+- **Both stdio and SSE transports.**
+- **Both Basic and OAuth 2.0** (client credentials + ROPC), with automatic token refresh and 30-second pre-expiry buffer.
+- **v3.2.0 released 2026-05-02** — most actively maintained competing project.
+- **Apache 2.0** license (slightly more permissive than MIT for derivative works requiring patent grants).
+- **Local script development with Git sync.**
+- **Optional SQLite full-text search index** over ServiceNow docs.
+- **Per-instance credential separation** prevents cross-contamination.
+
+**Weaknesses.**
+- **SSE transport only on the HTTP side** — no Streamable HTTP support, so it sits on a transport the MCP spec is deprecating.
+- **No transport-layer hardening** — no Host allowlist, no Origin allowlist, no loopback default; HTTP exposure depends on whatever upstream proxy you put in front.
+- **Node.js stack** — mismatch with the Python ecosystem most ServiceNow MCP work happens in.
+- **Auto-generated tool count inflation** — the 480+ figure is one CRUD-tool-per-table pattern. The 53 hand-written tools is the more meaningful number to compare against ours.
+- **Private GitHub org with limited public visibility** — repository structure suggests this is primarily an internal tool released as open source rather than a community-driven project.
+
+**Comparison with us.** Hand-written tool count: 53 vs our 211 (we win 4×). Total claimed tool count including auto-gen: 533 vs our 211 (they win 2.5×). Multi-instance: they have it, we don't (Phase 10+ work for us if someone needs it). Transport modernity: we're on Streamable HTTP, they're still on SSE. Security hardening: ours is the only one with a hardened transport.
+
+**This is the strongest current alternative** for users who specifically need multi-instance support in a Node.js stack.
+
+**Reference:** [Happy-Technologies-LLC/mcp-servicenow-nodejs on GitHub](https://github.com/Happy-Technologies-LLC/mcp-servicenow-nodejs).
+
+### 4. `ShunyaAI/snow-mcp` (Python)
+
+**What it is.** A Python MCP server with 60+ pre-built tools covering ITSM, ITOM, and AppDev.
+
+**Strengths.**
+- 60+ pre-built tools — meaningful coverage.
+- MIT licensed.
+- Python (compatible with the Anthropic / OpenAI / Mistral SDK ecosystems).
+
+**Weaknesses.**
+- **v1.0.0 "initial release" with only 2 commits on main** — extremely early-stage.
+- **No published transport details** — repo metadata doesn't specify whether it supports HTTP transports, security hardening, etc.
+- **No documented test coverage, CI, or maintenance velocity.**
+- Basic auth only documented.
+
+**Comparison with us.** Smaller tool surface (60 vs 211), no documented HTTP transport, no security hardening, no maintenance track record. Currently a prototype.
+
+**Reference:** [ShunyaAI/snow-mcp on GitHub](https://github.com/shunyaai/snow-mcp).
+
+### 5. `LokiMCPUniverse/servicenow-mcp-server` (Python)
+
+**What it is.** A Python MCP server with ~15 tools covering core operations (incidents, changes, CMDB, knowledge, catalog, analytics).
+
+**Strengths.**
+- MIT licensed.
+- Documented retry-with-exponential-backoff and rate-limit handling.
+- Audit-logging guidance for production.
+- Environment-variable credential management.
+
+**Weaknesses.**
+- **Very early-stage** — 2 stars, 7 forks, 1 contributor, 7 total commits.
+- **v0.1.0 dated June 9, 2025** with "PyPI installation coming soon" — unpublished.
+- **stdio transport only.**
+- **Basic auth as primary path** — OAuth only mentioned as a future consideration.
+- **15+ tools** is much smaller than echelon, michaelbuckner, our server, and all the alternatives above.
+
+**Comparison with us.** Much smaller surface, much less mature. Would be a starting point for a new project, not an alternative for production use.
+
+**Reference:** [LokiMCPUniverse/servicenow-mcp-server on GitHub](https://github.com/LokiMCPUniverse/servicenow-mcp-server).
+
+### 6. `modesty/fluent-mcp` — out of scope (different problem)
+
+**What it is.** A TypeScript MCP server that exposes the **ServiceNow Fluent SDK** to AI coding assistants. Helps developers *build* ServiceNow applications by exposing 9 SDK commands (`init_fluent_app`, `build_fluent_app`, `deploy_fluent_app`, `fluent_transform`, etc.) plus 234+ API specs and code snippets as MCP resources.
+
+**Why it's out of scope for this comparison.** This is a *developer tooling* MCP server — it helps you build ServiceNow apps from your IDE. It does **not** perform CRUD operations on a running ServiceNow instance. It's complementary to a server like ours: developers might use both, with Fluent MCP for app development and our server for instance automation.
+
+**Reference:** [modesty/fluent-mcp on GitHub](https://github.com/modesty/fluent-mcp).
+
+### Updated landscape summary table
+
+Adding the new finds to the picture:
+
+| Server | Tools | Transport | Security Hardening | Lang | Activity | Best For |
+|---|---|---|---|---|---|---|
+| **ShadNygren/servicenow-mcp (this fork)** | **211 curated** | stdio + **hardened Streamable HTTP** | **Bearer + Host + Origin + loopback + body-redaction + CodeQL gate** | Python | 130 commits, v0.7.0 | Production, security-conscious deployments |
+| Official ServiceNow Now Assist MCP | Now Assist skills | Streamable HTTP + SSE | OAuth 2.0 in-instance | Closed | Zurich Patch 4 | Exposing Now Assist skills to external agents |
+| aartiq/servicenow-mcp | 400+ (likely auto-gen) | stdio only | None (no HTTP) | TypeScript | 8 commits | TypeScript stack, role-based exposure |
+| Happy-Technologies-LLC/happy-platform-mcp | 53 hand + 480+ auto | stdio + SSE | None | Node.js | v3.2.0 May 2026 (active) | Multi-instance, Node.js stack |
+| ShunyaAI/snow-mcp | 60+ | unspecified | Basic auth | Python | 2 commits (v1.0.0) | Prototype |
+| LokiMCPUniverse/servicenow-mcp-server | 15+ | stdio only | Basic auth | Python | 7 commits (v0.1.0) | Starting point for new projects |
+| echelon-ai-labs (upstream we forked) | ~80 | SSE (deprecated) | Partial in `fix/sse-auth-hardening` branch only | Python | Unmaintained since Oct 2025 | (none — see this fork instead) |
+| michaelbuckner | 30 + NLP | stdio | None | Python | Limited | NLP-style natural-language queries (we ported the pattern) |
+| anilvaranasi | ~7 | stdio | Hardcoded creds | Python | No license | Tutorial-only |
+| modesty/fluent-mcp | 9 + 234 resources | stdio | n/a | TypeScript | Active | Different problem (Fluent SDK dev tooling) |
+
+### Where our fork still leads, where it doesn't, where we're tied
+
+**We lead on:**
+1. **Hardened HTTP transport** — no other open-source ServiceNow MCP server has the bearer + Host + Origin + loopback default + pure-ASGI streaming-safe + body-redaction + CodeQL-gated combination.
+2. **Curated, hand-written tool count** — 211 hand-curated tools beats every other server's hand-written count (the only way to compete on numbers is to auto-generate, which sacrifices semantic richness).
+3. **Type safety enforced as build gate** — only fork with `mypy` blocking CI at zero errors.
+4. **Test density** — 935 tests including 44 dedicated transport-security tests independent of any specific transport.
+5. **Documentation depth** — 274 KB of analysis, planning, and per-domain docs; nobody else has done a 200-fork sweep or published per-phase tagging.
+6. **Currently maintained Python implementation with security baseline** — only viable option in this category.
+
+**We don't lead on:**
+1. **Multi-instance support** — Happy Platform has it, we don't. Phase 10+ if someone needs it.
+2. **Auto-generation from table metadata** — Happy and aartiq have it, we don't (we curated). Different design philosophy: ours emits semantically-rich tools for known operations, theirs emits generic CRUD per table.
+3. **Raw tool count if you count auto-generation** — 211 vs Happy's 533 vs aartiq's 400+. Comparing hand-written counts (211 vs 53 vs unstated) puts us back on top.
+4. **Node.js/TypeScript stack support** — we're Python-only.
+
+**We're tied with:**
+1. **Spec-current Streamable HTTP transport** — tied with the official ServiceNow Now Assist MCP and partly with `aws-bedrock-agentcore-mcp-server` examples.
+2. **Active maintenance velocity** — tied with Happy Platform (both have releases within the past week).
+
+### Conclusion
+
+There is no other open-source ServiceNow MCP server that dominates ours across all axes. The closest meaningful alternatives are:
+
+- **Happy-Technologies-LLC/happy-platform-mcp** for users who specifically need multi-instance support in Node.js — our strongest current competitor, but lacking transport hardening and stuck on deprecated SSE.
+- **The official ServiceNow Now Assist MCP** for exposing Now Assist skills — different shape, complementary to ours.
+
+Our differentiation is intentional: **the most security-hardened, type-safe, curated-tool, well-tested, well-documented Python ServiceNow MCP server that's currently maintained.** We're not chasing tool-count totals via auto-generation, and we're not building a Node.js alternative. We're optimizing for: agent reliability against a real production ServiceNow instance + auditable security posture + maintainable Python codebase.
