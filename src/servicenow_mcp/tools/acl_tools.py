@@ -6,7 +6,7 @@ and related security configurations in ServiceNow.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import requests
 from pydantic import BaseModel, Field
@@ -156,7 +156,7 @@ def list_acls(
     api_url = f"{config.api_url}/table/sys_security_acl"
     
     # Build query parameters
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_limit": params.limit,
         "sysparm_offset": params.offset,
         "sysparm_display_value": "true",
@@ -244,7 +244,7 @@ def get_acl(
     
     api_url = f"{config.api_url}/table/sys_security_acl/{params.acl_id}"
     
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_display_value": "true",
         "sysparm_exclude_reference_link": "true",
     }
@@ -317,7 +317,7 @@ def create_acl(
     api_url = f"{config.api_url}/table/sys_security_acl"
     
     # Build request data
-    data = {
+    data: Dict[str, Any] = {
         "name": params.name,
         "type": params.type,
         "operation": params.operation,
@@ -489,7 +489,7 @@ def list_roles(
     api_url = f"{config.api_url}/table/sys_user_role"
     
     # Build query parameters
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_limit": params.limit,
         "sysparm_offset": params.offset,
         "sysparm_display_value": "true",
@@ -568,7 +568,7 @@ def get_role(
     if len(params.role_id) == 32:
         # Likely a sys_id
         api_url = f"{config.api_url}/table/sys_user_role/{params.role_id}"
-        query_params = {
+        query_params: Dict[str, Any] = {
             "sysparm_display_value": "true",
             "sysparm_exclude_reference_link": "true",
         }
@@ -655,7 +655,7 @@ def create_role(
     
     api_url = f"{config.api_url}/table/sys_user_role"
     
-    data = {
+    data: Dict[str, Any] = {
         "name": params.name,
         "elevated_privilege": str(params.elevated_privilege).lower(),
     }
@@ -775,7 +775,7 @@ def list_security_attributes(
     
     api_url = f"{config.api_url}/table/sys_security_attribute"
     
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_limit": params.limit,
         "sysparm_offset": params.offset,
         "sysparm_display_value": "true",
@@ -844,7 +844,7 @@ def create_security_attribute(
     
     api_url = f"{config.api_url}/table/sys_security_attribute"
     
-    data = {
+    data: Dict[str, Any] = {
         "name": params.name,
         "type": params.type,
     }

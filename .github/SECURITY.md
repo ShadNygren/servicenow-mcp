@@ -27,7 +27,7 @@ This project includes:
 - **pip-audit** — dependency vulnerability scanning in CI.
 - **Dependabot** — weekly automated dependency updates (pip + GitHub Actions).
 - **Log-redaction CI gate** — `tests/conftest.py` fails the build if any captured log line matches `access_token`, `refresh_token`, or `Authorization: Bearer/Basic` patterns. Catches OAuth-body-logging regressions.
-- **Inbound auth** — bearer token + Host/Origin allowlist on the SSE endpoint, loopback-bind by default (from upstream's `fix/sse-auth-hardening` branch, merged here as `c77861e`).
+- **Inbound auth** — bearer token + Host/Origin allowlist on the HTTP `/mcp` endpoint, loopback-bind by default (from upstream's `fix/sse-auth-hardening` branch, merged here as `c77861e`; the Streamable HTTP transport carries the same defenses unchanged in `transport_security.py`).
 - **Default-package security gate** — arbitrary-script-execution tools (`execute_script_include`, `create_script_include`, etc.) are registered but NOT included in any default tool package. Mitigates Issue [#43](https://github.com/echelon-ai-labs/servicenow-mcp/issues/43) finding #1.
 
 ## Known Considerations

@@ -11,7 +11,7 @@ import random
 from typing import Dict, List, Optional
 
 import requests
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.utils.config import ServerConfig
@@ -229,7 +229,7 @@ def _get_inactive_items(
         response = requests.get(url, headers=headers, params=params)
         response.raise_for_status()
         
-        return response.json()["result"]
+        return response.json()["result"]  # type: ignore[no-any-return]
     
     except Exception as e:
         logger.error(f"Error getting inactive items: {e}")

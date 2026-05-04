@@ -402,10 +402,6 @@ class PublishArtifactParams(BaseModel):
     annotation: str | None = Field("", description="Optional publish note/annotation")
 
 
-class PublishFlowParams(PublishArtifactParams):
-    """Parameters for publish_flow."""
-
-
 class PublishSubflowParams(PublishArtifactParams):
     """Parameters for publish_subflow."""
 
@@ -1203,7 +1199,7 @@ def _lookup_table_label(config: ServerConfig, auth_manager: AuthManager, table_n
     try:
         response = requests.get(
             f"{config.api_url}/table/sys_db_object",
-            params={
+            params={  # type: ignore[arg-type]
                 "sysparm_query": f"name={table_name}",
                 "sysparm_fields": "label",
                 "sysparm_limit": 1,
@@ -1216,7 +1212,7 @@ def _lookup_table_label(config: ServerConfig, auth_manager: AuthManager, table_n
         if records:
             label = records[0].get("label", "")
             if label:
-                return label
+                return label  # type: ignore[no-any-return]
     except requests.RequestException as e:
         logger.warning("_lookup_table_label | failed | table=%s | error=%s", table_name, e)
     return table_name.replace("_", " ").title()
@@ -1241,7 +1237,7 @@ def list_trigger_types(
     try:
         response = requests.get(
             f"{config.api_url}/table/sys_hub_trigger_type",
-            params={
+            params={  # type: ignore[arg-type]
                 "sysparm_fields": "sys_id,name,internal_name,base_trigger",
                 "sysparm_limit": 200,
                 "sysparm_orderby": "name",
@@ -1314,7 +1310,7 @@ def _resolve_trigger_definition_id(
     try:
         response = requests.get(
             f"{config.api_url}/table/sys_hub_trigger_type",
-            params={
+            params={  # type: ignore[arg-type]
                 "sysparm_query": f"name={display_name}",
                 "sysparm_fields": "sys_id,name,base_trigger",
                 "sysparm_limit": 1,
@@ -1660,7 +1656,7 @@ def _list_artifacts(
     try:
         response = requests.get(
             f"{config.api_url}/table/sys_hub_flow",
-            params={
+            params={  # type: ignore[arg-type]
                 "sysparm_query": _build_artifact_query(artifact_type, params),
                 "sysparm_fields": (
                     "sys_id,name,internal_name,description,type,active,published"
@@ -2028,7 +2024,7 @@ def list_action_types(
     try:
         response = requests.get(
             f"{config.api_url}/table/sys_hub_action_type_definition",
-            params={
+            params={  # type: ignore[arg-type]
                 "sysparm_query": f"nameCONTAINS{params.query}^ORinternal_nameCONTAINS{params.query}",
                 "sysparm_fields": "sys_id,name,internal_name,action_type_base,spoke,description",
                 "sysparm_display_value": "true",
@@ -2103,7 +2099,7 @@ def list_action_type_inputs(
     try:
         response = requests.get(
             f"{config.api_url}/table/sys_hub_action_input",
-            params={
+            params={  # type: ignore[arg-type]
                 # NOTE: The query field is `model`, NOT `action_type` — verified against live instance.
                 # `action_type` does not exist on sys_hub_action_input.
                 "sysparm_query": f"model={params.action_type_sys_id}",
@@ -3083,7 +3079,7 @@ def _patch_flow_version_trigger_type(
         try:
             ver_response = requests.get(
                 f"{config.api_url}/table/sys_hub_flow_version",
-                params={
+                params={  # type: ignore[arg-type]
                     "sysparm_query": f"flow={flow_sys_id}^ORDERBYDESCsys_created_on",
                     "sysparm_fields": "sys_id,payload",
                     "sysparm_limit": 1,
@@ -3208,7 +3204,7 @@ def _release_flow_edit_lock(
     try:
         get_response = requests.get(
             f"{config.api_url}/table/sys_hub_flow_safe_edit",
-            params={
+            params={  # type: ignore[arg-type]
                 "sysparm_query": f"flow={flow_sys_id}",
                 "sysparm_fields": "sys_id",
                 "sysparm_limit": 1,
@@ -3435,7 +3431,7 @@ def get_flow_triggers(
             response = requests.get(
                 url,
                 headers=headers,
-                params={
+                params={  # type: ignore[arg-type]
                     "sysparm_query": f"flow={params.flow_sys_id}",
                     "sysparm_display_value": "true",
                     "sysparm_fields": trigger_fields,
@@ -3569,7 +3565,7 @@ def get_flow_actions(
         response = requests.get(
             url,
             headers=headers,
-            params={
+            params={  # type: ignore[arg-type]
                 "sysparm_query": f"flow={params.flow_sys_id}^ORDERBYorder",
                 "sysparm_fields": "sys_id,flow,order,display_text,sys_class_name,ui_id",
                 "sysparm_display_value": "true",
@@ -3619,7 +3615,7 @@ def get_flow_version(
         response = requests.get(
             url,
             headers=headers,
-            params={
+            params={  # type: ignore[arg-type]
                 "sysparm_query": query + "^ORDERBYDESCsys_created_on",
                 "sysparm_limit": 1,
                 "sysparm_display_value": "true",
@@ -3636,7 +3632,7 @@ def get_flow_version(
                 snap_resp = requests.get(
                     snap_url,
                     headers=headers,
-                    params={
+                    params={  # type: ignore[arg-type]
                         "sysparm_query": f"flow={params.flow_sys_id}^ORDERBYDESCsys_created_on",
                         "sysparm_limit": 1,
                         "sysparm_display_value": "true",
@@ -3875,7 +3871,7 @@ def get_flow_execution_history(
     try:
         response = requests.get(
             f"{config.api_url}/table/sys_hub_flow_context",
-            params={
+            params={  # type: ignore[arg-type]
                 "sysparm_query": query,
                 "sysparm_fields": "sys_id,name,state,started,ended,error",
                 "sysparm_limit": params.limit,
@@ -4257,7 +4253,7 @@ def list_action_type_outputs(
     try:
         response = requests.get(
             f"{config.api_url}/table/sys_hub_action_output",
-            params={
+            params={  # type: ignore[arg-type]
                 "sysparm_query": f"model={params.action_type_sys_id}",
                 "sysparm_fields": "sys_id,element,label,column_label,internal_type,mandatory,default_value,order",
                 "sysparm_display_value": "true",
@@ -4357,7 +4353,7 @@ def list_flow_io(
         try:
             resp = requests.get(
                 f"{config.api_url}/table/{table}",
-                params={
+                params={  # type: ignore[arg-type]
                     **common_query_params,
                     "sysparm_query": f"model={params.flow_sys_id}^model_table=sys_hub_flow",
                 },
@@ -4513,7 +4509,7 @@ def execute_flow(
     try:
         meta_response = requests.get(
             f"{config.api_url}/table/sys_hub_flow",
-            params={
+            params={  # type: ignore[arg-type]
                 "sysparm_query": f"sys_id={params.flow_sys_id}",
                 "sysparm_fields": "sys_id,internal_name,scope",
                 "sysparm_display_value": "all",

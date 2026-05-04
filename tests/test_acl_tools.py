@@ -6,7 +6,7 @@ This module contains unit tests for ACL, Role, and Security Attribute management
 
 import requests
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from servicenow_mcp.tools.acl_tools import (
     list_acls,
     get_acl,
@@ -101,9 +101,8 @@ class TestListACLs:
         params = ListACLsParams(
             limit=10, offset=0, table_name="incident", operation="read", active=True
         )
-        result = list_acls(mock_config, mock_auth_manager, params)
+        list_acls(mock_config, mock_auth_manager, params)
 
-        # Verify query parameters were constructed correctly
         call_args = mock_get.call_args
         assert "sysparm_query" in call_args[1]["params"]
 

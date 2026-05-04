@@ -1,13 +1,13 @@
 # Deploying the ServiceNow MCP Server
 
-This guide covers production deployment options for the SSE / HTTP transport. **Most users don't need any of this** — see "When you DON'T need this guide" below.
+This guide covers production deployment options for the Streamable HTTP transport. **Most users don't need any of this** — see "When you DON'T need this guide" below.
 
 ## Choose your scenario
 
 | Scenario | What to do | Skip to |
 |---|---|---|
 | Local development, Claude Desktop talks to the server on your laptop | Run via **stdio** — `claude_desktop_config.json` launches the server as a subprocess. No network, no Docker, no Nginx. | [README §"Integration with Claude Desktop"](README.md#integration-with-claude-desktop) — stop reading this guide. |
-| One developer wants the SSE transport locally for testing | `python -m servicenow_mcp.server_sse` — binds to `127.0.0.1:8080` by default, bearer token auto-generated. | [README §"Server-Sent Events (SSE) Mode"](README.md#using-server-sent-events-sse-mode) |
+| One developer wants the Streamable HTTP transport locally for testing | `python -m servicenow_mcp.server_http` — binds to `127.0.0.1:8080` by default, bearer token auto-generated. | [README §"Streamable HTTP Mode"](README.md#streamable-http-mode) |
 | Containerized deployment on a private network | `docker run` the image with `MCP_AUTH_TOKEN` set; rely on your existing network boundary. No Nginx needed. | This guide §1 |
 | Behind your org's existing reverse proxy / API gateway | Run the container, route the proxy's MCP path at the container's `:8080`. The proxy handles TLS. No Nginx in this repo. | This guide §1 |
 | VPS with a public IP, want HTTPS, no other infra | Use the Docker Compose + Nginx recipe in this guide (§2). | This guide §2 |
@@ -30,12 +30,12 @@ The Nginx setup in this repo is one specific recipe for one specific scenario: "
 Quickest production-ish path. No Nginx, no TLS-from-us.
 
 ```bash
-docker build -t servicenow-mcp-sse .
+docker build -t servicenow-mcp-http .
 docker run --rm -p 127.0.0.1:8080:8080 \
   --env-file .env \
   -e MCP_AUTH_TOKEN="<long-random-secret>" \
   -e MCP_ALLOW_REMOTE=1 \
-  servicenow-mcp-sse
+  servicenow-mcp-http
 ```
 
 `-p 127.0.0.1:8080` binds only to the loopback interface of the host. If you want it reachable on a private LAN, use `-p 10.0.0.5:8080` (your private IP) instead.
@@ -46,7 +46,7 @@ Connect MCP clients with `Authorization: Bearer <MCP_AUTH_TOKEN>`.
 
 ## §2. Docker Compose with optional Nginx (public VPS, this repo's recipe)
 
-This guide walks through deploying the ServiceNow MCP SSE server on a VPS (e.g. Hostinger) using Docker Compose, optionally with Nginx as an SSL-terminating reverse proxy.
+This guide walks through deploying the ServiceNow MCP server on a VPS (e.g. Hostinger) using Docker Compose, optionally with Nginx as an SSL-terminating reverse proxy.
 
 **Nginx is opt-in.** The `nginx` service in `docker-compose.yml` sits behind a Compose profile, so by default only the MCP container starts:
 
@@ -64,7 +64,7 @@ Use the `with-nginx` profile only when:
 - You have a VPS with a public IP and no other TLS infrastructure.
 - You want a self-contained stack where TLS termination lives in this repo.
 
-If you run with nginx, the MCP server will be accessible at `https://<YOUR_VPS_IP>/sse`. If you skip nginx, the MCP server will be on `127.0.0.1:8080` (or whatever you set via `MCP_BIND_ADDR`) and you handle TLS in your upstream load balancer.
+If you run with nginx, the MCP server will be accessible at `https://<YOUR_VPS_IP>/mcp`. If you skip nginx, the MCP server will be on `127.0.0.1:8080` (or whatever you set via `MCP_BIND_ADDR`) and you handle TLS in your upstream load balancer.
 
 Skip to §3 if you're using a PaaS that does TLS for you.
 
@@ -168,25 +168,25 @@ servicenow-mcp-nginx-1  running         0.0.0.0:443->443/tcp
 
 ## Step 5 — Verify the Deployment
 
-Send a test request to the `/sse` endpoint. The `-k` flag ignores the self-signed
+Send a test request to the `/mcp` endpoint. The `-k` flag ignores the self-signed
 certificate warning.
 
 ```bash
-curl -k -v https://<YOUR_VPS_IP>/sse \
+curl -k -v https://<YOUR_VPS_IP>/mcp \
   -H "Authorization: Bearer <YOUR_MCP_AUTH_TOKEN>"
 ```
 
 A successful response will:
 - Return **HTTP 200**
 - Have `Content-Type: text/event-stream`
-- Keep the connection open (SSE stream)
+- Keep the connection open (streaming response)
 
 Press `Ctrl+C` to close.
 
 **Without the API key (expected 401):**
 
 ```bash
-curl -k -o - https://<YOUR_VPS_IP>/sse
+curl -k -o - https://<YOUR_VPS_IP>/mcp
 # → {"error":"Unauthorized","message":"Invalid or missing API key"}
 ```
 
@@ -199,7 +199,7 @@ remote MCP server:
 
 | Field | Value |
 |---|---|
-| **Server URL** | `https://<YOUR_VPS_IP>/sse` |
+| **Server URL** | `https://<YOUR_VPS_IP>/mcp` |
 | **Authentication** | Header-based |
 | **Header name** | `Authorization` |
 | **Header value** | `Bearer <YOUR_MCP_AUTH_TOKEN>` |
@@ -247,9 +247,9 @@ docker compose down
 - Verify that the `Authorization: Bearer <key>` header value exactly matches `MCP_AUTH_TOKEN` in your `.env`.
 - Check logs: `docker compose logs mcp`
 
-### SSE connection drops immediately
+### /mcp connection drops immediately
 - Check `proxy_read_timeout` in `nginx/nginx.conf` (set to `3600s`).
-- Ensure `proxy_buffering off` is present in the `/sse` location block.
+- Ensure `proxy_buffering off` is present in the `/mcp` location block (note: nginx still needs `proxy_buffering off` for Streamable HTTP just like it did for SSE).
 
 ### Certificate errors in MCP client
 - The client must either accept self-signed certificates or have the certificate added to its trust store.
@@ -258,7 +258,7 @@ docker compose down
 ### Container fails to start
 - Run `docker compose logs mcp` to see the error.
 - Common causes: missing required env vars (`SERVICENOW_INSTANCE_URL`, auth vars).
-- Test your `.env` locally: `servicenow-mcp-sse` (after `pip install -e .`).
+- Test your `.env` locally: `servicenow-mcp-http` (after `pip install -e .`).
 
 ### Port 443 already in use
 - Check what is listening: `ss -tlnp | grep 443`

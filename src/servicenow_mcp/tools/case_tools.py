@@ -8,7 +8,7 @@ sn_customerservice_case table returns 401.
 """
 
 import logging
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import requests
 from pydantic import BaseModel, Field
@@ -147,7 +147,7 @@ def list_cases(
         else:
             query_string += f"^ORDERBY{params.order_by}"
 
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_query": query_string,
         "sysparm_limit": limit,
         "sysparm_offset": params.offset,
@@ -203,7 +203,7 @@ def get_case_by_number(
     """
     api_url = f"{config.api_url}/table/task"
 
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_query": f"sys_class_name=sn_customerservice_case^number={params.case_number}",
         "sysparm_limit": 1,
         "sysparm_display_value": "true",
@@ -279,7 +279,7 @@ def search_cases(
     if params.created_after:
         filters.append(f"sys_created_on>={params.created_after}")
 
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_query": "^".join(filters),
         "sysparm_limit": limit,
         "sysparm_offset": params.offset,

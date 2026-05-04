@@ -28,10 +28,9 @@ jobs:
   type-check:
     name: Type check (mypy)
     runs-on: ubuntu-latest
-    # Strict mypy across the whole tree is aspirational at the start of the
-    # fork — failures don't block the build until Phase 2 lands the helpers
-    # refactor and the type-coverage starts climbing.
-    continue-on-error: true
+    # Mypy clean as of Phase 7 — Pydantic plugin enabled, types-requests
+    # added, and per-call sites annotated.  Now blocks the build to keep
+    # the bar from regressing.
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python

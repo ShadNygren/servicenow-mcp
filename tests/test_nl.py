@@ -170,7 +170,7 @@ def test_natural_language_update_full_flow():
     patch_resp = MagicMock()
     patch_resp.status_code = 200
 
-    with patch("servicenow_mcp.tools.nl_tools.requests.get", return_value=lookup) as get, patch(
+    with patch("servicenow_mcp.tools.nl_tools.requests.get", return_value=lookup), patch(
         "servicenow_mcp.tools.nl_tools.requests.patch", return_value=patch_resp
     ) as patch_call:
         result = natural_language_update(

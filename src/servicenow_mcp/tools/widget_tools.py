@@ -205,7 +205,7 @@ def _resolve_widget_id(
 
     # Query by widget 'id' field
     url = f"{config.instance_url}/api/now/table/sp_widget"
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_query": f"id={widget_id}",
         "sysparm_limit": 1,
         "sysparm_fields": "sys_id",
@@ -219,7 +219,7 @@ def _resolve_widget_id(
         data = response.json()
         results = data.get("result", [])
         if results:
-            return results[0].get("sys_id")
+            return results[0].get("sys_id")  # type: ignore[no-any-return]
     except Exception as e:
         logger.error(f"Error resolving widget ID: {e}")
 
@@ -260,7 +260,7 @@ def get_widget(
         # Search by sys_id (exact match)
         if params.sys_id:
             url = f"{base_url}/{params.sys_id}"
-            query_params = {
+            query_params: Dict[str, Any] = {
                 "sysparm_display_value": "true",
                 "sysparm_exclude_reference_link": "true",
                 "sysparm_fields": WIDGET_FIELDS,
@@ -335,7 +335,7 @@ def create_widget(
     url = f"{config.instance_url}/api/now/table/sp_widget"
 
     # Build request body with mandatory fields
-    body = {
+    body: Dict[str, Any] = {
         "name": params.name,
         "id": params.id,
         "description": params.description,

@@ -100,15 +100,23 @@ Order matters — earlier items are infrastructure for later items.
 4. **README rewrite** — comprehensive, with deployment guide, security warnings, install paths, all tool packages documented.
 5. **`torkian c12aaec`** — PR / issue templates, CONTRIBUTING.md, SECURITY.md.
 
-### Phase 7 — Streamable HTTP transport migration
+### Phase 7 — Streamable HTTP transport migration ✅ DONE
 
-The MCP spec deprecates SSE in favor of Streamable HTTP (single endpoint that supports both request/response and server-pushed streaming over chunked HTTP). Echelon's `server_sse.py` already uses FastMCP — this phase is a transport upgrade *within* FastMCP, not a framework switch.
+The MCP spec deprecates SSE in favor of Streamable HTTP (single endpoint that supports both request/response and server-pushed streaming over chunked HTTP).
 
-1. Implement Streamable HTTP endpoint via `mcp.server.fastmcp.FastMCP` Streamable HTTP support.
-2. Carry forward all security middleware from the hardening branch and Phase 6 (Host/Origin allowlist, loopback default, bearer token, ApiKey).
-3. Keep the existing SSE endpoint as `/sse` (deprecated) for one release cycle to avoid breaking existing clients; remove in a later release. Document the deprecation in README.
-4. Reference implementation: `chan4lk/servicenow-mcp` `streamable-http` branch (`1d2b689`) — predates the current spec, so use as guidance only, not a direct port.
-5. Tests covering both endpoints during the transition.
+**Shipped on the `phase-7-streamable-http` branch:**
+
+1. ✅ `src/servicenow_mcp/server_http.py` — Streamable HTTP server using `mcp.server.streamable_http_manager.StreamableHTTPSessionManager`. Single `/mcp` endpoint replaces the dual `/sse` + `/messages/` shape.
+2. ✅ `src/servicenow_mcp/event_store.py` — In-memory event store for resumability (per spec).
+3. ✅ `src/servicenow_mcp/transport_security.py` — Extracted `SecurityMiddleware` + helper functions (`is_loopback_host`, `resolve_auth_token`, `build_allowed_hosts`, `build_allowed_origins`) to a shared module that any HTTP transport can use.
+4. ✅ `servicenow-mcp-http` console script (`pyproject.toml`).
+5. ✅ Same security posture as the retired SSE transport — bearer token, Host/Origin allowlist, loopback default, `/health` bypass, pure-ASGI streaming-safe middleware.
+6. ✅ Comprehensive `tests/test_transport_security.py` (44 tests covering every aspect of `SecurityMiddleware` + helper functions independently of any specific transport).
+7. ✅ `tests/test_server_http_integration.py` (8 tests for the HTTP transport's wiring).
+8. ✅ SSE entirely removed: `server_sse.py`, `tests/test_server_sse*.py` deleted; `servicenow-mcp-sse` console script removed; nginx config rewritten for `/mcp` only.
+9. ✅ README, DEPLOYMENT.md, `.env.example` updated with the migration table.
+
+Reference implementation: `ibeketov/servicenow-mcp:main:server_http.py` (MIT-licensed) — used as the structural reference for the `StreamableHTTPSessionManager` integration. Our version layers our `SecurityMiddleware` on top (ibeketov's was unhardened).
 
 ### Phase 8 — Unify on FastMCP, retire `tool_utils.py` registry
 
@@ -159,7 +167,7 @@ Our fork serves as the de-facto reviewed-and-tested version while we advocate up
 These are not open questions — explicitly deferred:
 
 - **Do not refactor `requests` → `httpx.AsyncClient`.** Phase 9.
-- **Do not migrate SSE → Streamable HTTP.** Phase 7.
+- ~~Do not migrate SSE → Streamable HTTP. Phase 7.~~ **Done (Phase 7 complete on `phase-7-streamable-http` branch).** SSE entirely removed; `/mcp` is the single HTTP endpoint.
 - **Do not migrate stdio from low-level to FastMCP.** Phase 8.
 - **Do not retire `tool_utils.py` registry.** Phase 8.
 - **Do not implement full MCP-spec OAuth 2.1 north-bound.** Phase 10. Static-bearer-token floor (from `fix/sse-auth-hardening`) is the current ceiling.

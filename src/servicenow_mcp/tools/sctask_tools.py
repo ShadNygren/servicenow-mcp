@@ -74,7 +74,7 @@ def get_sctask(
         return {"success": False, "message": "Cannot find get_headers method"}
 
     url = f"{instance_url}/api/now/table/sc_task"
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_query": f"number={validated.task_number}",
         "sysparm_limit": 1,
         "sysparm_display_value": "true",
@@ -147,7 +147,7 @@ def list_sctasks(
         query_parts.append(validated.query)
 
     url = f"{instance_url}/api/now/table/sc_task"
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_limit": validated.limit,
         "sysparm_offset": validated.offset,
         "sysparm_display_value": "true",
@@ -196,7 +196,7 @@ def update_sctask(
     task_id = validated.task_number
     if task_id.startswith("SCTASK"):
         lookup_url = f"{instance_url}/api/now/table/sc_task"
-        lookup_params = {
+        lookup_params: Dict[str, Any] = {
             "sysparm_query": f"number={task_id}",
             "sysparm_limit": 1,
             "sysparm_fields": "sys_id",

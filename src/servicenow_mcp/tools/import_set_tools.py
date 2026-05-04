@@ -99,7 +99,7 @@ def _table_get(
     url = f"{config.instance_url}/api/now/table/{table}"
     response = requests.get(url, headers=auth_manager.get_headers(), params=params, timeout=30)
     response.raise_for_status()
-    return response.json().get("result", [])
+    return response.json().get("result", [])  # type: ignore[no-any-return]
 
 
 def _table_get_one(
@@ -116,7 +116,7 @@ def _table_get_one(
         timeout=30,
     )
     response.raise_for_status()
-    return response.json().get("result", {})
+    return response.json().get("result", {})  # type: ignore[no-any-return]
 
 
 def _table_post(
@@ -128,7 +128,7 @@ def _table_post(
     url = f"{config.instance_url}/api/now/table/{table}"
     response = requests.post(url, headers=auth_manager.get_headers(), json=data, timeout=30)
     response.raise_for_status()
-    return response.json().get("result", {})
+    return response.json().get("result", {})  # type: ignore[no-any-return]
 
 
 def _val(record: Dict, field: str) -> str:

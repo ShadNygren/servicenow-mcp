@@ -563,7 +563,7 @@ def get_role_id(
         if not result:
             return None
 
-        return result[0].get("sys_id")
+        return result[0].get("sys_id")  # type: ignore[no-any-return]
 
     except requests.RequestException as e:
         logger.error(f"Failed to get role ID: {e}")

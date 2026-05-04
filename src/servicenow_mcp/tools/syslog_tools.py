@@ -20,7 +20,6 @@ from servicenow_mcp.utils.helpers import (
     _join_query_parts,
     _paginated_list_response,
     _unwrap_and_validate_params,
-    validate_servicenow_datetime,
 )
 
 logger = logging.getLogger(__name__)

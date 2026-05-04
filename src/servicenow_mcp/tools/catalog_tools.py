@@ -113,7 +113,7 @@ def list_catalog_items(
     url = f"{config.instance_url}/api/now/table/sc_cat_item"
     
     # Prepare query parameters
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_limit": params.limit,
         "sysparm_offset": params.offset,
         "sysparm_display_value": "true",
@@ -218,7 +218,7 @@ def get_catalog_item(
     url = f"{config.instance_url}/api/now/table/sc_cat_item/{params.item_id}"
     
     # Prepare query parameters
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_display_value": "true",
         "sysparm_exclude_reference_link": "true",
     }
@@ -295,7 +295,7 @@ def get_catalog_item_variables(
     url = f"{config.instance_url}/api/now/table/item_option_new"
     
     # Prepare query parameters
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_query": f"cat_item={item_id}^ORDERBYorder",
         "sysparm_display_value": "true",
         "sysparm_exclude_reference_link": "true",
@@ -424,7 +424,7 @@ def list_catalog_categories(
     url = f"{config.instance_url}/api/now/table/sc_category"
     
     # Prepare query parameters
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_limit": params.limit,
         "sysparm_offset": params.offset,
         "sysparm_display_value": "true",
@@ -522,7 +522,7 @@ def create_catalog_category(
     url = f"{config.instance_url}/api/now/table/sc_category"
     
     # Prepare request body
-    body = {
+    body: Dict[str, Any] = {
         "title": params.title,
     }
     
@@ -683,7 +683,7 @@ def move_catalog_items(
     try:
         for item_id in params.item_ids:
             item_url = f"{url}/{item_id}"
-            body = {
+            body: Dict[str, Any] = {
                 "category": params.target_category_id
             }
             

@@ -184,3 +184,4 @@ cython_debug/
 .env.development
 .env.test
 .env.production
+.claude/

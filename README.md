@@ -47,7 +47,7 @@ Before deploying this server, read these:
 
 4. **HTTP transport binds to loopback by default** (since the `fix/sse-auth-hardening` merge). To expose the server to a non-loopback interface, pass `--allow-remote` AND set `MCP_AUTH_TOKEN` — without both, the server refuses to bind. Bearer-token, Host-allowlist, and Origin-allowlist defenses are all on by default.
 
-5. **Phase 7 will deprecate SSE in favor of Streamable HTTP.** The MCP spec has moved on. SSE will remain available for one release cycle after Streamable HTTP lands.
+5. **Phase 7 retired the SSE transport in favor of Streamable HTTP** (the MCP spec's current HTTP transport). The single `/mcp` endpoint replaces the older `/sse` + `/messages/` pair. Run `servicenow-mcp-http` instead of `servicenow-mcp-sse`. Migration table is in [Streamable HTTP Mode → Migration from SSE](#migration-from-sse) below.
 
 ## Quick start with a ServiceNow Personal Developer Instance (PDI)
 
@@ -109,43 +109,51 @@ Or with environment variables:
 SERVICENOW_INSTANCE_URL=https://your-instance.service-now.com SERVICENOW_USERNAME=your-username SERVICENOW_PASSWORD=your-password SERVICENOW_AUTH_TYPE=basic python -m servicenow_mcp.cli
 ```
 
-### Server-Sent Events (SSE) Mode
+### Streamable HTTP Mode
 
-The ServiceNow MCP server can also run as a web server using Server-Sent Events (SSE) for communication.
+The ServiceNow MCP server can run as a network server using **Streamable HTTP** — the MCP spec's HTTP transport. A single endpoint at `/mcp` handles both request/response and server-pushed streaming over chunked HTTP.
 
-> **Security:** the SSE transport authenticates every request with a bearer token and rejects requests whose `Host` or `Origin` headers are not in an allowlist. By default it binds to `127.0.0.1` only; non-loopback bind requires `--allow-remote` and an explicit `MCP_AUTH_TOKEN`. See [Vulnerability disclosure (EntruLabs, 2026-04-22)](#) for the original report this hardening addresses.
+> Phase 7 retired the older Server-Sent Events (SSE) transport (`/sse` + `/messages/` endpoints). The Streamable HTTP endpoint at `/mcp` replaces both. See [Migration from SSE](#migration-from-sse) below if you're upgrading from a pre-v0.7 deployment.
 
-#### Starting the SSE Server (loopback, local dev)
+> **Security:** the HTTP transport authenticates every request with a bearer token and rejects requests whose `Host` or `Origin` headers are not in an allowlist. By default it binds to `127.0.0.1` only; non-loopback bind requires `--allow-remote` and an explicit `MCP_AUTH_TOKEN`. The `/health` endpoint bypasses the bearer-token check (so platform liveness probes work) but still enforces the Host allowlist.
+
+#### Starting the HTTP Server (loopback, local dev)
 
 ```
-servicenow-mcp-sse
+servicenow-mcp-http
 ```
 
 The server binds `127.0.0.1:8080`, generates a random bearer token, and prints it once to stderr:
 
 ```
-[servicenow-mcp-sse] generated auth token: <random-token>
+[servicenow-mcp-http] generated auth token: <random-token>
 ```
 
 Use that token on every request:
 
 ```
-curl -N -H "Authorization: Bearer <random-token>" http://127.0.0.1:8080/sse
+curl -N -H "Authorization: Bearer <random-token>" http://127.0.0.1:8080/mcp
+```
+
+Liveness probe (no token needed):
+
+```
+curl http://127.0.0.1:8080/health
+# → OK
 ```
 
 To pin a stable token, set `MCP_AUTH_TOKEN` in `.env` (then no token is auto-generated).
 
-#### Exposing the SSE Server beyond loopback
+#### Exposing the HTTP Server beyond loopback
 
 Non-loopback bind is opt-in and requires both `--allow-remote` and an explicit `MCP_AUTH_TOKEN`:
 
 ```
 MCP_AUTH_TOKEN=$(openssl rand -hex 32) \
-servicenow-mcp-sse --host=0.0.0.0 --port=8080 --allow-remote \
-  --allowed-host=mcp.internal --allowed-host=mcp.internal:8080
+servicenow-mcp-http --host=0.0.0.0 --port=8080 --allow-remote
 ```
 
-You can pass `--allowed-host` repeatedly, or use the env var:
+If your reverse proxy (nginx, Caddy, ALB, Cloudflare, etc.) forwards a non-loopback `Host` header, set the env var:
 
 ```
 MCP_ALLOWED_HOSTS=mcp.internal,mcp.internal:8080
@@ -155,27 +163,50 @@ Loopback hosts (`127.0.0.1`, `localhost`, `[::1]`) are always allowed.
 
 #### Endpoints
 
-- `/sse` — SSE connection endpoint (bearer-token required)
-- `/messages/` — JSON-RPC POST endpoint (bearer-token required)
+- `/mcp` — Streamable HTTP MCP endpoint (bearer-token required)
+- `/health` — Liveness probe, returns `200 OK` (Host allowlist applies; bearer not required)
 
 #### Programmatic example
 
 ```python
-from servicenow_mcp.server_sse import create_servicenow_mcp
+from servicenow_mcp.server_http import create_servicenow_mcp
+from servicenow_mcp.transport_security import (
+    build_allowed_hosts, build_allowed_origins, resolve_auth_token,
+)
 
 mcp = create_servicenow_mcp(
     instance_url="https://your-instance.service-now.com",
     username="your-username",
     password="your-password",
 )
-mcp.start()  # 127.0.0.1:8080, auto-generated bearer token logged to stderr
+
+# Loopback bind, auto-generated bearer token (printed to stderr).
+auth_token = resolve_auth_token(
+    allow_remote=False, transport_name="my-app",
+)
+allowed_hosts = build_allowed_hosts(host="127.0.0.1", port=8080)
+allowed_origins = build_allowed_origins(allowed_hosts)
+mcp.start(
+    host="127.0.0.1", port=8080,
+    auth_token=auth_token,
+    allowed_hosts=allowed_hosts,
+    allowed_origins=allowed_origins,
+)
 ```
 
-To bind beyond loopback from code, set `MCP_AUTH_TOKEN` and pass `allow_remote=True`:
+#### Migration from SSE
 
-```python
-mcp.start(host="0.0.0.0", port=8080, allow_remote=True)
-```
+The pre-v0.7 SSE transport (`servicenow-mcp-sse`, `/sse` + `/messages/`) was removed in Phase 7. To migrate:
+
+| Was | Becomes |
+|---|---|
+| `servicenow-mcp-sse` (console script) | `servicenow-mcp-http` |
+| `http://host:port/sse` (client URL) | `http://host:port/mcp` |
+| `/messages/` (POST endpoint) | `/mcp` (single unified endpoint) |
+| `from servicenow_mcp.server_sse import ...` | `from servicenow_mcp.server_http import ...` |
+| `from servicenow_mcp.server_sse import SecurityMiddleware` | `from servicenow_mcp.transport_security import SecurityMiddleware` |
+
+Bearer token, Host allowlist, Origin allowlist, `MCP_AUTH_TOKEN`, `MCP_ALLOW_REMOTE`, `MCP_ALLOWED_HOSTS`, and the `/health` endpoint behave identically — only the URL paths changed.
 
 ## Tool Packaging (Optional)
 
