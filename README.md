@@ -2,14 +2,36 @@
 
 A Model Context Protocol (MCP) server for ServiceNow. Lets Claude (and any MCP-compatible client) read ServiceNow data and execute actions through the ServiceNow Table and REST APIs.
 
+> **216+ tools registered · 919 tests passing · 4 mcpscan.ai security findings mitigated · MIT licensed.**
+
 ## Fork notice
 
-This is a maintained fork of [`echelon-ai-labs/servicenow-mcp`](https://github.com/echelon-ai-labs/servicenow-mcp), integrating the upstream `fix/sse-auth-hardening` branch and patterns from related forks. Upstream has been effectively dormant since October 2025 — this fork serves as the de-facto reviewed-and-tested version.
+This is a maintained, security-hardened, feature-consolidated fork of [`echelon-ai-labs/servicenow-mcp`](https://github.com/echelon-ai-labs/servicenow-mcp). Upstream has been effectively dormant since October 2025 (no PRs merged in 7+ months as of writing). This fork serves as the de-facto reviewed-and-tested version of the project.
 
-The architectural rationale, fork survey, and PR/issue analysis live in:
-- [`ANALYSIS_OF_EXISTING_OPEN_SOURCE_SERVICENOW_MCP_SERVERS.md`](ANALYSIS_OF_EXISTING_OPEN_SOURCE_SERVICENOW_MCP_SERVERS.md)
-- [`ANALYSIS_OF_ECHELON_AI_LABS_SERVICENOW_MCP_FORKS.md`](ANALYSIS_OF_ECHELON_AI_LABS_SERVICENOW_MCP_FORKS.md)
-- [`ANALYSIS_OF_ECHELON_AI_LABS_PRS_AND_ISSUES.md`](ANALYSIS_OF_ECHELON_AI_LABS_PRS_AND_ISSUES.md)
+**Sources integrated** (all MIT-licensed; see [`NOTICE`](NOTICE) for per-component copyright):
+
+| Source | What we took |
+|---|---|
+| `echelon-ai-labs/servicenow-mcp` | Core server, 80+ baseline tools, the `fix/sse-auth-hardening` branch (merged as a real merge commit, preserving upstream authorship) |
+| `michaelbuckner/servicenow-mcp` | Natural-language processor + `nl_power_user` tool package |
+| `torkian/servicenow-mcp` | Helpers refactor (-740 LOC duplication), retry/backoff, rate limiting, pagination, bulk batch API, 80% test coverage, GH Actions CI/CodeQL/Dependabot, CMDB tools, asset tools, asset-contract tools, SCTASK + time-card, syslog tools, UI policy + user criteria, security-gated `execute_script_include` |
+| `Flowbie/servicenow-mcp` | SnowResponse envelope, identifier resolver, integration-test gate, full Flow Designer suite (36 tools targeting `sys_hub_*`) |
+| `klapom/servicenow-mcp` | Platform admin (business rule, OAuth, REST message, scheduled job, sys_dictionary, table API tools), data integration (import sets, transform maps, scheduled imports) |
+| `nathanolds22/servicenow-mcp` | Used as design reference (deferred large port due to security-sensitive script-execution tools) |
+| `russ430/servicenow-mcp` | Service Portal widget tools (`sp_widget`) |
+| `dobromirmontauk/servicenow-mcp` | CSM tools (case correlation, accounts, locations, products) — sanitized of fork-specific framing |
+| `haim-nizri/servicenow-mcp` | Scripted REST API tools (`sys_ws_definition` + `sys_ws_operation`) |
+| `ericstarkey/servicenow-mcp` | Docker Compose + Nginx (opt-in) deployment recipe |
+| `AppliedMedicalEurope/servicenow-mcp-eal` | Agile date field fixes, incident tool description hardening |
+| **PRs cherry-picked from echelon** | PR #46 (uvx packaging), PR #51 (client-credentials OAuth + configurable api_path), PR #56 (ACL/Role/Security Attribute tools), PR #36 (`/health` endpoint) |
+| **Issues fixed** | #26 (Pydantic v2), #43 findings 1/2/4 (RCE, password-grant, 0.0.0.0 binding), #45 (CMDB), #49 (install path), #50 (OAuth flexibility), #52 (work_notes/comments timeline), #54 (assignment_group filter) |
+
+The full architectural rationale, fork survey, PR/issue analysis, and 185-fork comprehensive sweep:
+
+- [`ANALYSIS_OF_EXISTING_OPEN_SOURCE_SERVICENOW_MCP_SERVERS.md`](ANALYSIS_OF_EXISTING_OPEN_SOURCE_SERVICENOW_MCP_SERVERS.md) — 3-server comparative review + original execution playbook
+- [`ANALYSIS_OF_ECHELON_AI_LABS_SERVICENOW_MCP_FORKS.md`](ANALYSIS_OF_ECHELON_AI_LABS_SERVICENOW_MCP_FORKS.md) — 18 active-fork survey
+- [`ANALYSIS_OF_ECHELON_AI_LABS_PRS_AND_ISSUES.md`](ANALYSIS_OF_ECHELON_AI_LABS_PRS_AND_ISSUES.md) — 15 open PRs + 13 open issues at echelon
+- [`ANALYSIS_OF_ALL_ECHELON_FORKS.md`](ANALYSIS_OF_ALL_ECHELON_FORKS.md) — comprehensive 185-fork sweep with verdicts
 
 License is MIT (matching all upstream sources). See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE) for per-component attribution.
 
