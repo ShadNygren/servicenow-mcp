@@ -44,11 +44,27 @@ Connect MCP clients with `Authorization: Bearer <MCP_AUTH_TOKEN>`.
 
 ---
 
-## §2. Docker Compose + Nginx (public VPS, this repo's recipe)
+## §2. Docker Compose with optional Nginx (public VPS, this repo's recipe)
 
-This guide walks through deploying the ServiceNow MCP SSE server on a VPS (e.g. Hostinger) using Docker Compose with Nginx as an SSL-terminating reverse proxy. The MCP server will be accessible at `https://<YOUR_VPS_IP>/sse`.
+This guide walks through deploying the ServiceNow MCP SSE server on a VPS (e.g. Hostinger) using Docker Compose, optionally with Nginx as an SSL-terminating reverse proxy.
 
-**Why Nginx?** The Python MCP process speaks plain HTTP on `127.0.0.1:8080`. To expose it as HTTPS on the public Internet you need TLS termination on `:443` somewhere. Nginx is one common, lightweight way. You could equally use Caddy (auto Let's Encrypt), Traefik, or a cloud load balancer — the MCP server doesn't care.
+**Nginx is opt-in.** The `nginx` service in `docker-compose.yml` sits behind a Compose profile, so by default only the MCP container starts:
+
+```bash
+# Default: just the MCP container, no nginx.
+docker compose up -d
+
+# Opt-in: include nginx for TLS termination.
+docker compose --profile with-nginx up -d
+```
+
+**Why is Nginx opt-in?** The Python MCP process speaks plain HTTP on `127.0.0.1:8080`. To expose it as HTTPS on the public Internet you need TLS termination on `:443` somewhere. Most production environments already have that somewhere — a cloud load balancer (AWS ALB, GCP Load Balancer, Azure Application Gateway), Cloudflare/Fastly at the edge, an existing reverse proxy, or a PaaS edge (Cloud Run, App Runner). In those cases, **don't run our nginx.** Bare `docker compose up -d` is the right shape.
+
+Use the `with-nginx` profile only when:
+- You have a VPS with a public IP and no other TLS infrastructure.
+- You want a self-contained stack where TLS termination lives in this repo.
+
+If you run with nginx, the MCP server will be accessible at `https://<YOUR_VPS_IP>/sse`. If you skip nginx, the MCP server will be on `127.0.0.1:8080` (or whatever you set via `MCP_BIND_ADDR`) and you handle TLS in your upstream load balancer.
 
 Skip to §3 if you're using a PaaS that does TLS for you.
 

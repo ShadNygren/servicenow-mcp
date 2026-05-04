@@ -1,4 +1,23 @@
-version: "3.9"
+# Docker Compose for the ServiceNow MCP server.
+#
+# By default, ONLY the `mcp` service runs. The `nginx` service sits
+# behind a Compose profile and is opt-in for the specific case where
+# you want this stack to terminate TLS itself (typically: VPS with
+# a public IP, no other infra).
+#
+# Default usage (no nginx):
+#   docker compose up -d
+#   # MCP listens on 127.0.0.1:8080. Reach it from the host or from a
+#   # cloud load balancer / API gateway that terminates TLS upstream.
+#
+# Opt-in nginx (this repo terminates TLS):
+#   docker compose --profile with-nginx up -d
+#   # Generates self-signed cert via nginx/generate-certs.sh first.
+#
+# Most users want the default. Cloud Run / App Runner / ECS-behind-ALB /
+# Fly / Render / Cloudflare-Tunnel / behind your-org's-existing-proxy
+# all do TLS termination at their edge — bare `docker compose up -d` is
+# the right shape for those.
 
 services:
   mcp:
@@ -7,14 +26,18 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    expose:
-      - "8080"
+    # By default, expose 8080 only on the host's loopback. Override via
+    # MCP_BIND_ADDR=0.0.0.0 if you're terminating TLS upstream and need
+    # to reach the container from outside the Docker host.
+    ports:
+      - "${MCP_BIND_ADDR:-127.0.0.1}:8080:8080"
     networks:
       - internal
 
   nginx:
     image: nginx:1.25-alpine
     restart: unless-stopped
+    profiles: ["with-nginx"]
     ports:
       - "443:443"
     volumes:
