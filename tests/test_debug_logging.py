@@ -125,6 +125,45 @@ class TestTruncateBody(unittest.TestCase):
         result = _truncate_body(42)
         self.assertEqual(result, "42")
 
+    def test_password_key_redacted_in_dict_body(self):
+        result = _truncate_body({"username": "alice", "password": "hunter2"})
+        self.assertNotIn("hunter2", result)
+        self.assertIn(_REDACTED, result)
+        self.assertIn("alice", result)
+
+    def test_oauth_grant_body_fields_redacted(self):
+        body = {
+            "grant_type": "password",
+            "username": "alice",
+            "password": "hunter2",
+            "client_secret": "shhhhh",
+            "access_token": "AT-eyJ123",
+            "refresh_token": "RT-eyJ456",
+        }
+        result = _truncate_body(body)
+        for secret in ("hunter2", "shhhhh", "AT-eyJ123", "RT-eyJ456"):
+            self.assertNotIn(secret, result)
+        self.assertIn("alice", result)
+        self.assertIn("grant_type", result)
+
+    def test_nested_dict_redacted(self):
+        body = {"outer": {"password": "hunter2", "name": "alice"}}
+        result = _truncate_body(body)
+        self.assertNotIn("hunter2", result)
+        self.assertIn("alice", result)
+
+    def test_list_of_dicts_redacted(self):
+        body = [{"password": "p1"}, {"name": "alice", "secret": "s1"}]
+        result = _truncate_body(body)
+        self.assertNotIn("p1", result)
+        self.assertNotIn("s1", result)
+        self.assertIn("alice", result)
+
+    def test_redaction_case_insensitive(self):
+        result = _truncate_body({"PASSWORD": "hunter2", "Secret": "shhh"})
+        self.assertNotIn("hunter2", result)
+        self.assertNotIn("shhh", result)
+
 
 # ---------------------------------------------------------------------------
 # Debug logging integration in _make_request

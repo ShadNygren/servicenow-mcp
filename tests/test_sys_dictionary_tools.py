@@ -10,7 +10,6 @@ from servicenow_mcp.tools.sys_dictionary_tools import (
     list_fields,
     update_field,
 )
-import requests
 
 
 class TestSysDictionaryTools(unittest.TestCase):

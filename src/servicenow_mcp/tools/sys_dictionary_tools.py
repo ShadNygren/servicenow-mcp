@@ -6,7 +6,7 @@ ServiceNow tables via the sys_dictionary table.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import requests
 from pydantic import BaseModel, Field

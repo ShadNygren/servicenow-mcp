@@ -6,7 +6,7 @@ and related security configurations in ServiceNow.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import requests
 from pydantic import BaseModel, Field

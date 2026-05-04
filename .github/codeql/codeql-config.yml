@@ -1,0 +1,14 @@
+name: "CodeQL config — scan production server code only"
+
+# Restrict CodeQL analysis to the runtime server source. The `scripts/`,
+# `tests/`, and `examples/` trees contain developer setup tooling, unit
+# tests with synthetic credentials, and demo code — none of which run in
+# production. Including them produces high-severity alerts for paths that
+# are by design interactive or local-dev only (e.g. the `setup_*.py`
+# helpers that write credentials into a `.env` file).
+#
+# The `paths` directive whitelists analyzed paths; everything else is
+# excluded from scanning.
+
+paths:
+  - src/
