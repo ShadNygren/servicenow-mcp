@@ -1,12 +1,12 @@
 """ServiceNow MCP server — Streamable HTTP transport.
 
-Streamable HTTP is the MCP spec's successor to the (now-deprecated) SSE
-transport. A single endpoint at ``/mcp`` handles both request/response
-and server-pushed streaming over chunked HTTP, replacing the dual
-``/sse`` + ``/messages/`` shape.
+Streamable HTTP is the MCP spec's HTTP transport. A single endpoint at
+``/mcp`` handles both request/response and server-pushed streaming
+over chunked HTTP. (This replaced the older SSE transport's
+``/sse`` + ``/messages/`` pair when SSE was retired in v0.7.)
 
-This module reuses the same SecurityMiddleware as ``server_sse.py`` so
-the security model is identical across transports:
+The HTTP transport is gated by SecurityMiddleware
+(:mod:`servicenow_mcp.transport_security`):
 
   - Loopback bind by default; non-loopback requires --allow-remote AND
     MCP_AUTH_TOKEN.
@@ -43,12 +43,12 @@ from starlette.types import Receive, Scope, Send
 
 from servicenow_mcp.event_store import InMemoryEventStore
 from servicenow_mcp.server import ServiceNowMCP
-from servicenow_mcp.server_sse import (
+from servicenow_mcp.transport_security import (
     SecurityMiddleware,
-    _build_allowed_hosts,
-    _build_allowed_origins,
-    _is_loopback_host,
-    _resolve_auth_token,
+    build_allowed_hosts,
+    build_allowed_origins,
+    is_loopback_host,
+    resolve_auth_token,
 )
 from servicenow_mcp.utils.config import (
     AuthConfig,
@@ -70,9 +70,10 @@ def create_starlette_app(
 ) -> Starlette:
     """Build a Starlette app exposing the MCP server via Streamable HTTP.
 
-    Same security posture as ``server_sse.create_starlette_app`` —
-    SecurityMiddleware in front of every request, /health bypassed
-    for the bearer check only.
+    SecurityMiddleware (from :mod:`servicenow_mcp.transport_security`)
+    is mounted in front of every request: bearer token, Host allowlist,
+    Origin allowlist. ``/health`` is bypassed for the bearer check
+    (Host allowlist still applies) so platform liveness probes work.
     """
     event_store = InMemoryEventStore()
 
@@ -190,15 +191,17 @@ def main() -> None:
     )
 
     allow_remote = args.allow_remote or bool(os.getenv("MCP_ALLOW_REMOTE"))
-    if not allow_remote and not _is_loopback_host(args.host):
+    if not allow_remote and not is_loopback_host(args.host):
         raise SystemExit(
             f"Refusing to bind to non-loopback address {args.host} without "
             "--allow-remote (or MCP_ALLOW_REMOTE=1)."
         )
 
-    auth_token = _resolve_auth_token(allow_remote=allow_remote)
-    allowed_hosts = _build_allowed_hosts(host=args.host, port=args.port)
-    allowed_origins = _build_allowed_origins(allowed_hosts)
+    auth_token = resolve_auth_token(
+        allow_remote=allow_remote, transport_name="servicenow-mcp-http"
+    )
+    allowed_hosts = build_allowed_hosts(host=args.host, port=args.port)
+    allowed_origins = build_allowed_origins(allowed_hosts)
 
     instance_url = os.getenv("SERVICENOW_INSTANCE_URL")
     username = os.getenv("SERVICENOW_USERNAME")

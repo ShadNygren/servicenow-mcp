@@ -42,7 +42,6 @@ dev = [
 
 [project.scripts]
 servicenow-mcp = "servicenow_mcp.cli:main"
-servicenow-mcp-sse = "servicenow_mcp.server_sse:main"
 servicenow-mcp-http = "servicenow_mcp.server_http:main"
 
 [tool.hatch.build.targets.wheel]
@@ -93,7 +92,7 @@ addopts = "--ignore=examples"
 omit = [
     "src/servicenow_mcp/cli.py",
     "src/servicenow_mcp/server.py",
-    "src/servicenow_mcp/server_sse.py",
+    "src/servicenow_mcp/server_http.py",
 ]
 
 [dependency-groups]

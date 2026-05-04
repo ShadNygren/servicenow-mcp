@@ -16,7 +16,7 @@ from starlette.responses import PlainTextResponse
 from starlette.routing import Mount, Route
 from starlette.testclient import TestClient
 
-from servicenow_mcp.server_sse import SecurityMiddleware
+from servicenow_mcp.transport_security import SecurityMiddleware
 
 
 TOKEN = "test-secret-token-please-ignore"

@@ -22,7 +22,7 @@
 services:
   mcp:
     build: .
-    image: servicenow-mcp-sse:latest
+    image: servicenow-mcp:latest
     restart: unless-stopped
     env_file:
       - .env
