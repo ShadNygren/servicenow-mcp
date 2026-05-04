@@ -185,6 +185,17 @@ system_administrator:
   - table_create_record
   - table_update_record
   - table_delete_record
+  # Data Integration (import sets, transform maps, scheduled imports)
+  - list_import_sets
+  - list_data_sources
+  - list_import_runs
+  - trigger_import
+  - list_transform_maps
+  - get_transform_map
+  - list_field_mappings
+  - list_transform_scripts
+  - list_scheduled_imports
+  - clone_import_configuration
   # Schema / Dictionary
   - create_field
   - list_fields
@@ -457,3 +468,14 @@ full:
   - list_oauth_profiles
   - update_oauth_profile
   - delete_oauth_profile
+  # Data Integration (klapom 8c4b817)
+  - list_import_sets
+  - list_data_sources
+  - list_import_runs
+  - trigger_import
+  - list_transform_maps
+  - get_transform_map
+  - list_field_mappings
+  - list_transform_scripts
+  - list_scheduled_imports
+  - clone_import_configuration

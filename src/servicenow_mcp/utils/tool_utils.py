@@ -456,6 +456,28 @@ from servicenow_mcp.tools.scripted_rest_tools import (
     create_scripted_rest_api as create_scripted_rest_api_tool,
     create_scripted_rest_resource as create_scripted_rest_resource_tool,
 )
+from servicenow_mcp.tools.import_set_tools import (
+    CloneImportConfigurationParams,
+    GetTransformMapParams,
+    ListDataSourcesParams,
+    ListFieldMappingsParams,
+    ListImportRunsParams,
+    ListImportSetsParams,
+    ListScheduledImportsParams,
+    ListTransformMapsParams,
+    ListTransformScriptsParams,
+    TriggerImportParams,
+)
+from servicenow_mcp.tools.import_set_tools import clone_import_configuration as clone_import_configuration_tool
+from servicenow_mcp.tools.import_set_tools import get_transform_map as get_transform_map_tool
+from servicenow_mcp.tools.import_set_tools import list_data_sources as list_data_sources_tool
+from servicenow_mcp.tools.import_set_tools import list_field_mappings as list_field_mappings_tool
+from servicenow_mcp.tools.import_set_tools import list_import_runs as list_import_runs_tool
+from servicenow_mcp.tools.import_set_tools import list_import_sets as list_import_sets_tool
+from servicenow_mcp.tools.import_set_tools import list_scheduled_imports as list_scheduled_imports_tool
+from servicenow_mcp.tools.import_set_tools import list_transform_maps as list_transform_maps_tool
+from servicenow_mcp.tools.import_set_tools import list_transform_scripts as list_transform_scripts_tool
+from servicenow_mcp.tools.import_set_tools import trigger_import as trigger_import_tool
 from servicenow_mcp.tools.csm_tools import (
     GetCaseHistoryParams,
     GetCasesByAccountParams,
@@ -1480,6 +1502,77 @@ def get_tool_definitions(
                 "and the server-side script body that handles requests."
             ),
             "raw_pydantic",
+        ),
+        # --- Data Integration Tools (klapom 8c4b817) ---
+        "list_import_sets": (
+            list_import_sets_tool,
+            ListImportSetsParams,
+            str,
+            "List Import Set table definitions from ServiceNow (sys_import_set_table)",
+            "json",
+        ),
+        "list_data_sources": (
+            list_data_sources_tool,
+            ListDataSourcesParams,
+            str,
+            "List configured Data Sources from ServiceNow (sys_data_source)",
+            "json",
+        ),
+        "list_import_runs": (
+            list_import_runs_tool,
+            ListImportRunsParams,
+            str,
+            "List Import Set run history with status from ServiceNow (sys_import_set_run)",
+            "json",
+        ),
+        "trigger_import": (
+            trigger_import_tool,
+            TriggerImportParams,
+            str,
+            "Trigger an import run for a configured Data Source in ServiceNow",
+            "json",
+        ),
+        "list_transform_maps": (
+            list_transform_maps_tool,
+            ListTransformMapsParams,
+            str,
+            "List Transform Maps (sys_transform_map) for a Data Source or Import Set table in ServiceNow",
+            "json",
+        ),
+        "get_transform_map": (
+            get_transform_map_tool,
+            GetTransformMapParams,
+            str,
+            "Get full details of a Transform Map including field mappings and transform scripts",
+            "json",
+        ),
+        "list_field_mappings": (
+            list_field_mappings_tool,
+            ListFieldMappingsParams,
+            str,
+            "List field mappings (sys_transform_entry) for a Transform Map in ServiceNow",
+            "json",
+        ),
+        "list_transform_scripts": (
+            list_transform_scripts_tool,
+            ListTransformScriptsParams,
+            str,
+            "List transform scripts (onBefore, onAfter, onComplete etc.) for a Transform Map",
+            "json",
+        ),
+        "list_scheduled_imports": (
+            list_scheduled_imports_tool,
+            ListScheduledImportsParams,
+            str,
+            "List scheduled import jobs (sys_trigger) that trigger Data Sources in ServiceNow",
+            "json",
+        ),
+        "clone_import_configuration": (
+            clone_import_configuration_tool,
+            CloneImportConfigurationParams,
+            str,
+            "Clone a complete import configuration: Data Source, Transform Maps, Field Mappings, Scripts, and optionally Scheduler",
+            "json",
         ),
         # Customer Service Case Tools (CSM)
         "list_cases": (

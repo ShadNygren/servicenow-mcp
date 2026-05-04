@@ -156,6 +156,18 @@ from servicenow_mcp.tools.scripted_rest_tools import (
     create_scripted_rest_api,
     create_scripted_rest_resource,
 )
+from servicenow_mcp.tools.import_set_tools import (
+    clone_import_configuration,
+    get_transform_map,
+    list_data_sources,
+    list_field_mappings,
+    list_import_runs,
+    list_import_sets,
+    list_scheduled_imports,
+    list_transform_maps,
+    list_transform_scripts,
+    trigger_import,
+)
 from servicenow_mcp.tools.business_rule_tools import (
     create_business_rule,
     delete_business_rule,
