@@ -89,9 +89,18 @@ class TestCatalogTools(unittest.TestCase):
         self.assertEqual(kwargs["params"]["sysparm_limit"], 10)
         self.assertEqual(kwargs["params"]["sysparm_offset"], 0)
         self.assertIn("sysparm_query", kwargs["params"])
-        self.assertIn("active=true", kwargs["params"]["sysparm_query"])
-        self.assertIn("category=Hardware", kwargs["params"]["sysparm_query"])
-        self.assertIn("short_descriptionLIKElaptop^ORnameLIKElaptop", kwargs["params"]["sysparm_query"])
+        # After windoze95 e3385d5 fix: base filters (active, category) are
+        # distributed across both OR clauses of the LIKE search to keep AND
+        # semantics. ServiceNow's ^OR has loose binding, so the old format
+        # `active=true^short_desc...^ORname...` was actually
+        # `(active=true AND short_desc) OR name` — leaking inactive records.
+        sysparm = kwargs["params"]["sysparm_query"]
+        self.assertIn("active=true", sysparm)
+        self.assertIn("category=Hardware", sysparm)
+        # Both branches must contain the base filters AND a LIKE clause.
+        self.assertIn("active=true^category=Hardware^short_descriptionLIKElaptop", sysparm)
+        self.assertIn("active=true^category=Hardware^nameLIKElaptop", sysparm)
+        self.assertIn("^OR", sysparm)
 
     @patch("servicenow_mcp.tools.catalog_tools.requests.get")
     def test_list_catalog_items_error(self, mock_get):
@@ -290,8 +299,12 @@ class TestCatalogTools(unittest.TestCase):
         self.assertEqual(kwargs["params"]["sysparm_limit"], 10)
         self.assertEqual(kwargs["params"]["sysparm_offset"], 0)
         self.assertIn("sysparm_query", kwargs["params"])
-        self.assertIn("active=true", kwargs["params"]["sysparm_query"])
-        self.assertIn("titleLIKEhardware^ORdescriptionLIKEhardware", kwargs["params"]["sysparm_query"])
+        # Same OR-binding fix as test_list_catalog_items.
+        sysparm = kwargs["params"]["sysparm_query"]
+        self.assertIn("active=true", sysparm)
+        self.assertIn("active=true^titleLIKEhardware", sysparm)
+        self.assertIn("active=true^descriptionLIKEhardware", sysparm)
+        self.assertIn("^OR", sysparm)
 
     @patch("servicenow_mcp.tools.catalog_tools.requests.get")
     def test_list_catalog_categories_error(self, mock_get):

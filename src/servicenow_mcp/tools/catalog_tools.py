@@ -120,18 +120,35 @@ def list_catalog_items(
         "sysparm_exclude_reference_link": "true",
     }
     
-    # Add filters
-    filters = []
+    # Add filters. ServiceNow's ^OR has loose binding: a query like
+    # `active=true^short_descLIKE{q}^ORnameLIKE{q}` parses as
+    # `(active=true AND short_desc) OR name`, leaking inactive records
+    # via the `OR name` branch. Distribute base filters across both
+    # OR clauses to keep AND semantics. Fix from windoze95 e3385d5.
+    base_filters = []
     if params.active:
-        filters.append("active=true")
+        base_filters.append("active=true")
     if params.category:
-        filters.append(f"category={params.category}")
+        base_filters.append(f"category={params.category}")
+
+    filters = []
     if params.query:
-        filters.append(f"short_descriptionLIKE{params.query}^ORnameLIKE{params.query}")
-    
+        query_clauses = [
+            f"short_descriptionLIKE{params.query}",
+            f"nameLIKE{params.query}",
+        ]
+        if base_filters:
+            left = "^".join(base_filters + [query_clauses[0]])
+            right = "^".join(base_filters + [query_clauses[1]])
+            filters.append(f"{left}^OR{right}")
+        else:
+            filters.append(f"{query_clauses[0]}^OR{query_clauses[1]}")
+    else:
+        filters.extend(base_filters)
+
     if filters:
         query_params["sysparm_query"] = "^".join(filters)
-    
+
     # Make the API request
     headers = auth_manager.get_headers()
     headers["Accept"] = "application/json"
@@ -414,16 +431,29 @@ def list_catalog_categories(
         "sysparm_exclude_reference_link": "true",
     }
     
-    # Add filters
-    filters = []
+    # Same OR-binding fix as list_catalog_items above.
+    base_filters = []
     if params.active:
-        filters.append("active=true")
+        base_filters.append("active=true")
+
+    filters = []
     if params.query:
-        filters.append(f"titleLIKE{params.query}^ORdescriptionLIKE{params.query}")
-    
+        query_clauses = [
+            f"titleLIKE{params.query}",
+            f"descriptionLIKE{params.query}",
+        ]
+        if base_filters:
+            left = "^".join(base_filters + [query_clauses[0]])
+            right = "^".join(base_filters + [query_clauses[1]])
+            filters.append(f"{left}^OR{right}")
+        else:
+            filters.append(f"{query_clauses[0]}^OR{query_clauses[1]}")
+    else:
+        filters.extend(base_filters)
+
     if filters:
         query_params["sysparm_query"] = "^".join(filters)
-    
+
     # Make the API request
     headers = auth_manager.get_headers()
     headers["Accept"] = "application/json"
