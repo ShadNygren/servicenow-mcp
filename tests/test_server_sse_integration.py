@@ -31,8 +31,12 @@ def _build_stub_app(token=TOKEN, hosts=ALLOWED_HOSTS, origins=ALLOWED_ORIGINS):
     async def messages_ok(request):
         return PlainTextResponse("messages-ok")
 
+    async def health(request):
+        return PlainTextResponse("OK")
+
     return Starlette(
         routes=[
+            Route("/health", endpoint=health),
             Route("/sse", endpoint=ok),
             Mount("/messages/", routes=[Route("/", endpoint=messages_ok)]),
         ],
@@ -203,3 +207,48 @@ def test_real_create_starlette_app_no_debug_in_default_call():
         allowed_origins=ALLOWED_ORIGINS,
     )
     assert app.debug is False
+
+
+# ---------------------------------------------------------------------------
+# /health endpoint — unauthenticated liveness probe (PR #36 / Phase 6)
+# ---------------------------------------------------------------------------
+
+
+def test_health_endpoint_requires_no_authorization():
+    """The /health endpoint must work for platform liveness probes that
+    don't carry a bearer token (Cloud Run, K8s liveness probes, ALB
+    target-group checks, Docker HEALTHCHECK)."""
+    client = TestClient(_build_stub_app())
+    r = client.get("/health")
+    assert r.status_code == 200
+    assert r.text == "OK"
+
+
+def test_health_endpoint_still_enforces_host_allowlist():
+    """DNS-rebinding defense applies even on /health: an attacker
+    pointing a hostile hostname at our process must still be 421'd."""
+    client = TestClient(_build_stub_app())
+    r = client.get("/health", headers={"host": "attacker.example.com"})
+    assert r.status_code == 421
+
+
+def test_health_endpoint_returns_no_instance_state():
+    """Health probes return only "OK" — no instance URL, no tool list,
+    no version info that could be useful to an attacker."""
+    client = TestClient(_build_stub_app())
+    r = client.get("/health")
+    assert r.text == "OK"
+    # Body is exactly the 2-byte string "OK".
+    assert len(r.content) == 2
+
+
+def test_health_endpoint_post_does_not_bypass_auth():
+    """The bypass is GET-only. POST /health must still go through the
+    full auth chain so the bypass can't be abused as an unauth-POST
+    surface."""
+    client = TestClient(_build_stub_app())
+    r = client.post("/health")
+    # Could be 401 (no token), 405 (no POST handler), or any other
+    # error — but it must NOT be a 200 with body "OK" because that
+    # would mean we bypassed auth on a POST.
+    assert not (r.status_code == 200 and r.text == "OK")

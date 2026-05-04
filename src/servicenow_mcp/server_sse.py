@@ -19,6 +19,7 @@ from starlette.applications import Starlette
 from starlette.datastructures import Headers
 from starlette.middleware import Middleware
 from starlette.requests import Request
+from starlette.responses import PlainTextResponse
 from starlette.routing import Mount, Route
 
 from servicenow_mcp.server import ServiceNowMCP
@@ -95,6 +96,16 @@ class SecurityMiddleware:
             await self.app(scope, receive, send)
             return
 
+        # /health is a liveness probe — bypasses bearer auth so platform
+        # health checks (Cloud Run, K8s liveness probes, ALB target-group
+        # checks, Docker HEALTHCHECK) work without provisioning the token.
+        # Returns only "OK" — no instance state, no tool surface, nothing
+        # exfiltratable. Host/Origin allowlist still applies to defend
+        # against DNS rebinding.
+        is_health_probe = (
+            scope.get("method") == "GET" and scope.get("path") == "/health"
+        )
+
         headers = Headers(scope=scope)
 
         host = headers.get("host", "").lower().strip()
@@ -107,6 +118,11 @@ class SecurityMiddleware:
             if origin.lower().strip() not in self._allowed_origins:
                 await _send_text(send, 403, b"Forbidden: Origin not in allowlist")
                 return
+
+        if is_health_probe:
+            # Allow the request through without bearer-token enforcement.
+            await self.app(scope, receive, send)
+            return
 
         auth = headers.get("authorization", "")
         scheme, _, value = auth.partition(" ")
@@ -163,9 +179,23 @@ def create_starlette_app(
                 mcp_server.create_initialization_options(),
             )
 
+    async def health_check(request: Request) -> PlainTextResponse:
+        """Liveness probe — returns 200 OK with no auth required.
+
+        Mounted unauthenticated so platform health checks (Cloud Run,
+        Kubernetes liveness probes, ALB target-group checks, Docker
+        HEALTHCHECK) can verify the process is up without needing the
+        bearer token. Returns no information about the server's state
+        beyond "the process responded" — by design.
+
+        Pattern from PR #36 (xiangshen-dk).
+        """
+        return PlainTextResponse("OK", status_code=200)
+
     return Starlette(
         debug=debug,
         routes=[
+            Route("/health", endpoint=health_check),
             Route("/sse", endpoint=handle_sse),
             Mount("/messages/", app=sse.handle_post_message),
         ],
