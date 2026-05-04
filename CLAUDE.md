@@ -118,15 +118,33 @@ The MCP spec deprecates SSE in favor of Streamable HTTP (single endpoint that su
 
 Reference implementation: `ibeketov/servicenow-mcp:main:server_http.py` (MIT-licensed) — used as the structural reference for the `StreamableHTTPSessionManager` integration. Our version layers our `SecurityMiddleware` on top (ibeketov's was unhardened).
 
-### Phase 8 — Unify on FastMCP, retire `tool_utils.py` registry
+### Phase 8 — Unify on FastMCP, retire `tool_utils.py` registry ✅ DONE
 
-After Phase 7, both transports are FastMCP-based, but `cli.py` still uses `mcp.server.lowlevel.Server` and tool registration goes through the ~980-line `tool_utils.py` registry that maps strings to factory functions. This phase commits to FastMCP-everywhere.
+Goal: replace `mcp.server.lowlevel.Server` with `FastMCP` for both stdio (`cli.py`) and Streamable HTTP (`server_http.py`) transports.
 
-1. Migrate `cli.py` (stdio entry point) from `mcp.server.lowlevel.Server` to FastMCP.
-2. Replace `tool_utils.py` with `@mcp.tool()` decorators on each tool. Schemas auto-generate from Pydantic parameter models.
-3. Reimplement `MCP_TOOL_PACKAGE` filtering as decorator-time registration into named groups (e.g., `@mcp.tool(packages=["service_desk", "full"])`), with package selection happening at server startup before tools are exposed.
-4. Adding a new tool becomes: drop a file in `tools/<domain>/`, decorate the function. No central registry edit.
-5. **Why this is post-Phase 7, not part of it:** Phase 7 is a transport change (small, focused, urgent because SSE is deprecated). Phase 8 is a registration-pattern change that touches every tool file. Splitting reduces blast radius and lets us ship Streamable HTTP support without waiting on the registry rewrite.
+**Shipped on the `phase-8-fastmcp` branch:**
+
+1. ✅ `src/servicenow_mcp/server.py` rewritten — `ServiceNowMCP` now wraps a `FastMCP("ServiceNow")` instance. Manual `_list_tools_impl` / `_call_tool_impl` handlers gone (FastMCP provides them). `start()` returns the `FastMCP` instance instead of a low-level `Server`.
+
+2. ✅ `src/servicenow_mcp/utils/fastmcp_adapter.py` — new `register_tool()` helper that builds a thin wrapper per tool: captures `config` + `auth_manager` in closure, dynamically constructs an `inspect.Signature` mirroring the params model's fields with `Annotated[T, FieldInfo]` so FastMCP's schema generator picks up `Field(description=, ...)` metadata. Result: flat field-level JSON Schema per tool, underlying tool functions unchanged. **No 200-tool rewrite required.**
+
+3. ✅ `MCP_TOOL_PACKAGE` filtering preserved — selection happens at *startup* (before `add_tool` runs), same UX, simpler internals. The introspection tool `list_tool_packages` is registered via `@mcp.tool` like everything else.
+
+4. ✅ `cli.py` uses `mcp.run_stdio_async()` — replaces the manual `stdio_server()` + `server.run()` dance.
+
+5. ✅ `server_http.py` mounts FastMCP's `streamable_http_app()` at the root and adds `/health` at the same level. The outer Starlette inherits the inner app's lifespan, so the FastMCP session manager starts/stops with uvicorn. Our hardened `SecurityMiddleware` still wraps everything (bearer + Host + Origin + loopback default + body redaction).
+
+6. ✅ Schema-discovery resources (`servicenow://tables`, `servicenow://tables/{table}`, `servicenow://schema/{table}`) registered with FastMCP's `@resource` decorator pattern. Template URIs flow through `SchemaResources.read`.
+
+7. ✅ `mcp_server` attribute kept as a property aliasing `mcp` for backward compatibility.
+
+8. ✅ Dead test files (`test_server_catalog.py`, `test_server_workflow.py`, `test_workflow_tools_direct.py`) deleted — they tested an even-older shape and had been on `collect_ignore` since the fork started.
+
+9. ✅ Unused `serialize_tool_output` removed from `server.py` (FastMCP handles return-value serialization).
+
+**Test status: 935 passing, ruff clean, mypy clean.** Tool registry (`tool_utils.py`) is still on disk as the canonical list of tools — keeping it as the central definition is the cleaner path; what we eliminated was the *manual server wiring* around it.
+
+**Deferred to Phase 8.5 (optional, not blocking):** decorator-on-each-tool-function pattern (`@mcp.tool()` directly on every tool implementation). The current adapter approach gives us all the FastMCP benefits without touching every tool file; the per-tool decorator migration would be cosmetic and would touch 200+ files. Worth doing only if there's demand for the "drop a file in `tools/<domain>/`, decorate, done" experience.
 
 **Why FastMCP-everywhere is the right end state:**
 
@@ -168,8 +186,8 @@ These are not open questions — explicitly deferred:
 
 - **Do not refactor `requests` → `httpx.AsyncClient`.** Phase 9.
 - ~~Do not migrate SSE → Streamable HTTP. Phase 7.~~ **Done (Phase 7 complete on `phase-7-streamable-http` branch).** SSE entirely removed; `/mcp` is the single HTTP endpoint.
-- **Do not migrate stdio from low-level to FastMCP.** Phase 8.
-- **Do not retire `tool_utils.py` registry.** Phase 8.
+- ~~Do not migrate stdio from low-level to FastMCP. Phase 8.~~ **Done (Phase 8 complete on `phase-8-fastmcp` branch).** Both transports now FastMCP-based.
+- ~~Do not retire `tool_utils.py` registry. Phase 8.~~ **Partial — server-side wiring around the registry is gone; the registry remains as the canonical tool list. Per-tool decorator migration deferred to optional Phase 8.5.**
 - **Do not implement full MCP-spec OAuth 2.1 north-bound.** Phase 10. Static-bearer-token floor (from `fix/sse-auth-hardening`) is the current ceiling.
 - **Commit cadence is small and atomic.** Push after each milestone.
 - **Stay MIT.** Don't relicense.

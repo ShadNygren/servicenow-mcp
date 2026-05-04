@@ -17,7 +17,6 @@ Resources (``servicenow://tables``, ``servicenow://tables/{table}``,
 ``@resource`` decorator pattern.
 """
 
-import json
 import logging
 import os
 import sys
@@ -295,40 +294,3 @@ class ServiceNowMCP:
             "ServiceNowMCP configured on FastMCP. Returning instance for transport runner."
         )
         return self.mcp
-
-
-# Re-exported for backward compatibility — tests / external code that imported
-# ``serialize_tool_output`` from ``servicenow_mcp.server`` continue to work.
-# The function is now unused inside the FastMCP server itself (FastMCP handles
-# return-value serialization) but remains a public utility.
-def serialize_tool_output(result: Any, tool_name: str) -> str:
-    """Serialise *result* to a JSON string when possible, falling back to ``str(result)``."""
-    try:
-        if isinstance(result, str):
-            try:
-                return json.dumps(json.loads(result), indent=2)
-            except json.JSONDecodeError:
-                return result
-        if isinstance(result, dict):
-            return json.dumps(result, indent=2)
-        if hasattr(result, "model_dump_json"):
-            try:
-                return result.model_dump_json(indent=2)  # type: ignore[no-any-return]
-            except TypeError:
-                return json.dumps(result.model_dump(), indent=2)
-        if hasattr(result, "model_dump"):
-            return json.dumps(result.model_dump(), indent=2)
-        if hasattr(result, "dict"):
-            return json.dumps(result.dict(), indent=2)
-        logger.warning(
-            "Could not serialise result for tool '%s'; falling back to str(). Type: %s",
-            tool_name,
-            type(result),
-        )
-        return str(result)
-    except Exception as e:
-        logger.error("Serialisation error for tool '%s': %s", tool_name, e, exc_info=True)
-        return json.dumps(
-            {"error": f"Serialisation failed for tool {tool_name}", "details": str(e)},
-            indent=2,
-        )
