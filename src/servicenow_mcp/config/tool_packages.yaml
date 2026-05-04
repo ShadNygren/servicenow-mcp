@@ -179,6 +179,48 @@ agile_management:
   - update_time_card
 
 system_administrator:
+  # Generic Table API
+  - table_get_records
+  - table_get_record
+  - table_create_record
+  - table_update_record
+  - table_delete_record
+  # Schema / Dictionary
+  - create_field
+  - list_fields
+  - update_field
+  # Business Rules
+  - create_business_rule
+  - list_business_rules
+  - get_business_rule
+  - update_business_rule
+  - delete_business_rule
+  # Scheduled Jobs
+  - create_scheduled_job
+  - list_scheduled_jobs
+  - get_scheduled_job
+  - update_scheduled_job
+  - delete_scheduled_job
+  # REST Message Configuration (sys_rest_message + sys_rest_message_fn)
+  - create_rest_message
+  - list_rest_messages
+  - get_rest_message
+  - update_rest_message
+  - delete_rest_message
+  - create_http_method
+  - list_http_methods
+  - update_http_method
+  - delete_http_method
+  # OAuth Credential Management
+  - create_oauth_entity
+  - list_oauth_entities
+  - get_oauth_entity
+  - update_oauth_entity
+  - delete_oauth_entity
+  - create_oauth_profile
+  - list_oauth_profiles
+  - update_oauth_profile
+  - delete_oauth_profile
   # User Management
   - create_user
   - update_user
@@ -378,3 +420,40 @@ full:
   - list_time_cards
   - create_time_card
   - update_time_card
+  # Platform admin (klapom port — system_administrator subset)
+  - table_get_records
+  - table_get_record
+  - table_create_record
+  - table_update_record
+  - table_delete_record
+  - create_field
+  - list_fields
+  - update_field
+  - create_business_rule
+  - list_business_rules
+  - get_business_rule
+  - update_business_rule
+  - delete_business_rule
+  - create_scheduled_job
+  - list_scheduled_jobs
+  - get_scheduled_job
+  - update_scheduled_job
+  - delete_scheduled_job
+  - create_rest_message
+  - list_rest_messages
+  - get_rest_message
+  - update_rest_message
+  - delete_rest_message
+  - create_http_method
+  - list_http_methods
+  - update_http_method
+  - delete_http_method
+  - create_oauth_entity
+  - list_oauth_entities
+  - get_oauth_entity
+  - update_oauth_entity
+  - delete_oauth_entity
+  - create_oauth_profile
+  - list_oauth_profiles
+  - update_oauth_profile
+  - delete_oauth_profile

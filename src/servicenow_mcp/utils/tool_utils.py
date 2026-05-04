@@ -476,6 +476,107 @@ from servicenow_mcp.tools.csm_tools import (
     list_locations as list_locations_tool,
     list_products as list_products_tool,
 )
+from servicenow_mcp.tools.table_api_tools import (
+    TableGetRecordsParams,
+    TableGetRecordParams,
+    TableCreateRecordParams,
+    TableUpdateRecordParams,
+    TableDeleteRecordParams,
+)
+from servicenow_mcp.tools.table_api_tools import (
+    table_get_records as table_get_records_tool,
+    table_get_record as table_get_record_tool,
+    table_create_record as table_create_record_tool,
+    table_update_record as table_update_record_tool,
+    table_delete_record as table_delete_record_tool,
+)
+# --- System Dictionary Tools ---
+from servicenow_mcp.tools.sys_dictionary_tools import (
+    CreateFieldParams,
+    ListFieldsParams,
+    UpdateFieldParams,
+)
+from servicenow_mcp.tools.sys_dictionary_tools import (
+    create_field as create_field_tool,
+    list_fields as list_fields_tool,
+    update_field as update_field_tool,
+)
+# --- Business Rule Tools ---
+from servicenow_mcp.tools.business_rule_tools import (
+    CreateBusinessRuleParams,
+    ListBusinessRulesParams,
+    GetBusinessRuleParams,
+    UpdateBusinessRuleParams,
+    DeleteBusinessRuleParams,
+)
+from servicenow_mcp.tools.business_rule_tools import (
+    create_business_rule as create_business_rule_tool,
+    list_business_rules as list_business_rules_tool,
+    get_business_rule as get_business_rule_tool,
+    update_business_rule as update_business_rule_tool,
+    delete_business_rule as delete_business_rule_tool,
+)
+# --- Scheduled Job Tools ---
+from servicenow_mcp.tools.scheduled_job_tools import (
+    CreateScheduledJobParams,
+    ListScheduledJobsParams,
+    GetScheduledJobParams,
+    UpdateScheduledJobParams,
+    DeleteScheduledJobParams,
+)
+from servicenow_mcp.tools.scheduled_job_tools import (
+    create_scheduled_job as create_scheduled_job_tool,
+    list_scheduled_jobs as list_scheduled_jobs_tool,
+    get_scheduled_job as get_scheduled_job_tool,
+    update_scheduled_job as update_scheduled_job_tool,
+    delete_scheduled_job as delete_scheduled_job_tool,
+)
+# --- REST Message Tools ---
+from servicenow_mcp.tools.rest_message_tools import (
+    CreateRestMessageParams,
+    ListRestMessagesParams,
+    GetRestMessageParams,
+    UpdateRestMessageParams,
+    DeleteRestMessageParams,
+    CreateHttpMethodParams,
+    ListHttpMethodsParams,
+    UpdateHttpMethodParams,
+    DeleteHttpMethodParams,
+)
+from servicenow_mcp.tools.rest_message_tools import (
+    create_rest_message as create_rest_message_tool,
+    list_rest_messages as list_rest_messages_tool,
+    get_rest_message as get_rest_message_tool,
+    update_rest_message as update_rest_message_tool,
+    delete_rest_message as delete_rest_message_tool,
+    create_http_method as create_http_method_tool,
+    list_http_methods as list_http_methods_tool,
+    update_http_method as update_http_method_tool,
+    delete_http_method as delete_http_method_tool,
+)
+# --- OAuth Credential Tools ---
+from servicenow_mcp.tools.oauth_tools import (
+    CreateOAuthEntityParams,
+    ListOAuthEntitiesParams,
+    GetOAuthEntityParams,
+    UpdateOAuthEntityParams,
+    DeleteOAuthEntityParams,
+    CreateOAuthProfileParams,
+    ListOAuthProfilesParams,
+    UpdateOAuthProfileParams,
+    DeleteOAuthProfileParams,
+)
+from servicenow_mcp.tools.oauth_tools import (
+    create_oauth_entity as create_oauth_entity_tool,
+    list_oauth_entities as list_oauth_entities_tool,
+    get_oauth_entity as get_oauth_entity_tool,
+    update_oauth_entity as update_oauth_entity_tool,
+    delete_oauth_entity as delete_oauth_entity_tool,
+    create_oauth_profile as create_oauth_profile_tool,
+    list_oauth_profiles as list_oauth_profiles_tool,
+    update_oauth_profile as update_oauth_profile_tool,
+    delete_oauth_profile as delete_oauth_profile_tool,
+)
 from servicenow_mcp.tools.cmdb_relationship_tools import (
     CreateCIRelationshipParams,
     DeleteCIRelationshipParams,
@@ -1459,6 +1560,264 @@ def get_tool_definitions(
             str,
             "Get full comment and work note timeline for a customer service case",
             "json_dict",
+        ),
+        # --- Generic Table API Tools ---
+        "table_get_records": (
+            table_get_records_tool,
+            TableGetRecordsParams,
+            Dict[str, Any],
+            "Retrieve multiple records from any ServiceNow table. Supports filtering, pagination, and field selection.",
+            "raw_dict",
+        ),
+        "table_get_record": (
+            table_get_record_tool,
+            TableGetRecordParams,
+            Dict[str, Any],
+            "Retrieve a single record by sys_id from any ServiceNow table.",
+            "raw_dict",
+        ),
+        "table_create_record": (
+            table_create_record_tool,
+            TableCreateRecordParams,
+            Dict[str, Any],
+            "Create a new record on any ServiceNow table with arbitrary field data.",
+            "raw_dict",
+        ),
+        "table_update_record": (
+            table_update_record_tool,
+            TableUpdateRecordParams,
+            Dict[str, Any],
+            "Update an existing record on any ServiceNow table (PATCH with delta payload).",
+            "raw_dict",
+        ),
+        "table_delete_record": (
+            table_delete_record_tool,
+            TableDeleteRecordParams,
+            Dict[str, Any],
+            "Delete a record from any ServiceNow table by sys_id.",
+            "raw_dict",
+        ),
+        # --- System Dictionary Tools (Custom Fields) ---
+        "create_field": (
+            create_field_tool,
+            CreateFieldParams,
+            Dict[str, Any],
+            "Create a new custom field (column) on a ServiceNow table via sys_dictionary.",
+            "raw_dict",
+        ),
+        "list_fields": (
+            list_fields_tool,
+            ListFieldsParams,
+            Dict[str, Any],
+            "List field definitions on a ServiceNow table. Filter by name or custom-only.",
+            "raw_dict",
+        ),
+        "update_field": (
+            update_field_tool,
+            UpdateFieldParams,
+            Dict[str, Any],
+            "Update an existing field definition (label, mandatory, read_only, etc.) in sys_dictionary.",
+            "raw_dict",
+        ),
+        # --- Business Rule Tools ---
+        "create_business_rule": (
+            create_business_rule_tool,
+            CreateBusinessRuleParams,
+            Dict[str, Any],
+            "Create a new Business Rule (server-side script) on a ServiceNow table.",
+            "raw_dict",
+        ),
+        "list_business_rules": (
+            list_business_rules_tool,
+            ListBusinessRulesParams,
+            Dict[str, Any],
+            "List Business Rules from ServiceNow. Filter by table, name, or active status.",
+            "raw_dict",
+        ),
+        "get_business_rule": (
+            get_business_rule_tool,
+            GetBusinessRuleParams,
+            Dict[str, Any],
+            "Get a single Business Rule with full details including script code.",
+            "raw_dict",
+        ),
+        "update_business_rule": (
+            update_business_rule_tool,
+            UpdateBusinessRuleParams,
+            Dict[str, Any],
+            "Update an existing Business Rule (script, timing, filters, active flag).",
+            "raw_dict",
+        ),
+        "delete_business_rule": (
+            delete_business_rule_tool,
+            DeleteBusinessRuleParams,
+            Dict[str, Any],
+            "Delete a Business Rule from ServiceNow.",
+            "raw_dict",
+        ),
+        # --- Scheduled Job Tools ---
+        "create_scheduled_job": (
+            create_scheduled_job_tool,
+            CreateScheduledJobParams,
+            Dict[str, Any],
+            "Create a new Scheduled Script Execution (sysauto_script) in ServiceNow.",
+            "raw_dict",
+        ),
+        "list_scheduled_jobs": (
+            list_scheduled_jobs_tool,
+            ListScheduledJobsParams,
+            Dict[str, Any],
+            "List Scheduled Script Executions from ServiceNow.",
+            "raw_dict",
+        ),
+        "get_scheduled_job": (
+            get_scheduled_job_tool,
+            GetScheduledJobParams,
+            Dict[str, Any],
+            "Get a single Scheduled Job with full details including script code.",
+            "raw_dict",
+        ),
+        "update_scheduled_job": (
+            update_scheduled_job_tool,
+            UpdateScheduledJobParams,
+            Dict[str, Any],
+            "Update an existing Scheduled Job (script, schedule, active flag).",
+            "raw_dict",
+        ),
+        "delete_scheduled_job": (
+            delete_scheduled_job_tool,
+            DeleteScheduledJobParams,
+            Dict[str, Any],
+            "Delete a Scheduled Job from ServiceNow.",
+            "raw_dict",
+        ),
+        # --- REST Message Tools ---
+        "create_rest_message": (
+            create_rest_message_tool,
+            CreateRestMessageParams,
+            Dict[str, Any],
+            "Create a new outbound REST Message (sys_rest_message) in ServiceNow.",
+            "raw_dict",
+        ),
+        "list_rest_messages": (
+            list_rest_messages_tool,
+            ListRestMessagesParams,
+            Dict[str, Any],
+            "List outbound REST Messages from ServiceNow.",
+            "raw_dict",
+        ),
+        "get_rest_message": (
+            get_rest_message_tool,
+            GetRestMessageParams,
+            Dict[str, Any],
+            "Get a single REST Message with full details.",
+            "raw_dict",
+        ),
+        "update_rest_message": (
+            update_rest_message_tool,
+            UpdateRestMessageParams,
+            Dict[str, Any],
+            "Update an existing REST Message (endpoint, auth, description).",
+            "raw_dict",
+        ),
+        "delete_rest_message": (
+            delete_rest_message_tool,
+            DeleteRestMessageParams,
+            Dict[str, Any],
+            "Delete a REST Message from ServiceNow.",
+            "raw_dict",
+        ),
+        "create_http_method": (
+            create_http_method_tool,
+            CreateHttpMethodParams,
+            Dict[str, Any],
+            "Create an HTTP Method (GET/POST/PATCH/etc.) on a REST Message.",
+            "raw_dict",
+        ),
+        "list_http_methods": (
+            list_http_methods_tool,
+            ListHttpMethodsParams,
+            Dict[str, Any],
+            "List HTTP Methods defined on a REST Message.",
+            "raw_dict",
+        ),
+        "update_http_method": (
+            update_http_method_tool,
+            UpdateHttpMethodParams,
+            Dict[str, Any],
+            "Update an existing HTTP Method on a REST Message.",
+            "raw_dict",
+        ),
+        "delete_http_method": (
+            delete_http_method_tool,
+            DeleteHttpMethodParams,
+            Dict[str, Any],
+            "Delete an HTTP Method from a REST Message.",
+            "raw_dict",
+        ),
+        # --- OAuth Credential Tools ---
+        "create_oauth_entity": (
+            create_oauth_entity_tool,
+            CreateOAuthEntityParams,
+            Dict[str, Any],
+            "Create a new OAuth Entity (Application Registry) in ServiceNow for outbound OAuth2.",
+            "raw_dict",
+        ),
+        "list_oauth_entities": (
+            list_oauth_entities_tool,
+            ListOAuthEntitiesParams,
+            Dict[str, Any],
+            "List OAuth Entities (Application Registry) from ServiceNow.",
+            "raw_dict",
+        ),
+        "get_oauth_entity": (
+            get_oauth_entity_tool,
+            GetOAuthEntityParams,
+            Dict[str, Any],
+            "Get a single OAuth Entity with full details.",
+            "raw_dict",
+        ),
+        "update_oauth_entity": (
+            update_oauth_entity_tool,
+            UpdateOAuthEntityParams,
+            Dict[str, Any],
+            "Update an existing OAuth Entity (client credentials, token URL, etc.).",
+            "raw_dict",
+        ),
+        "delete_oauth_entity": (
+            delete_oauth_entity_tool,
+            DeleteOAuthEntityParams,
+            Dict[str, Any],
+            "Delete an OAuth Entity from ServiceNow.",
+            "raw_dict",
+        ),
+        "create_oauth_profile": (
+            create_oauth_profile_tool,
+            CreateOAuthProfileParams,
+            Dict[str, Any],
+            "Create an OAuth Entity Profile (credential set with grant type).",
+            "raw_dict",
+        ),
+        "list_oauth_profiles": (
+            list_oauth_profiles_tool,
+            ListOAuthProfilesParams,
+            Dict[str, Any],
+            "List OAuth Entity Profiles from ServiceNow.",
+            "raw_dict",
+        ),
+        "update_oauth_profile": (
+            update_oauth_profile_tool,
+            UpdateOAuthProfileParams,
+            Dict[str, Any],
+            "Update an existing OAuth Entity Profile.",
+            "raw_dict",
+        ),
+        "delete_oauth_profile": (
+            delete_oauth_profile_tool,
+            DeleteOAuthProfileParams,
+            Dict[str, Any],
+            "Delete an OAuth Entity Profile from ServiceNow.",
+            "raw_dict",
         ),
         # CMDB Relationship Tools
         "list_ci_relationships": (

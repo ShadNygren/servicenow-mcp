@@ -156,6 +156,54 @@ from servicenow_mcp.tools.scripted_rest_tools import (
     create_scripted_rest_api,
     create_scripted_rest_resource,
 )
+from servicenow_mcp.tools.business_rule_tools import (
+    create_business_rule,
+    delete_business_rule,
+    get_business_rule,
+    list_business_rules,
+    update_business_rule,
+)
+from servicenow_mcp.tools.scheduled_job_tools import (
+    create_scheduled_job,
+    delete_scheduled_job,
+    get_scheduled_job,
+    list_scheduled_jobs,
+    update_scheduled_job,
+)
+from servicenow_mcp.tools.rest_message_tools import (
+    create_http_method,
+    create_rest_message,
+    delete_http_method,
+    delete_rest_message,
+    get_rest_message,
+    list_http_methods,
+    list_rest_messages,
+    update_http_method,
+    update_rest_message,
+)
+from servicenow_mcp.tools.oauth_tools import (
+    create_oauth_entity,
+    create_oauth_profile,
+    delete_oauth_entity,
+    delete_oauth_profile,
+    get_oauth_entity,
+    list_oauth_entities,
+    list_oauth_profiles,
+    update_oauth_entity,
+    update_oauth_profile,
+)
+from servicenow_mcp.tools.sys_dictionary_tools import (
+    create_field,
+    list_fields,
+    update_field,
+)
+from servicenow_mcp.tools.table_api_tools import (
+    table_create_record,
+    table_delete_record,
+    table_get_record,
+    table_get_records,
+    table_update_record,
+)
 from servicenow_mcp.tools.csm_tools import (
     get_case_history,
     get_cases_by_account,
