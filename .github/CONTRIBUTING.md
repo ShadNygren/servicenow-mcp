@@ -5,7 +5,7 @@ Thanks for your interest in contributing! This is an actively maintained project
 ## Quick Start
 
 ```bash
-git clone https://github.com/torkian/servicenow-mcp.git
+git clone https://github.com/ShadNygren/servicenow-mcp.git
 cd servicenow-mcp
 python -m venv .venv
 source .venv/bin/activate
