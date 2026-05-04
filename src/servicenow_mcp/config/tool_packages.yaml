@@ -280,6 +280,20 @@ system_administrator:
   - list_groups
   - add_group_members
   - remove_group_members
+  # Access Control (PR #56) — PRIVILEGED. Mutating ACLs/roles changes the
+  # platform authorization model. Do not include in non-sysadmin packages
+  # without an approval gate.
+  - list_acls
+  - get_acl
+  - create_acl
+  - update_acl
+  - delete_acl
+  - list_roles
+  - get_role
+  - create_role
+  - update_role
+  - list_security_attributes
+  - create_security_attribute
   # System Logs
   - list_syslog_entries
   - get_syslog_entry

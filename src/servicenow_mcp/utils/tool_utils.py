@@ -478,6 +478,33 @@ from servicenow_mcp.tools.import_set_tools import list_scheduled_imports as list
 from servicenow_mcp.tools.import_set_tools import list_transform_maps as list_transform_maps_tool
 from servicenow_mcp.tools.import_set_tools import list_transform_scripts as list_transform_scripts_tool
 from servicenow_mcp.tools.import_set_tools import trigger_import as trigger_import_tool
+from servicenow_mcp.tools.acl_tools import (
+    ACLResponse,
+    AssignRoleToACLParams,
+    CreateACLParams,
+    CreateRoleParams,
+    CreateSecurityAttributeParams,
+    DeleteACLParams,
+    GetACLParams,
+    GetRoleParams,
+    ListACLsParams,
+    ListRolesParams,
+    ListSecurityAttributesParams,
+    RemoveRoleFromACLParams,
+    UpdateACLParams,
+    UpdateRoleParams,
+)
+from servicenow_mcp.tools.acl_tools import create_acl as create_acl_tool
+from servicenow_mcp.tools.acl_tools import create_role as create_role_tool
+from servicenow_mcp.tools.acl_tools import create_security_attribute as create_security_attribute_tool
+from servicenow_mcp.tools.acl_tools import delete_acl as delete_acl_tool
+from servicenow_mcp.tools.acl_tools import get_acl as get_acl_tool
+from servicenow_mcp.tools.acl_tools import get_role as get_role_tool
+from servicenow_mcp.tools.acl_tools import list_acls as list_acls_tool
+from servicenow_mcp.tools.acl_tools import list_roles as list_roles_tool
+from servicenow_mcp.tools.acl_tools import list_security_attributes as list_security_attributes_tool
+from servicenow_mcp.tools.acl_tools import update_acl as update_acl_tool
+from servicenow_mcp.tools.acl_tools import update_role as update_role_tool
 from servicenow_mcp.tools.flow_tools import (
     ActionTypeInput,
     ActionTypeSummary,
@@ -1674,6 +1701,88 @@ def get_tool_definitions(
             str,
             "Clone a complete import configuration: Data Source, Transform Maps, Field Mappings, Scripts, and optionally Scheduler",
             "json",
+        ),
+        # --- ACL / Role / Security Attribute Tools (PR #56 port) ---
+        # Privileged sysadmin tools — added to system_administrator package
+        # only. Tools that mutate ACLs/roles can grant/revoke access at the
+        # platform level; do not include in service-desk or developer
+        # packages without an explicit approval gate.
+        "list_acls": (
+            list_acls_tool,
+            ListACLsParams,
+            Dict[str, Any],
+            "List Access Control rules (sys_security_acl) with optional filters",
+            "raw_dict",
+        ),
+        "get_acl": (
+            get_acl_tool,
+            GetACLParams,
+            Dict[str, Any],
+            "Get a single ACL by sys_id, including assigned roles",
+            "raw_dict",
+        ),
+        "create_acl": (
+            create_acl_tool,
+            CreateACLParams,
+            ACLResponse,
+            "Create an Access Control rule. PRIVILEGED: changes the platform's authorization model.",
+            "raw_pydantic",
+        ),
+        "update_acl": (
+            update_acl_tool,
+            UpdateACLParams,
+            ACLResponse,
+            "Update an existing ACL. PRIVILEGED: changes the platform's authorization model.",
+            "raw_pydantic",
+        ),
+        "delete_acl": (
+            delete_acl_tool,
+            DeleteACLParams,
+            ACLResponse,
+            "Delete an ACL. PRIVILEGED: removing an ACL may permit previously-denied access.",
+            "raw_pydantic",
+        ),
+        "list_roles": (
+            list_roles_tool,
+            ListRolesParams,
+            Dict[str, Any],
+            "List ServiceNow roles (sys_user_role) with optional filters",
+            "raw_dict",
+        ),
+        "get_role": (
+            get_role_tool,
+            GetRoleParams,
+            Dict[str, Any],
+            "Get a single role by sys_id or name",
+            "raw_dict",
+        ),
+        "create_role": (
+            create_role_tool,
+            CreateRoleParams,
+            ACLResponse,
+            "Create a new role. PRIVILEGED.",
+            "raw_pydantic",
+        ),
+        "update_role": (
+            update_role_tool,
+            UpdateRoleParams,
+            ACLResponse,
+            "Update an existing role's metadata. PRIVILEGED.",
+            "raw_pydantic",
+        ),
+        "list_security_attributes": (
+            list_security_attributes_tool,
+            ListSecurityAttributesParams,
+            Dict[str, Any],
+            "List Security Attributes (sys_security_attribute) used in fine-grained ACL conditions",
+            "raw_dict",
+        ),
+        "create_security_attribute": (
+            create_security_attribute_tool,
+            CreateSecurityAttributeParams,
+            ACLResponse,
+            "Create a Security Attribute. PRIVILEGED.",
+            "raw_pydantic",
         ),
         # --- Flow Designer Tools (Flowbie port) ---
         "list_trigger_types": (

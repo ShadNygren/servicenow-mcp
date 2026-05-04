@@ -168,6 +168,19 @@ from servicenow_mcp.tools.import_set_tools import (
     list_transform_scripts,
     trigger_import,
 )
+from servicenow_mcp.tools.acl_tools import (
+    create_acl,
+    create_role,
+    create_security_attribute,
+    delete_acl,
+    get_acl,
+    get_role,
+    list_acls,
+    list_roles,
+    list_security_attributes,
+    update_acl,
+    update_role,
+)
 from servicenow_mcp.tools.flow_tools import (
     add_logic_to_flow,
     add_steps_to_flow,
