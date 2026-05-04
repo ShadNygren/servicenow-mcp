@@ -7,42 +7,17 @@ not for production use where a persistent storage solution would be more appropr
 
 import logging
 from collections import deque
-from collections.abc import Callable  # Import Callable
 from dataclasses import dataclass
 from uuid import uuid4
 
-# Attempting to import from mcp.server.streamable_http_manager as it contains StreamableHTTPSessionManager
-# These types might be defined there or in a related module like mcp.server.event_types
-# If these imports fail, they will need to be adjusted based on the actual mcp library structure.
-try:
-    from mcp.server.streamable_http_manager import (
-        EventCallback,
-        EventId,
-        EventMessage,
-        EventStore,
-        StreamId,
-    )
-except ImportError:
-    # Fallback or placeholder if the above path is incorrect.
-    # This will likely cause issues if not resolved.
-    # Define dummy types for now to allow the rest of the code to be parsed
-    # This is a common pattern if you're unsure of the exact import path
-    # and want to get the structure right first.
-    EventId = str
-    StreamId = str
-    JSONRPCMessage = dict # This should be a more specific type from mcp.types
-    class EventMessage:
-        def __init__(self, message: JSONRPCMessage, event_id: EventId):
-            self.message = message
-            self.event_id = event_id
-    EventCallback = Callable[[EventMessage], None] # Use Callable
-    class EventStore: # Base class
-        async def store_event(self, stream_id: StreamId, message: JSONRPCMessage) -> EventId:
-            raise NotImplementedError
-        async def replay_events_after(self, last_event_id: EventId, send_callback: EventCallback) -> StreamId | None:
-            raise NotImplementedError
-
-from mcp.types import JSONRPCMessage  # This import seems more standard from mcp.types
+from mcp.server.streamable_http import (
+    EventCallback,
+    EventId,
+    EventMessage,
+    EventStore,
+    StreamId,
+)
+from mcp.types import JSONRPCMessage
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +30,7 @@ class EventEntry:
 
     event_id: EventId
     stream_id: StreamId
-    message: JSONRPCMessage
+    message: JSONRPCMessage | None
 
 
 class InMemoryEventStore(EventStore):
@@ -80,7 +55,7 @@ class InMemoryEventStore(EventStore):
         self.event_index: dict[EventId, EventEntry] = {}
 
     async def store_event(
-        self, stream_id: StreamId, message: JSONRPCMessage
+        self, stream_id: StreamId, message: JSONRPCMessage | None
     ) -> EventId:
         """Stores an event with a generated event ID."""
         event_id = str(uuid4())
@@ -123,7 +98,8 @@ class InMemoryEventStore(EventStore):
         found_last = False
         for event in stream_events:
             if found_last:
-                await send_callback(EventMessage(event.message, event.event_id))
+                if event.message is not None:
+                    await send_callback(EventMessage(event.message, event.event_id))
             elif event.event_id == last_event_id:
                 found_last = True
 

@@ -5,7 +5,7 @@ This module provides tools for viewing and managing workflows in ServiceNow.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Type, TypeVar, Union
+from typing import Any, Dict, List, Optional, Type, TypeVar, Union, cast
 
 import requests
 from pydantic import BaseModel, Field
@@ -131,7 +131,7 @@ def _unwrap_params(params: Any, param_class: Type[T]) -> Dict[str, Any]:
         return params
     if isinstance(params, param_class):
         return params.dict(exclude_none=True)
-    return params
+    return params  # type: ignore[no-any-return]
 
 
 def _get_auth_and_config(
@@ -175,8 +175,8 @@ def _get_auth_and_config(
         server_config = server_config_or_auth
     else:
         raise ValueError("Cannot find instance_url attribute in either auth_manager or server_config")
-    
-    return auth_manager, server_config
+
+    return cast(AuthManager, auth_manager), cast(ServerConfig, server_config)
 
 
 def list_workflows(
@@ -205,7 +205,7 @@ def list_workflows(
         return {"error": str(e)}
     
     # Convert parameters to ServiceNow query format
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_limit": params.get("limit", 10),
         "sysparm_offset": params.get("offset", 0),
     }
@@ -327,7 +327,7 @@ def list_workflow_versions(
         return {"error": "Workflow ID is required"}
     
     # Convert parameters to ServiceNow query format
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_query": f"workflow={workflow_id}",
         "sysparm_limit": params.get("limit", 10),
         "sysparm_offset": params.get("offset", 0),
@@ -393,7 +393,7 @@ def get_workflow_activities(
         try:
             headers = auth_manager.get_headers()
             version_url = f"{server_config.instance_url}/api/now/table/wf_workflow_version"
-            version_params = {
+            version_params: Dict[str, Any] = {
                 "sysparm_query": f"workflow={workflow_id}^published=true",
                 "sysparm_limit": 1,
                 "sysparm_orderby": "version DESC",
@@ -477,7 +477,7 @@ def create_workflow(
         return {"error": "Workflow name is required"}
     
     # Prepare data for the API request
-    data = {
+    data: Dict[str, Any] = {
         "name": params["name"],
     }
     
@@ -619,7 +619,7 @@ def activate_workflow(
         return {"error": "Workflow ID is required"}
     
     # Prepare data for the API request
-    data = {
+    data: Dict[str, Any] = {
         "active": "true",
     }
     
@@ -675,7 +675,7 @@ def deactivate_workflow(
         return {"error": "Workflow ID is required"}
     
     # Prepare data for the API request
-    data = {
+    data: Dict[str, Any] = {
         "active": "false",
     }
     
@@ -736,7 +736,7 @@ def add_workflow_activity(
         return {"error": "Activity name is required"}
     
     # Prepare data for the API request
-    data = {
+    data: Dict[str, Any] = {
         "workflow_version": workflow_version_id,
         "name": activity_name,
     }

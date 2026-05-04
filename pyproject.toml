@@ -67,18 +67,16 @@ profile = "black"
 line_length = 100
 
 [tool.mypy]
-# Mypy runs in informational mode — failures do not block CI (see
-# `continue-on-error: true` in `.github/workflows/ci.yml`).  The fork
-# inherits ~250 type errors from upstream cherry-picks.  Reaching
-# strict typing is gradual work; in the meantime, the configuration
-# below still surfaces the high-signal issues (`Any` returns, unused
-# configs) without burying them under hundreds of `no-untyped-def`
-# noise from un-annotated tool functions.
+# Mypy passes clean as of Phase 7.  Required setup:
+#   1. `pydantic.mypy` plugin so `Optional[str] = Field(None, ...)` is read
+#      as optional, not as a required positional arg.
+#   2. `types-requests` + `types-PyYAML` in dev deps for stub coverage.
+# Strict-mode toggles (`disallow_untyped_defs`, etc.) stay off until tool
+# functions get full annotations — gradual climb, see Phase 8/9 in CLAUDE.md.
 python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
-# Strict-mode toggles are deferred: enable each one as the corresponding
-# module reaches full annotation coverage.  See Phase 8/9 in CLAUDE.md.
+plugins = ["pydantic.mypy"]
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
 

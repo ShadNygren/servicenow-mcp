@@ -9,7 +9,7 @@ import json
 import logging
 import re
 import time
-from typing import Any, Callable, Dict, List, Optional, Type, TypeVar
+from typing import Any, Callable, Dict, List, Optional, Type, TypeVar, cast
 
 import requests
 from pydantic import BaseModel
@@ -310,7 +310,7 @@ def _format_http_error(e: Exception) -> str:
 def _unwrap_and_validate_params(
     params: Any,
     model_class: Type[T],
-    required_fields: List[str] = None,
+    required_fields: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Unwrap and validate tool parameters against a Pydantic model.
 
@@ -523,10 +523,12 @@ def _get_instance_url(auth_manager: Any, server_config: Any) -> Optional[str]:
     Returns:
         Instance URL string, or ``None`` if not found.
     """
-    if getattr(server_config, "instance_url", None):
-        return server_config.instance_url
-    if getattr(auth_manager, "instance_url", None):
-        return auth_manager.instance_url
+    url = getattr(server_config, "instance_url", None)
+    if url:
+        return cast(Optional[str], url)
+    url = getattr(auth_manager, "instance_url", None)
+    if url:
+        return cast(Optional[str], url)
     logger.error("Cannot find instance_url in either server_config or auth_manager")
     return None
 
@@ -544,8 +546,8 @@ def _get_headers(auth_manager: Any, server_config: Any) -> Optional[Dict[str, st
         Headers dict, or ``None`` if not found.
     """
     if hasattr(auth_manager, "get_headers"):
-        return auth_manager.get_headers()
+        return cast(Optional[Dict[str, str]], auth_manager.get_headers())
     if hasattr(server_config, "get_headers"):
-        return server_config.get_headers()
+        return cast(Optional[Dict[str, str]], server_config.get_headers())
     logger.error("Cannot find get_headers method in either auth_manager or server_config")
     return None

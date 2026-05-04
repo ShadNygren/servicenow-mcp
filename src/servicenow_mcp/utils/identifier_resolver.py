@@ -1,5 +1,5 @@
 import re
-from typing import Dict
+from typing import Any, Dict
 
 import requests
 
@@ -38,7 +38,7 @@ def resolve_identifier(config, auth_manager, table: str, identifier: str) -> str
 
     number_field = _NUMBER_FIELD.get(table, "number")
     url = f"{config.api_url}/table/{table}"
-    params = {
+    params: Dict[str, Any] = {
         "sysparm_query": f"{number_field}={identifier.upper()}",
         "sysparm_fields": "sys_id",
         "sysparm_limit": 1,
@@ -53,4 +53,5 @@ def resolve_identifier(config, auth_manager, table: str, identifier: str) -> str
             f"Record not found: {table}/{identifier}. "
             "Verify the record exists and that you have read access to this table."
         )
-    return results[0]["sys_id"]
+    sys_id: str = results[0]["sys_id"]
+    return sys_id

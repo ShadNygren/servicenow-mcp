@@ -36,7 +36,7 @@ def _search_cases_by_query(
     query_str: str,
     limit: int,
     offset: int,
-) -> dict:
+) -> list:
     """Query the task table for CSM cases matching *query_str*.
 
     Prepends ``sys_class_name=sn_customerservice_case`` to the query, caps
@@ -58,7 +58,7 @@ def _search_cases_by_query(
 
     response = requests.get(
         api_url,
-        params=query_params,
+        params=query_params,  # type: ignore[arg-type]
         headers=auth_manager.get_headers(),
         timeout=config.timeout,
     )
@@ -183,7 +183,7 @@ def list_accounts(
     try:
         response = requests.get(
             api_url,
-            params=query_params,
+            params=query_params,  # type: ignore[arg-type]
             headers=auth_manager.get_headers(),
             timeout=config.timeout,
         )
@@ -244,7 +244,7 @@ def list_locations(
     try:
         response = requests.get(
             api_url,
-            params=query_params,
+            params=query_params,  # type: ignore[arg-type]
             headers=auth_manager.get_headers(),
             timeout=config.timeout,
         )
@@ -305,7 +305,7 @@ def list_products(
     try:
         response = requests.get(
             api_url,
-            params=query_params,
+            params=query_params,  # type: ignore[arg-type]
             headers=auth_manager.get_headers(),
             timeout=config.timeout,
         )
@@ -350,7 +350,7 @@ def get_cases_by_account(
     try:
         acct_resp = requests.get(
             acct_url,
-            params={
+            params={  # type: ignore[arg-type]
                 "sysparm_query": f"nameLIKE{params.account_name}",
                 "sysparm_limit": 1,
                 "sysparm_fields": "sys_id,name",
@@ -565,7 +565,7 @@ def get_case_history(
     try:
         response = requests.get(
             api_url,
-            params=query_params,
+            params=query_params,  # type: ignore[arg-type]
             headers=auth_manager.get_headers(),
             timeout=config.timeout,
         )

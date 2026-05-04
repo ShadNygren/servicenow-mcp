@@ -121,7 +121,7 @@ def create_starlette_app(
 class ServiceNowHttpMCP(ServiceNowMCP):
     """ServiceNow MCP server using Streamable HTTP transport."""
 
-    def start(
+    def serve(
         self,
         host: str = "127.0.0.1",
         port: int = 8080,
@@ -131,6 +131,10 @@ class ServiceNowHttpMCP(ServiceNowMCP):
         allowed_origins: Set[str],
     ) -> None:
         """Run the server with Streamable HTTP via Starlette + Uvicorn.
+
+        Distinct name from base ``ServiceNowMCP.start()`` (which returns the
+        underlying low-level Server) because this method *runs* the uvicorn
+        process — different shape, different return type.
 
         Args:
             host: Bind address. Defaults to loopback.
@@ -213,7 +217,7 @@ def main() -> None:
         )
 
     server = create_servicenow_mcp(instance_url, username, password)
-    server.start(
+    server.serve(
         host=args.host,
         port=args.port,
         auth_token=auth_token,

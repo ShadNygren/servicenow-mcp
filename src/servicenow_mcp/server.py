@@ -62,7 +62,7 @@ def serialize_tool_output(result: Any, tool_name: str) -> str:
             # The indent argument might not be supported by all versions/models,
             # so we might need to dump to dict first if indent is crucial.
             try:
-                return result.model_dump_json(indent=2)
+                return result.model_dump_json(indent=2)  # type: ignore[no-any-return]
             except TypeError:  # Handle case where indent is not supported
                 return json.dumps(result.model_dump(), indent=2)
         elif hasattr(result, "model_dump"):  # Pydantic v2 fallback
@@ -161,7 +161,7 @@ class ServiceNowMCP:
         else:
             # Fallback for older Python or missing importlib_resources
             try:
-                import pkg_resources
+                import pkg_resources  # type: ignore[import-not-found]
                 config_path = pkg_resources.resource_filename("servicenow_mcp", "config/tool_packages.yaml")
                 with open(config_path, "r") as f:
                     loaded_config = yaml.safe_load(f)

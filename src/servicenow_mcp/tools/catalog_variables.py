@@ -103,7 +103,7 @@ def create_catalog_item_variable(
     api_url = f"{config.instance_url}/api/now/table/item_option_new"
 
     # Build request data
-    data = {
+    data: Dict[str, Any] = {
         "cat_item": params.catalog_item_id,
         "name": params.name,
         "type": params.type,
@@ -174,10 +174,10 @@ def list_catalog_item_variables(
         Response with a list of variables for the catalog item.
     """
     # Build query parameters
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_query": f"cat_item={params.catalog_item_id}^ORDERBYorder",
     }
-    
+
     if params.limit:
         query_params["sysparm_limit"] = params.limit
     if params.offset:
@@ -238,7 +238,7 @@ def update_catalog_item_variable(
     api_url = f"{config.instance_url}/api/now/table/item_option_new/{params.variable_id}"
 
     # Build request data with only parameters that are provided
-    data = {}
+    data: Dict[str, Any] = {}
     
     if params.label is not None:
         data["question_text"] = params.label

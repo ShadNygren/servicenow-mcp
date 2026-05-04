@@ -131,7 +131,7 @@ def create_change_request(
     validated_params = result["params"]
     
     # Prepare the request data
-    data = {
+    data: Dict[str, Any] = {
         "short_description": validated_params.short_description,
         "type": validated_params.type,
     }
@@ -363,16 +363,16 @@ def list_change_requests(
     
     # Make the API request
     url = f"{instance_url}/api/now/table/change_request"
-    
-    params = {
+
+    query_params: Dict[str, Any] = {
         "sysparm_limit": validated_params.limit,
         "sysparm_offset": validated_params.offset,
         "sysparm_query": query,
         "sysparm_display_value": "true",
     }
-    
+
     try:
-        response = requests.get(url, headers=headers, params=params)
+        response = requests.get(url, headers=headers, params=query_params)
         response.raise_for_status()
         
         result = response.json()
@@ -441,13 +441,13 @@ def get_change_request_details(
     
     # Make the API request
     url = f"{instance_url}/api/now/table/change_request/{validated_params.change_id}"
-    
-    params = {
+
+    query_params: Dict[str, Any] = {
         "sysparm_display_value": "true",
     }
-    
+
     try:
-        response = requests.get(url, headers=headers, params=params)
+        response = requests.get(url, headers=headers, params=query_params)
         response.raise_for_status()
         
         result = response.json()
@@ -506,7 +506,7 @@ def add_change_task(
     validated_params = result["params"]
     
     # Prepare the request data
-    data = {
+    data: Dict[str, Any] = {
         "change_request": validated_params.change_id,
         "short_description": validated_params.short_description,
     }
@@ -591,7 +591,7 @@ def submit_change_for_approval(
     validated_params = result["params"]
     
     # Prepare the request data
-    data = {
+    data: Dict[str, Any] = {
         "state": "assess",  # Set state to "assess" to submit for approval
     }
     
@@ -698,7 +698,7 @@ def approve_change(
     # First, find the approval record
     approval_query_url = f"{instance_url}/api/now/table/sysapproval_approver"
     
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_query": f"document_id={validated_params.change_id}",
         "sysparm_limit": 1,
     }
@@ -800,7 +800,7 @@ def reject_change(
     # First, find the approval record
     approval_query_url = f"{instance_url}/api/now/table/sysapproval_approver"
     
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_query": f"document_id={validated_params.change_id}",
         "sysparm_limit": 1,
     }

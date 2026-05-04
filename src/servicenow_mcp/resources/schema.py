@@ -119,7 +119,7 @@ class SchemaResources:
     def _list_tables(self) -> List[Dict[str, Any]]:
         cached = self._cache.get("tables_list")
         if cached is not None:
-            return cached
+            return cached  # type: ignore[no-any-return]
         result = self._table_api_get(
             "sys_db_object",
             params={
@@ -134,7 +134,7 @@ class SchemaResources:
         cache_key = f"sample:{table}"
         cached = self._cache.get(cache_key)
         if cached is not None:
-            return cached
+            return cached  # type: ignore[no-any-return]
         result = self._table_api_get(
             table,
             params={"sysparm_limit": str(_TABLE_SAMPLE_LIMIT)},
@@ -146,7 +146,7 @@ class SchemaResources:
         cache_key = f"schema:{table}"
         cached = self._cache.get(cache_key)
         if cached is not None:
-            return cached
+            return cached  # type: ignore[no-any-return]
         # Filter on element-not-empty so we don't return collection-level rows.
         result = self._table_api_get(
             "sys_dictionary",
@@ -171,4 +171,4 @@ class SchemaResources:
             raise RuntimeError(
                 f"ServiceNow Table API returned {response.status_code} for {table}"
             )
-        return response.json().get("result", [])
+        return response.json().get("result", [])  # type: ignore[no-any-return]

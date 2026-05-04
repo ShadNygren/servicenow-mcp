@@ -78,6 +78,16 @@ class ServerConfig(BaseModel):
             "gateway or with a non-standard API mount."
         ),
     )
+    script_execution_api_resource_path: Optional[str] = Field(
+        default=None,
+        description=(
+            "Resource path of the Scripted REST API endpoint that "
+            "executes JavaScript on the instance. Required by the "
+            "execute_script_include tool. Set via "
+            "``--script-execution-api-resource-path`` or "
+            "``SCRIPT_EXECUTION_API_RESOURCE_PATH``."
+        ),
+    )
 
     @property
     def api_url(self) -> str:

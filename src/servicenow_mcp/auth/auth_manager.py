@@ -34,7 +34,7 @@ class AuthManager:
     their stated expiry and refreshed automatically before they expire.
     """
 
-    def __init__(self, config: AuthConfig, instance_url: str = None):
+    def __init__(self, config: AuthConfig, instance_url: Optional[str] = None):
         """
         Initialize the authentication manager.
 

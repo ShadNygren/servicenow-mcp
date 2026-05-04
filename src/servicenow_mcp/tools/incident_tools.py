@@ -5,7 +5,7 @@ This module provides tools for managing incidents in ServiceNow.
 """
 
 import logging
-from typing import Optional, List
+from typing import Any, Dict, List, Optional
 
 import requests
 from pydantic import BaseModel, Field
@@ -154,7 +154,7 @@ def create_incident(
     api_url = f"{config.api_url}/table/incident"
 
     # Build request data
-    data = {
+    data: Dict[str, Any] = {
         "short_description": params.short_description,
     }
 
@@ -230,7 +230,7 @@ def update_incident(
         # First, we need to get the sys_id
         try:
             query_url = f"{config.api_url}/table/incident"
-            query_params = {
+            query_params: Dict[str, Any] = {
                 "sysparm_query": f"number={incident_id}",
                 "sysparm_limit": 1,
             }
@@ -343,7 +343,7 @@ def add_comment(
         # First, we need to get the sys_id
         try:
             query_url = f"{config.api_url}/table/incident"
-            query_params = {
+            query_params: Dict[str, Any] = {
                 "sysparm_query": f"number={incident_id}",
                 "sysparm_limit": 1,
             }
@@ -434,7 +434,7 @@ def resolve_incident(
         # First, we need to get the sys_id
         try:
             query_url = f"{config.api_url}/table/incident"
-            query_params = {
+            query_params: Dict[str, Any] = {
                 "sysparm_query": f"number={incident_id}",
                 "sysparm_limit": 1,
             }
@@ -465,7 +465,7 @@ def resolve_incident(
             )
 
     # Build request data
-    data = {
+    data: Dict[str, Any] = {
         "state": "6",  # Resolved
         "close_code": params.resolution_code,
         "close_notes": params.resolution_notes,
@@ -613,7 +613,7 @@ def get_incident_by_number(
     api_url = f"{config.api_url}/table/incident"
 
     # Build query parameters
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_query": f"number={params.incident_number}",
         "sysparm_limit": 1,
         "sysparm_display_value": "true",

@@ -64,11 +64,12 @@ class UpdateTimeCardParams(BaseModel):
 def _resolve_task_sys_id(instance_url: str, headers: Dict, task_number: str) -> Optional[str]:
     """Resolve a SCTASK number to its sys_id."""
     url = f"{instance_url}/api/now/table/sc_task"
-    resp = requests.get(url, headers=headers, params={
+    lookup_params: Dict[str, Any] = {
         "sysparm_query": f"number={task_number}",
         "sysparm_limit": 1,
         "sysparm_fields": "sys_id",
-    })
+    }
+    resp = requests.get(url, headers=headers, params=lookup_params)
     resp.raise_for_status()
     records = resp.json().get("result", [])
     return records[0]["sys_id"] if records else None

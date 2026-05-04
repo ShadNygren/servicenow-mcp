@@ -229,7 +229,7 @@ def _get_inactive_items(
         response = requests.get(url, headers=headers, params=params)
         response.raise_for_status()
         
-        return response.json()["result"]
+        return response.json()["result"]  # type: ignore[no-any-return]
     
     except Exception as e:
         logger.error(f"Error getting inactive items: {e}")

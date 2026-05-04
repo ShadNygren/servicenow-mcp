@@ -92,7 +92,7 @@ def list_script_includes(
         url = f"{config.instance_url}/api/now/table/sys_script_include"
         
         # Build query parameters
-        query_params = {
+        query_params: Dict[str, Any] = {
             "sysparm_limit": params.limit,
             "sysparm_offset": params.offset,
             "sysparm_display_value": "true",
@@ -184,7 +184,7 @@ def get_script_include(
     """
     try:
         # Build query parameters
-        query_params = {
+        query_params: Dict[str, Any] = {
             "sysparm_display_value": "true",
             "sysparm_exclude_reference_link": "true",
             "sysparm_fields": "sys_id,name,script,description,api_name,client_callable,active,access,sys_created_on,sys_updated_on,sys_created_by,sys_updated_by"
@@ -279,7 +279,7 @@ def create_script_include(
     url = f"{config.instance_url}/api/now/table/sys_script_include"
     
     # Build the request body
-    body = {
+    body: Dict[str, Any] = {
         "name": params.name,
         "script": params.script,
         "active": str(params.active).lower(),

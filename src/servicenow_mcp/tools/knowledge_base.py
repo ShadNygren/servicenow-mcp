@@ -154,7 +154,7 @@ def create_knowledge_base(
     api_url = f"{config.api_url}/table/kb_knowledge_base"
 
     # Build request data
-    data = {
+    data: Dict[str, Any] = {
         "title": params.title,
     }
 
@@ -215,7 +215,7 @@ def list_knowledge_bases(
     api_url = f"{config.api_url}/table/kb_knowledge_base"
 
     # Build query parameters
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_limit": params.limit,
         "sysparm_offset": params.offset,
         "sysparm_display_value": "true",
@@ -341,7 +341,7 @@ def create_category(
     api_url = f"{config.api_url}/table/kb_category"
 
     # Build request data
-    data = {
+    data: Dict[str, Any] = {
         "label": params.title,
         "kb_knowledge_base": params.knowledge_base,
         # Convert boolean to string "true"/"false" as ServiceNow expects
@@ -413,7 +413,7 @@ def create_article(
     api_url = f"{config.api_url}/table/kb_knowledge"
 
     # Build request data
-    data = {
+    data: Dict[str, Any] = {
         "short_description": params.short_description,
         "text": params.text,
         "kb_knowledge_base": params.knowledge_base,
@@ -533,7 +533,7 @@ def publish_article(
     api_url = f"{config.api_url}/table/kb_knowledge/{params.article_id}"
 
     # Build request data
-    data = {
+    data: Dict[str, Any] = {
         "workflow_state": params.workflow_state,
     }
 
@@ -587,7 +587,7 @@ def list_articles(
     api_url = f"{config.api_url}/table/kb_knowledge"
 
     # Build query parameters
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_limit": params.limit,
         "sysparm_offset": params.offset,
         "sysparm_display_value": "all",
@@ -721,7 +721,7 @@ def get_article(
     api_url = f"{config.api_url}/table/kb_knowledge/{params.article_id}"
 
     # Build query parameters
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_display_value": "true",
     }
 
@@ -830,7 +830,7 @@ def list_categories(
     api_url = f"{config.api_url}/table/kb_category"
 
     # Build query parameters
-    query_params = {
+    query_params: Dict[str, Any] = {
         "sysparm_limit": params.limit,
         "sysparm_offset": params.offset,
         "sysparm_display_value": "all",
