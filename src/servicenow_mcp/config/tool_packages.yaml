@@ -140,6 +140,43 @@ platform_developer:
   # Scripted REST API
   - create_scripted_rest_api
   - create_scripted_rest_resource
+  # Flow Designer (sys_hub_flow + processflow API)
+  - list_flows
+  - get_flow
+  - create_flow
+  - update_flow
+  - publish_flow
+  - delete_flow
+  - clone_flow
+  - execute_flow
+  - get_flow_execution_history
+  - get_flow_execution_detail
+  - get_flow_triggers
+  - update_flow_trigger
+  - get_flow_actions
+  - get_flow_version
+  - list_subflows
+  - get_subflow
+  - create_subflow
+  - update_subflow
+  - publish_subflow
+  - delete_subflow
+  - list_actions
+  - get_action
+  - create_action
+  - update_action
+  - publish_action
+  - delete_action
+  - add_steps_to_flow
+  - add_subflow_step_to_flow
+  - remove_steps_from_flow
+  - add_logic_to_flow
+  - list_trigger_types
+  - list_action_types
+  - list_action_type_inputs
+  - list_action_type_outputs
+  - list_flow_logic_types
+  - list_flow_io
   # Changesets
   - list_changesets
   - get_changeset_details
@@ -479,3 +516,40 @@ full:
   - list_transform_scripts
   - list_scheduled_imports
   - clone_import_configuration
+  # Flow Designer (Flowbie port)
+  - list_flows
+  - get_flow
+  - create_flow
+  - update_flow
+  - publish_flow
+  - delete_flow
+  - clone_flow
+  - execute_flow
+  - get_flow_execution_history
+  - get_flow_execution_detail
+  - get_flow_triggers
+  - update_flow_trigger
+  - get_flow_actions
+  - get_flow_version
+  - list_subflows
+  - get_subflow
+  - create_subflow
+  - update_subflow
+  - publish_subflow
+  - delete_subflow
+  - list_actions
+  - get_action
+  - create_action
+  - update_action
+  - publish_action
+  - delete_action
+  - add_steps_to_flow
+  - add_subflow_step_to_flow
+  - remove_steps_from_flow
+  - add_logic_to_flow
+  - list_trigger_types
+  - list_action_types
+  - list_action_type_inputs
+  - list_action_type_outputs
+  - list_flow_logic_types
+  - list_flow_io

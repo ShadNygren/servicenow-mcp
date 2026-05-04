@@ -478,6 +478,107 @@ from servicenow_mcp.tools.import_set_tools import list_scheduled_imports as list
 from servicenow_mcp.tools.import_set_tools import list_transform_maps as list_transform_maps_tool
 from servicenow_mcp.tools.import_set_tools import list_transform_scripts as list_transform_scripts_tool
 from servicenow_mcp.tools.import_set_tools import trigger_import as trigger_import_tool
+from servicenow_mcp.tools.flow_tools import (
+    ActionTypeInput,
+    ActionTypeSummary,
+    AddStepsToFlowParams,
+    AddStepsToFlowResponse,
+    AddSubflowStepToFlowParams,
+    AddSubflowStepToFlowResponse,
+    CreateActionParams,
+    CreateFlowParams,
+    CreateFlowResponse,
+    CreateSubflowParams,
+    DeleteActionParams,
+    DeleteArtifactParams,
+    DeleteArtifactResponse,
+    DeleteFlowParams,
+    DeleteSubflowParams,
+    ExecuteFlowParams,
+    ExecuteFlowResponse,
+    GetFlowExecutionDetailParams,
+    GetFlowExecutionDetailResult,
+    FlowExecution,
+    FlowLogicType,
+    GetActionParams,
+    GetArtifactResponse,
+    GetFlowActionsParams,
+    GetFlowExecutionHistoryParams,
+    GetFlowExecutionHistoryResult,
+    GetFlowParams,
+    GetFlowTriggersParams,
+    GetFlowVersionParams,
+    GetSubflowParams,
+    ListActionTypeInputsParams,
+    ListActionTypeInputsResult,
+    ListActionTypeOutputsParams,
+    ListActionTypeOutputsResult,
+    ListActionsParams,
+    ListActionTypesParams,
+    ListActionTypesResult,
+    ListArtifactsResponse,
+    ListFlowIOParams,
+    ListFlowIOResult,
+    ListFlowLogicTypesParams,
+    ListFlowLogicTypesResult,
+    ListFlowsParams,
+    ListSubflowsParams,
+    ListTriggerTypesParams,
+    ListTriggerTypesResult,
+    MutationResponse,
+    AddLogicToFlowParams,
+    AddLogicToFlowResponse,
+    PublishActionParams,
+    PublishFlowParams,
+    PublishSubflowParams,
+    RemoveStepsFromFlowParams,
+    RemoveStepsFromFlowResponse,
+    CloneFlowParams,
+    CloneFlowResponse,
+    UpdateFlowTriggerParams,
+    UpdateFlowTriggerResponse,
+    UpdateActionParams,
+    UpdateFlowParams,
+    UpdateSubflowParams,
+)
+from servicenow_mcp.tools.flow_tools import (
+    add_logic_to_flow as add_logic_to_flow_tool,
+    add_steps_to_flow as add_steps_to_flow_tool,
+    add_subflow_step_to_flow as add_subflow_step_to_flow_tool,
+    create_action as create_action_tool,
+    create_flow as create_flow_tool,
+    clone_flow as clone_flow_tool,
+    update_flow_trigger as update_flow_trigger_tool,
+    create_subflow as create_subflow_tool,
+    delete_action as delete_action_tool,
+    delete_flow as delete_flow_tool,
+    delete_subflow as delete_subflow_tool,
+    execute_flow as execute_flow_tool,
+    get_flow_execution_detail as get_flow_execution_detail_tool,
+    get_action as get_action_tool,
+    get_flow as get_flow_tool,
+    get_flow_actions as get_flow_actions_tool,
+    get_flow_execution_history as get_flow_execution_history_tool,
+    get_flow_triggers as get_flow_triggers_tool,
+    get_flow_version as get_flow_version_tool,
+    get_subflow as get_subflow_tool,
+    list_action_type_inputs as list_action_type_inputs_tool,
+    list_action_type_outputs as list_action_type_outputs_tool,
+    list_action_types as list_action_types_tool,
+    list_actions as list_actions_tool,
+    list_flow_io as list_flow_io_tool,
+    list_flow_logic_types as list_flow_logic_types_tool,
+    list_flows as list_flows_tool,
+    list_subflows as list_subflows_tool,
+    list_trigger_types as list_trigger_types_tool,
+    publish_action as publish_action_tool,
+    publish_flow as publish_flow_tool,
+    publish_subflow as publish_subflow_tool,
+    remove_steps_from_flow as remove_steps_from_flow_tool,
+    update_action as update_action_tool,
+    update_flow as update_flow_tool,
+    update_subflow as update_subflow_tool,
+)
 from servicenow_mcp.tools.csm_tools import (
     GetCaseHistoryParams,
     GetCasesByAccountParams,
@@ -1572,6 +1673,209 @@ def get_tool_definitions(
             CloneImportConfigurationParams,
             str,
             "Clone a complete import configuration: Data Source, Transform Maps, Field Mappings, Scripts, and optionally Scheduler",
+            "json",
+        ),
+        # --- Flow Designer Tools (Flowbie port) ---
+        "list_trigger_types": (
+            list_trigger_types_tool,
+            ListTriggerTypesParams,
+            ListTriggerTypesResult,
+            (
+                "List all available Flow Designer trigger types from sys_hub_trigger_type. "
+                "Returns the sys_id and name for each trigger type on this instance. "
+                "Call this before create_flow to discover valid trigger_definition_id values, "
+                "or let create_flow resolve the sys_id automatically from the type string."
+            ),
+            "json",
+        ),
+        "create_flow": (
+            create_flow_tool,
+            CreateFlowParams,
+            CreateFlowResponse,
+            (
+                "Create a new Flow Designer flow in ServiceNow using the internal "
+                "/api/now/processflow/ API. Supports flows with a trigger (record-based "
+                "or recurrence) and one or more action steps. The flow is created in "
+                "draft state and must be activated manually in Flow Designer. "
+                "Action inputs require exact parameter definition sys_ids — see the "
+                "flow-designer-api.md memory file for known IDs for Look Up Record and "
+                "Create Record."
+            ),
+            "json",
+        ),
+        "list_flows": (
+            list_flows_tool,
+            ListFlowsParams,
+            dict,
+            "List Flow Designer flows from sys_hub_flow with optional filters for type, status, scope, and name",
+            "json",
+        ),
+        "get_flow": (
+            get_flow_tool,
+            GetFlowParams,
+            dict,
+            "Get the detail view of a single Flow Designer flow by sys_id",
+            "json",
+        ),
+        "clone_flow": (
+            clone_flow_tool,
+            CloneFlowParams,
+            CloneFlowResponse,
+            (
+                "Duplicate an existing Flow Designer flow to a new draft flow (new sys_id). "
+                "Fetches the source via GET /processflow/flow/{id}, creates a new shell, "
+                "copies trigger/action/logic/subflow instances with regenerated ids, then Save. "
+                "Use after list_flows/get_flow when reusing an existing design."
+            ),
+            "json",
+        ),
+        "update_flow_trigger": (
+            update_flow_trigger_tool,
+            UpdateFlowTriggerParams,
+            UpdateFlowTriggerResponse,
+            (
+                "Replace the trigger on an existing flow (processflow GET, replace triggerInstances, PUT, Save). "
+                "Uses the same TriggerInstanceParam shape as create_flow. "
+                "Does not add action or subflow steps."
+            ),
+            "json",
+        ),
+        "get_flow_triggers": (
+            get_flow_triggers_tool,
+            GetFlowTriggersParams,
+            dict,
+            "Get trigger instances for a flow from sys_hub_trigger_instance (V1) and sys_hub_trigger_instance_v2 (V2), merged. Supports limit/offset pagination.",
+            "json",
+        ),
+        "get_flow_actions": (
+            get_flow_actions_tool,
+            GetFlowActionsParams,
+            dict,
+            "Get flow components in list mode (all step types ordered by execution from sys_hub_flow_component) or detail mode (full fields for one component via sys_class_name routing). Provide component_sys_id for detail mode.",
+            "json",
+        ),
+        "get_flow_version": (
+            get_flow_version_tool,
+            GetFlowVersionParams,
+            dict,
+            "Get the latest or published version record for a flow from sys_hub_flow_version",
+            "json",
+        ),
+        "update_flow": (
+            update_flow_tool,
+            UpdateFlowParams,
+            MutationResponse,
+            "Update a Flow Designer flow.",
+            "json",
+        ),
+        "publish_flow": (
+            publish_flow_tool,
+            PublishFlowParams,
+            dict,
+            "Publish (activate) a Flow Designer flow by setting active=true on sys_hub_flow",
+            "json",
+        ),
+        "create_subflow": (
+            create_subflow_tool,
+            CreateSubflowParams,
+            MutationResponse,
+            "Create a Flow Designer subflow.",
+            "json",
+        ),
+        "list_subflows": (
+            list_subflows_tool,
+            ListSubflowsParams,
+            ListArtifactsResponse,
+            "List Flow Designer subflows.",
+            "json",
+        ),
+        "get_subflow": (
+            get_subflow_tool,
+            GetSubflowParams,
+            GetArtifactResponse,
+            "Get a Flow Designer subflow by sys_id.",
+            "json",
+        ),
+        "update_subflow": (
+            update_subflow_tool,
+            UpdateSubflowParams,
+            MutationResponse,
+            "Update a Flow Designer subflow.",
+            "json",
+        ),
+        "publish_subflow": (
+            publish_subflow_tool,
+            PublishSubflowParams,
+            MutationResponse,
+            "Publish a Flow Designer subflow.",
+            "json",
+        ),
+        "create_action": (
+            create_action_tool,
+            CreateActionParams,
+            MutationResponse,
+            "Create a Flow Designer custom action.",
+            "json",
+        ),
+        "list_actions": (
+            list_actions_tool,
+            ListActionsParams,
+            ListArtifactsResponse,
+            "List Flow Designer custom actions.",
+            "json",
+        ),
+        "get_action": (
+            get_action_tool,
+            GetActionParams,
+            GetArtifactResponse,
+            "Get a Flow Designer custom action by sys_id.",
+            "json",
+        ),
+        "update_action": (
+            update_action_tool,
+            UpdateActionParams,
+            MutationResponse,
+            "Update a Flow Designer custom action.",
+            "json",
+        ),
+        "publish_action": (
+            publish_action_tool,
+            PublishActionParams,
+            MutationResponse,
+            "Publish a Flow Designer custom action.",
+            "json",
+        ),
+        "list_action_types": (
+            list_action_types_tool,
+            ListActionTypesParams,
+            ListActionTypesResult,
+            (
+                "Search the action type catalog by name. Returns both definition_sys_id (for list_action_type_inputs) "
+                "and base_sys_id (for ActionInstanceParam.action_type_sys_id in add_steps_to_flow/create_flow). "
+                "These are different sys_ids — both are required for the full flow authoring workflow."
+            ),
+            "json",
+        ),
+        "list_action_type_inputs": (
+            list_action_type_inputs_tool,
+            ListActionTypeInputsParams,
+            ListActionTypeInputsResult,
+            (
+                "Return all input parameter definitions (sys_ids, types, mandatory flags) for a given action type. "
+                "Use this to discover the exact ActionInputParam.id values needed by create_flow and add_steps_to_flow "
+                "without hardcoding instance-specific sys_ids."
+            ),
+            "json",
+        ),
+        "list_action_type_outputs": (
+            list_action_type_outputs_tool,
+            ListActionTypeOutputsParams,
+            ListActionTypeOutputsResult,
+            (
+                "List output variable definitions (data pills) for an action type from sys_hub_action_output. "
+                "Use definition_sys_id from list_action_types (same as list_action_type_inputs). "
+                "Needed to wire action outputs into later step inputs."
+            ),
             "json",
         ),
         # Customer Service Case Tools (CSM)
