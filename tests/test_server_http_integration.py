@@ -8,8 +8,6 @@ The streamable-HTTP session manager itself is exercised by the upstream
 mcp library's own tests; we only verify the security perimeter here.
 """
 
-from unittest.mock import MagicMock
-
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.responses import PlainTextResponse
@@ -101,21 +99,31 @@ def test_streamable_http_health_still_enforces_host():
 
 
 def test_create_starlette_app_imports_cleanly():
-    """Smoke test: the real create_starlette_app from server_http imports
-    and runs without crashing on instantiation."""
+    """Smoke test: create_starlette_app builds a Starlette app with /health
+    plus a root-mounted FastMCP streamable_http_app (which exposes /mcp)."""
+    from mcp.server.fastmcp import FastMCP
+
     from servicenow_mcp.server_http import create_starlette_app
 
-    mock_server = MagicMock()
+    mcp = FastMCP("test")
     app = create_starlette_app(
-        mock_server,
+        mcp,
         auth_token=TOKEN,
         allowed_hosts=ALLOWED_HOSTS,
         allowed_origins=ALLOWED_ORIGINS,
     )
     assert app.debug is False
-    # Verify the routes are wired correctly.
+    # /health is a top-level route on the outer app.
     paths = {getattr(r, "path", None) for r in app.routes}
     assert "/health" in paths
-    # Mount paths show up via app.routes too.
-    mount_paths = {getattr(r, "path", None) for r in app.routes if hasattr(r, "app")}
-    assert "/mcp" in mount_paths
+    # FastMCP's streamable_http_app is mounted at the root; /mcp lives inside it.
+    mounts = [r for r in app.routes if hasattr(r, "app")]
+    assert any(getattr(r, "path", None) == "" for r in mounts), (
+        "Expected the FastMCP streamable_http_app to be mounted at the root."
+    )
+    inner_paths = {
+        getattr(rr, "path", None)
+        for r in mounts
+        for rr in getattr(getattr(r, "app", None), "routes", [])
+    }
+    assert "/mcp" in inner_paths

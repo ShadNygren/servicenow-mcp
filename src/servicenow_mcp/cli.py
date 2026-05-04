@@ -9,7 +9,6 @@ import sys
 
 import anyio
 from dotenv import load_dotenv
-from mcp.server.stdio import stdio_server
 
 from servicenow_mcp.server import ServiceNowMCP
 from servicenow_mcp.utils.config import (
@@ -241,13 +240,10 @@ def create_config(args) -> ServerConfig:
     )
 
 
-async def arun_server(server_instance):
-    """Runs the given MCP server instance using stdio transport."""
-    logger.info("Starting server with stdio transport...")
-    async with stdio_server() as streams:
-        # Get initialization options from the low-level server
-        init_options = server_instance.create_initialization_options()
-        await server_instance.run(streams[0], streams[1], init_options)
+async def arun_server(mcp_instance):
+    """Run the FastMCP server over the stdio transport."""
+    logger.info("Starting FastMCP server with stdio transport...")
+    await mcp_instance.run_stdio_async()
     logger.info("Stdio server finished.")
 
 
@@ -275,11 +271,9 @@ def main():
         # Create server controller instance
         mcp_controller = ServiceNowMCP(config)
 
-        # Get the low-level server instance to run
-        server_to_run = mcp_controller.start()
-
-        # Run the server using anyio and the stdio transport
-        anyio.run(arun_server, server_to_run)
+        # Get the configured FastMCP instance and run on stdio.
+        mcp_instance = mcp_controller.start()
+        anyio.run(arun_server, mcp_instance)
 
     except ValueError as e:
         logger.error(f"Configuration or runtime error: {e}")
