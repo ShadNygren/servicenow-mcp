@@ -57,7 +57,7 @@ class CreateArticleParams(BaseModel):
     knowledge_base: str = Field(..., description="The knowledge base to create the article in")
     category: str = Field(..., description="Category for the article")
     keywords: Optional[str] = Field(None, description="Keywords for search")
-    article_type: Optional[str] = Field("html", description="The type of article. Options are 'text' or 'wiki'. text lets the text field support html formatting. wiki lets the text field support wiki markup.")
+    article_type: Optional[str] = Field("text", description="The type of article. Options are 'text' or 'wiki'. text lets the text field support html formatting. wiki lets the text field support wiki markup.")
 
 
 class UpdateArticleParams(BaseModel):
@@ -633,7 +633,7 @@ def list_articles(
             logger.error("Unexpected response format: %s", json_response)
             return {
                 "success": False,
-                "message": f"Unexpected response format",
+                "message": "Unexpected response format",
                 "articles": [],
                 "count": 0,
                 "limit": params.limit,

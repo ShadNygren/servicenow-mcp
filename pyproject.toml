@@ -38,6 +38,8 @@ dev = [
     "isort>=5.12.0",
     "mypy>=1.0.0",
     "ruff>=0.0.1",
+    "types-requests>=2.28.0",
+    "types-PyYAML>=6.0.0",
 ]
 
 [project.scripts]
@@ -65,17 +67,35 @@ profile = "black"
 line_length = 100
 
 [tool.mypy]
+# Mypy runs in informational mode — failures do not block CI (see
+# `continue-on-error: true` in `.github/workflows/ci.yml`).  The fork
+# inherits ~250 type errors from upstream cherry-picks.  Reaching
+# strict typing is gradual work; in the meantime, the configuration
+# below still surfaces the high-signal issues (`Any` returns, unused
+# configs) without burying them under hundreds of `no-untyped-def`
+# noise from un-annotated tool functions.
 python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
+# Strict-mode toggles are deferred: enable each one as the corresponding
+# module reaches full annotation coverage.  See Phase 8/9 in CLAUDE.md.
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.ruff.lint]
 select = ["E", "F", "B", "I"]
 ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+# __init__.py modules re-export tool symbols so the public package surface
+# can be imported as `from servicenow_mcp.tools import create_incident`.
+# Ruff's F401 ("imported but unused") fires on every re-export; suppressing
+# it here is the idiomatic fix and matches the canonical Python convention.
+"__init__.py" = ["F401"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

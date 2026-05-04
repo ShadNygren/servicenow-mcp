@@ -206,7 +206,7 @@ class TestGetOAuthToken(unittest.TestCase):
         )
         manager = AuthManager(config, instance_url="https://localhost")
         # Should not raise ValueError pre-request; gets to the HTTP layer.
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(ValueError):
             manager._get_oauth_token()
         # The ValueError now comes from the OAuth grant failure path, not
         # from URL pre-validation. Verify the URL was constructed correctly.

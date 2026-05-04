@@ -402,10 +402,6 @@ class PublishArtifactParams(BaseModel):
     annotation: str | None = Field("", description="Optional publish note/annotation")
 
 
-class PublishFlowParams(PublishArtifactParams):
-    """Parameters for publish_flow."""
-
-
 class PublishSubflowParams(PublishArtifactParams):
     """Parameters for publish_subflow."""
 

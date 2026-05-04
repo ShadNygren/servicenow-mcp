@@ -6,7 +6,6 @@ Closes echelon Issue #52
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 import requests
 
 from servicenow_mcp.tools.incident_tools import (

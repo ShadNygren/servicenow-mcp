@@ -8,7 +8,6 @@ datetime-vs-float TypeError seen in upstream michaelbuckner code.
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch, MagicMock
 
-import pytest
 import requests
 
 from servicenow_mcp.auth.auth_manager import AuthManager

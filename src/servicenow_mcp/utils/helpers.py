@@ -24,6 +24,10 @@ _REDACTED = "<redacted>"
 _SENSITIVE_HEADERS = frozenset(
     {"authorization", "x-servicenow-api-key", "cookie", "set-cookie", "proxy-authorization"}
 )
+_SENSITIVE_BODY_KEYS = frozenset(
+    {"password", "passwd", "secret", "token", "access_token", "refresh_token",
+     "client_secret", "api_key", "apikey", "authorization"}
+)
 _DEBUG_BODY_LIMIT = 500
 
 
@@ -37,12 +41,30 @@ def _redact_headers(headers: Optional[Dict[str, str]]) -> Dict[str, str]:
     }
 
 
+def _redact_body_keys(obj: Any) -> Any:
+    """Recursively redact values for keys matching :data:`_SENSITIVE_BODY_KEYS`."""
+    if isinstance(obj, dict):
+        return {
+            k: (_REDACTED if k.lower() in _SENSITIVE_BODY_KEYS else _redact_body_keys(v))
+            for k, v in obj.items()
+        }
+    if isinstance(obj, list):
+        return [_redact_body_keys(item) for item in obj]
+    return obj
+
+
 def _truncate_body(body: Any) -> str:
-    """Serialise *body* to a string and truncate at :data:`_DEBUG_BODY_LIMIT` chars."""
+    """Serialise *body* to a string and truncate at :data:`_DEBUG_BODY_LIMIT` chars.
+
+    Dict / list bodies are first walked to redact values whose keys match
+    :data:`_SENSITIVE_BODY_KEYS` (password, secret, token, etc.) so that
+    accidental debug logging of an OAuth password-grant body or similar
+    cannot leak credentials.
+    """
     if body is None:
         return ""
     if isinstance(body, (dict, list)):
-        text = json.dumps(body)
+        text = json.dumps(_redact_body_keys(body))
     else:
         text = str(body)
     if len(text) > _DEBUG_BODY_LIMIT:
@@ -501,9 +523,9 @@ def _get_instance_url(auth_manager: Any, server_config: Any) -> Optional[str]:
     Returns:
         Instance URL string, or ``None`` if not found.
     """
-    if hasattr(server_config, "instance_url"):
+    if getattr(server_config, "instance_url", None):
         return server_config.instance_url
-    if hasattr(auth_manager, "instance_url"):
+    if getattr(auth_manager, "instance_url", None):
         return auth_manager.instance_url
     logger.error("Cannot find instance_url in either server_config or auth_manager")
     return None

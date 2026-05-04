@@ -1,6 +1,6 @@
 
 import unittest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 import requests
 from servicenow_mcp.tools.csm_tools import (
     list_accounts,

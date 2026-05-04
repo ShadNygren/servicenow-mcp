@@ -28,7 +28,7 @@ import contextlib
 import logging
 import os
 from collections.abc import AsyncIterator
-from typing import Dict, Set, Union
+from typing import Set
 
 import uvicorn
 from dotenv import load_dotenv
