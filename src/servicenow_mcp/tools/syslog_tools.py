@@ -8,14 +8,15 @@ syslog table (sys_log).
 import logging
 from typing import Any, Dict, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 from servicenow_mcp.utils.helpers import (
     _build_sysparm_params,
-    _get_headers,
+    _get_headers_async,
     _get_instance_url,
     _join_query_parts,
     _paginated_list_response,
@@ -83,7 +84,7 @@ def _format_syslog_entry(entry: Dict) -> Dict:
     }
 
 
-def list_syslog_entries(
+async def list_syslog_entries(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -109,7 +110,7 @@ def list_syslog_entries(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
@@ -136,18 +137,19 @@ def list_syslog_entries(
 
     url = f"{instance_url}/api/now/table/{SYSLOG_TABLE}"
     try:
-        response = requests.get(url, headers=headers, params=query_params)
+        client = await get_async_client()
+        response = await client.get(url, headers=headers, params=query_params)
         response.raise_for_status()
         entries = [_format_syslog_entry(r) for r in response.json().get("result", [])]
         return _paginated_list_response(
             entries, validated.limit, validated.offset, "entries",
         )
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error("Error listing syslog entries: %s", e)
         return {"success": False, "message": f"Error listing syslog entries: {str(e)}"}
 
 
-def get_syslog_entry(
+async def get_syslog_entry(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -170,7 +172,7 @@ def get_syslog_entry(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
@@ -181,7 +183,8 @@ def get_syslog_entry(
         "sysparm_fields": ",".join(SYSLOG_FIELDS),
     }
     try:
-        response = requests.get(url, headers=headers, params=query_params)
+        client = await get_async_client()
+        response = await client.get(url, headers=headers, params=query_params)
         if response.status_code == 404:
             return {"success": False, "message": f"Syslog entry not found: {validated.sys_id}"}
         response.raise_for_status()
@@ -192,6 +195,6 @@ def get_syslog_entry(
             "success": True,
             "entry": _format_syslog_entry(record),
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error("Error retrieving syslog entry: %s", e)
         return {"success": False, "message": f"Error retrieving syslog entry: {str(e)}"}

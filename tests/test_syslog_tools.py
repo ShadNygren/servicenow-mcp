@@ -1,7 +1,10 @@
 """Tests for syslog_tools.py."""
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import httpx
 
 from servicenow_mcp.tools.syslog_tools import (
     GetSyslogEntryParams,
@@ -36,9 +39,19 @@ def _make_config():
 
 def _make_auth_manager():
     auth_manager = MagicMock(spec=AuthManager)
-    auth_manager.get_headers.return_value = {"Authorization": "Bearer FAKE"}
+    # Phase 9.2: tools call get_headers_async via _get_headers_async helper.
+    auth_manager.get_headers_async = AsyncMock(return_value={"Authorization": "Bearer FAKE"})
     auth_manager.instance_url = "https://dev99999.service-now.com"
     return auth_manager
+
+
+def _mock_response(status_code=200, json_body=None):
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.headers = {}
+    resp.raise_for_status = MagicMock()
+    resp.json = MagicMock(return_value=json_body or {})
+    return resp
 
 
 class TestFormatSyslogEntry(unittest.TestCase):
@@ -59,19 +72,16 @@ class TestFormatSyslogEntry(unittest.TestCase):
             self.assertIsNone(result[key])
 
 
-class TestListSyslogEntries(unittest.TestCase):
+class TestListSyslogEntries(IsolatedAsyncioTestCase):
     def setUp(self):
         self.config = _make_config()
         self.auth_manager = _make_auth_manager()
 
-    @patch("requests.get")
-    def test_list_returns_entries(self, mock_get):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"result": [FAKE_ENTRY]}
-        mock_get.return_value = mock_response
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_returns_entries(self, mock_get):
+        mock_get.return_value = _mock_response(json_body={"result": [FAKE_ENTRY]})
 
-        result = list_syslog_entries(
+        result = await list_syslog_entries(
             self.auth_manager,
             self.config,
             {"limit": 10, "offset": 0},
@@ -81,26 +91,20 @@ class TestListSyslogEntries(unittest.TestCase):
         self.assertEqual(result["count"], 1)
         self.assertEqual(result["entries"][0]["sys_id"], "abc123")
 
-    @patch("requests.get")
-    def test_list_empty_result(self, mock_get):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"result": []}
-        mock_get.return_value = mock_response
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_empty_result(self, mock_get):
+        mock_get.return_value = _mock_response(json_body={"result": []})
 
-        result = list_syslog_entries(self.auth_manager, self.config, {})
+        result = await list_syslog_entries(self.auth_manager, self.config, {})
         self.assertTrue(result["success"])
         self.assertEqual(result["count"], 0)
         self.assertEqual(result["entries"], [])
 
-    @patch("requests.get")
-    def test_list_with_level_filter(self, mock_get):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"result": [FAKE_ENTRY]}
-        mock_get.return_value = mock_response
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_with_level_filter(self, mock_get):
+        mock_get.return_value = _mock_response(json_body={"result": [FAKE_ENTRY]})
 
-        result = list_syslog_entries(
+        result = await list_syslog_entries(
             self.auth_manager,
             self.config,
             {"level": "error"},
@@ -111,14 +115,11 @@ class TestListSyslogEntries(unittest.TestCase):
         query = call_kwargs[1]["params"].get("sysparm_query", "")
         self.assertIn("level=error", query)
 
-    @patch("requests.get")
-    def test_list_with_source_filter(self, mock_get):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"result": []}
-        mock_get.return_value = mock_response
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_with_source_filter(self, mock_get):
+        mock_get.return_value = _mock_response(json_body={"result": []})
 
-        result = list_syslog_entries(
+        result = await list_syslog_entries(
             self.auth_manager,
             self.config,
             {"source": "Scripting"},
@@ -129,14 +130,11 @@ class TestListSyslogEntries(unittest.TestCase):
         query = call_kwargs[1]["params"].get("sysparm_query", "")
         self.assertIn("sourceLIKEScripting", query)
 
-    @patch("requests.get")
-    def test_list_with_message_filter(self, mock_get):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"result": []}
-        mock_get.return_value = mock_response
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_with_message_filter(self, mock_get):
+        mock_get.return_value = _mock_response(json_body={"result": []})
 
-        result = list_syslog_entries(
+        result = await list_syslog_entries(
             self.auth_manager,
             self.config,
             {"message_contains": "failed"},
@@ -147,14 +145,11 @@ class TestListSyslogEntries(unittest.TestCase):
         query = call_kwargs[1]["params"].get("sysparm_query", "")
         self.assertIn("messageLIKEfailed", query)
 
-    @patch("requests.get")
-    def test_list_with_date_range(self, mock_get):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"result": []}
-        mock_get.return_value = mock_response
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_with_date_range(self, mock_get):
+        mock_get.return_value = _mock_response(json_body={"result": []})
 
-        result = list_syslog_entries(
+        result = await list_syslog_entries(
             self.auth_manager,
             self.config,
             {"created_after": "2026-04-01", "created_before": "2026-04-08"},
@@ -166,51 +161,49 @@ class TestListSyslogEntries(unittest.TestCase):
         self.assertIn("sys_created_on>=2026-04-01", query)
         self.assertIn("sys_created_on<=2026-04-08", query)
 
-    @patch("requests.get")
-    def test_list_request_exception(self, mock_get):
-        import requests as req
-        mock_get.side_effect = req.exceptions.ConnectionError("timeout")
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_request_exception(self, mock_get):
+        mock_get.side_effect = httpx.ConnectError("timeout")
 
-        result = list_syslog_entries(self.auth_manager, self.config, {})
+        result = await list_syslog_entries(self.auth_manager, self.config, {})
         self.assertFalse(result["success"])
         self.assertIn("Error listing syslog entries", result["message"])
 
-    def test_list_missing_instance_url(self):
+    async def test_list_missing_instance_url(self):
         auth_manager = MagicMock()
         del auth_manager.instance_url
         server_config = MagicMock()
         del server_config.instance_url
 
-        result = list_syslog_entries(auth_manager, server_config, {})
+        result = await list_syslog_entries(auth_manager, server_config, {})
         self.assertFalse(result["success"])
         self.assertIn("instance_url", result["message"])
 
-    def test_list_missing_headers(self):
+    async def test_list_missing_headers(self):
         auth_manager = MagicMock()
         auth_manager.instance_url = "https://dev99999.service-now.com"
+        del auth_manager.get_headers_async
         del auth_manager.get_headers
         server_config = MagicMock()
         del server_config.instance_url
+        del server_config.get_headers_async
         del server_config.get_headers
 
-        result = list_syslog_entries(auth_manager, server_config, {})
+        result = await list_syslog_entries(auth_manager, server_config, {})
         self.assertFalse(result["success"])
         self.assertIn("get_headers", result["message"])
 
 
-class TestGetSyslogEntry(unittest.TestCase):
+class TestGetSyslogEntry(IsolatedAsyncioTestCase):
     def setUp(self):
         self.config = _make_config()
         self.auth_manager = _make_auth_manager()
 
-    @patch("requests.get")
-    def test_get_entry_success(self, mock_get):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"result": FAKE_ENTRY}
-        mock_get.return_value = mock_response
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_entry_success(self, mock_get):
+        mock_get.return_value = _mock_response(json_body={"result": FAKE_ENTRY})
 
-        result = get_syslog_entry(
+        result = await get_syslog_entry(
             self.auth_manager,
             self.config,
             {"sys_id": "abc123"},
@@ -220,13 +213,11 @@ class TestGetSyslogEntry(unittest.TestCase):
         self.assertEqual(result["entry"]["sys_id"], "abc123")
         self.assertEqual(result["entry"]["level"], "error")
 
-    @patch("requests.get")
-    def test_get_entry_not_found_404(self, mock_get):
-        mock_response = MagicMock()
-        mock_response.status_code = 404
-        mock_get.return_value = mock_response
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_entry_not_found_404(self, mock_get):
+        mock_get.return_value = _mock_response(status_code=404)
 
-        result = get_syslog_entry(
+        result = await get_syslog_entry(
             self.auth_manager,
             self.config,
             {"sys_id": "nonexistent"},
@@ -235,14 +226,11 @@ class TestGetSyslogEntry(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertIn("nonexistent", result["message"])
 
-    @patch("requests.get")
-    def test_get_entry_empty_result(self, mock_get):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"result": {}}
-        mock_get.return_value = mock_response
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_entry_empty_result(self, mock_get):
+        mock_get.return_value = _mock_response(json_body={"result": {}})
 
-        result = get_syslog_entry(
+        result = await get_syslog_entry(
             self.auth_manager,
             self.config,
             {"sys_id": "xyz"},
@@ -251,12 +239,11 @@ class TestGetSyslogEntry(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertIn("not found", result["message"])
 
-    @patch("requests.get")
-    def test_get_entry_request_exception(self, mock_get):
-        import requests as req
-        mock_get.side_effect = req.exceptions.ConnectionError("timeout")
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_entry_request_exception(self, mock_get):
+        mock_get.side_effect = httpx.ConnectError("timeout")
 
-        result = get_syslog_entry(
+        result = await get_syslog_entry(
             self.auth_manager,
             self.config,
             {"sys_id": "abc123"},
@@ -265,17 +252,17 @@ class TestGetSyslogEntry(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertIn("Error retrieving syslog entry", result["message"])
 
-    def test_get_entry_missing_sys_id(self):
-        result = get_syslog_entry(self.auth_manager, self.config, {})
+    async def test_get_entry_missing_sys_id(self):
+        result = await get_syslog_entry(self.auth_manager, self.config, {})
         self.assertFalse(result["success"])
 
-    def test_get_entry_missing_instance_url(self):
+    async def test_get_entry_missing_instance_url(self):
         auth_manager = MagicMock()
         del auth_manager.instance_url
         server_config = MagicMock()
         del server_config.instance_url
 
-        result = get_syslog_entry(auth_manager, server_config, {"sys_id": "abc"})
+        result = await get_syslog_entry(auth_manager, server_config, {"sys_id": "abc"})
         self.assertFalse(result["success"])
         self.assertIn("instance_url", result["message"])
 
