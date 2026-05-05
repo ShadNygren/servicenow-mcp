@@ -1,14 +1,17 @@
 """Tests for Service Catalog Task (SCTASK) tools."""
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import httpx
 
 from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.tools.sctask_tools import get_sctask, list_sctasks, update_sctask
 from servicenow_mcp.utils.config import AuthConfig, AuthType, BasicAuthConfig, ServerConfig
 
 
-class TestSCTaskTools(unittest.TestCase):
+class TestSCTaskTools(IsolatedAsyncioTestCase):
 
     def setUp(self):
         self.auth_config = AuthConfig(
@@ -20,14 +23,14 @@ class TestSCTaskTools(unittest.TestCase):
             auth=self.auth_config,
         )
         self.auth_manager = MagicMock(spec=AuthManager)
-        self.auth_manager.get_headers.return_value = {
+        self.auth_manager.get_headers_async = AsyncMock(return_value={
             "Authorization": "Bearer FAKE_TOKEN",
-        }
+        })
 
     # --- get_sctask ---
 
-    @patch("servicenow_mcp.tools.sctask_tools.requests.get")
-    def test_get_sctask_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_sctask_success(self, mock_get):
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "result": [
@@ -53,7 +56,7 @@ class TestSCTaskTools(unittest.TestCase):
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
 
-        result = get_sctask(
+        result = await get_sctask(
             self.auth_manager, self.config, {"task_number": "SCTASK0525799"}
         )
 
@@ -62,30 +65,30 @@ class TestSCTaskTools(unittest.TestCase):
         self.assertEqual(result["sctask"]["sys_id"], "abc123")
         mock_get.assert_called_once()
 
-    @patch("servicenow_mcp.tools.sctask_tools.requests.get")
-    def test_get_sctask_not_found(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_sctask_not_found(self, mock_get):
         mock_response = MagicMock()
         mock_response.json.return_value = {"result": []}
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
 
-        result = get_sctask(
+        result = await get_sctask(
             self.auth_manager, self.config, {"task_number": "SCTASK9999999"}
         )
 
         self.assertFalse(result["success"])
         self.assertIn("not found", result["message"])
 
-    def test_get_sctask_missing_param(self):
-        result = get_sctask(self.auth_manager, self.config, {})
+    async def test_get_sctask_missing_param(self):
+        result = await get_sctask(self.auth_manager, self.config, {})
 
         self.assertFalse(result["success"])
         self.assertIn("task_number", result["message"])
 
     # --- list_sctasks ---
 
-    @patch("servicenow_mcp.tools.sctask_tools.requests.get")
-    def test_list_sctasks_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_sctasks_success(self, mock_get):
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "result": [
@@ -96,20 +99,20 @@ class TestSCTaskTools(unittest.TestCase):
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
 
-        result = list_sctasks(self.auth_manager, self.config, {"limit": 10})
+        result = await list_sctasks(self.auth_manager, self.config, {"limit": 10})
 
         self.assertTrue(result["success"])
         self.assertEqual(result["count"], 2)
         self.assertEqual(len(result["sctasks"]), 2)
 
-    @patch("servicenow_mcp.tools.sctask_tools.requests.get")
-    def test_list_sctasks_with_filters(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_sctasks_with_filters(self, mock_get):
         mock_response = MagicMock()
         mock_response.json.return_value = {"result": []}
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
 
-        result = list_sctasks(
+        result = await list_sctasks(
             self.auth_manager,
             self.config,
             {
@@ -128,9 +131,9 @@ class TestSCTaskTools(unittest.TestCase):
 
     # --- update_sctask ---
 
-    @patch("servicenow_mcp.tools.sctask_tools.requests.patch")
-    @patch("servicenow_mcp.tools.sctask_tools.requests.get")
-    def test_update_sctask_success(self, mock_get, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_update_sctask_success(self, mock_get, mock_patch):
         # Mock the lookup to resolve SCTASK number to sys_id
         lookup_response = MagicMock()
         lookup_response.json.return_value = {
@@ -151,7 +154,7 @@ class TestSCTaskTools(unittest.TestCase):
         patch_response.raise_for_status = MagicMock()
         mock_patch.return_value = patch_response
 
-        result = update_sctask(
+        result = await update_sctask(
             self.auth_manager,
             self.config,
             {
@@ -165,9 +168,9 @@ class TestSCTaskTools(unittest.TestCase):
         self.assertIn("updated successfully", result["message"])
         mock_patch.assert_called_once()
 
-    @patch("servicenow_mcp.tools.sctask_tools.requests.patch")
-    @patch("servicenow_mcp.tools.sctask_tools.requests.get")
-    def test_update_sctask_time_worked_accumulation(self, mock_get, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_update_sctask_time_worked_accumulation(self, mock_get, mock_patch):
         # First call: resolve SCTASK number
         lookup_response = MagicMock()
         lookup_response.json.return_value = {
@@ -192,7 +195,7 @@ class TestSCTaskTools(unittest.TestCase):
         patch_response.raise_for_status = MagicMock()
         mock_patch.return_value = patch_response
 
-        result = update_sctask(
+        result = await update_sctask(
             self.auth_manager,
             self.config,
             {"task_number": "SCTASK0525799", "time_worked": "02:00:00"},
@@ -203,14 +206,14 @@ class TestSCTaskTools(unittest.TestCase):
         patch_call = mock_patch.call_args
         self.assertEqual(patch_call[1]["json"]["time_worked"], "03:30:00")
 
-    @patch("servicenow_mcp.tools.sctask_tools.requests.get")
-    def test_update_sctask_not_found(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_update_sctask_not_found(self, mock_get):
         mock_response = MagicMock()
         mock_response.json.return_value = {"result": []}
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
 
-        result = update_sctask(
+        result = await update_sctask(
             self.auth_manager,
             self.config,
             {"task_number": "SCTASK9999999", "state": "2"},
@@ -219,16 +222,16 @@ class TestSCTaskTools(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertIn("not found", result["message"])
 
-    def test_update_sctask_missing_param(self):
-        result = update_sctask(self.auth_manager, self.config, {"state": "2"})
+    async def test_update_sctask_missing_param(self):
+        result = await update_sctask(self.auth_manager, self.config, {"state": "2"})
 
         self.assertFalse(result["success"])
         self.assertIn("task_number", result["message"])
 
     # --- unwrap params ---
 
-    @patch("servicenow_mcp.tools.sctask_tools.requests.get")
-    def test_get_sctask_unwraps_nested_params(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_sctask_unwraps_nested_params(self, mock_get):
         """Test that params wrapped in {"params": {...}} are unwrapped."""
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -237,7 +240,7 @@ class TestSCTaskTools(unittest.TestCase):
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
 
-        result = get_sctask(
+        result = await get_sctask(
             self.auth_manager,
             self.config,
             {"params": {"task_number": "SCTASK0001"}},

@@ -7,12 +7,13 @@ This module provides tools for managing Time Cards (time_card table) in ServiceN
 import logging
 from typing import Any, Dict, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
-from servicenow_mcp.utils.helpers import _get_headers, _get_instance_url, _unwrap_and_validate_params
+from servicenow_mcp.utils.helpers import _get_headers_async, _get_instance_url, _unwrap_and_validate_params
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ class UpdateTimeCardParams(BaseModel):
     state: Optional[str] = Field(None, description="State of the time card")
 
 
-def _resolve_task_sys_id(instance_url: str, headers: Dict, task_number: str) -> Optional[str]:
+async def _resolve_task_sys_id(instance_url: str, headers: Dict, task_number: str) -> Optional[str]:
     """Resolve a SCTASK number to its sys_id."""
     url = f"{instance_url}/api/now/table/sc_task"
     lookup_params: Dict[str, Any] = {
@@ -69,7 +70,8 @@ def _resolve_task_sys_id(instance_url: str, headers: Dict, task_number: str) -> 
         "sysparm_limit": 1,
         "sysparm_fields": "sys_id",
     }
-    resp = requests.get(url, headers=headers, params=lookup_params)
+    client = await get_async_client()
+    resp = await client.get(url, headers=headers, params=lookup_params)
     resp.raise_for_status()
     records = resp.json().get("result", [])
     return records[0]["sys_id"] if records else None
@@ -95,7 +97,7 @@ def _format_time_card(tc: Dict) -> Dict:
     }
 
 
-def list_time_cards(
+async def list_time_cards(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -109,7 +111,7 @@ def list_time_cards(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
@@ -118,11 +120,11 @@ def list_time_cards(
     # Resolve task number to sys_id if provided
     if validated.task_number:
         try:
-            task_sys_id = _resolve_task_sys_id(instance_url, headers, validated.task_number)
+            task_sys_id = await _resolve_task_sys_id(instance_url, headers, validated.task_number)
             if not task_sys_id:
                 return {"success": False, "message": f"Task not found: {validated.task_number}"}
             query_parts.append(f"task={task_sys_id}")
-        except requests.exceptions.RequestException as e:
+        except httpx.HTTPError as e:
             return {"success": False, "message": f"Error resolving task: {str(e)}"}
     elif validated.task_sys_id:
         query_parts.append(f"task={validated.task_sys_id}")
@@ -143,7 +145,8 @@ def list_time_cards(
         query_params["sysparm_query"] = "^".join(query_parts)
 
     try:
-        response = requests.get(url, headers=headers, params=query_params)
+        client = await get_async_client()
+        response = await client.get(url, headers=headers, params=query_params)
         response.raise_for_status()
         cards = response.json().get("result", [])
         return {
@@ -151,12 +154,12 @@ def list_time_cards(
             "time_cards": [_format_time_card(tc) for tc in cards],
             "count": len(cards),
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error listing time cards: {e}")
         return {"success": False, "message": f"Error listing time cards: {str(e)}"}
 
 
-def create_time_card(
+async def create_time_card(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -170,17 +173,17 @@ def create_time_card(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
     headers["Content-Type"] = "application/json"
 
     # Resolve task number to sys_id
     try:
-        task_sys_id = _resolve_task_sys_id(instance_url, headers, validated.task_number)
+        task_sys_id = await _resolve_task_sys_id(instance_url, headers, validated.task_number)
         if not task_sys_id:
             return {"success": False, "message": f"Task not found: {validated.task_number}"}
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         return {"success": False, "message": f"Error resolving task: {str(e)}"}
 
     data: Dict[str, Any] = {
@@ -199,7 +202,8 @@ def create_time_card(
 
     url = f"{instance_url}/api/now/table/time_card"
     try:
-        response = requests.post(url, json=data, headers=headers)
+        client = await get_async_client()
+        response = await client.post(url, json=data, headers=headers)
         response.raise_for_status()
         tc = response.json().get("result", {})
         return {
@@ -207,12 +211,12 @@ def create_time_card(
             "message": "Time card created successfully",
             "time_card": _format_time_card(tc),
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error creating time card: {e}")
         return {"success": False, "message": f"Error creating time card: {str(e)}"}
 
 
-def update_time_card(
+async def update_time_card(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -226,7 +230,7 @@ def update_time_card(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
     headers["Content-Type"] = "application/json"
@@ -243,7 +247,8 @@ def update_time_card(
 
     url = f"{instance_url}/api/now/table/time_card/{validated.time_card_sys_id}"
     try:
-        response = requests.patch(url, json=data, headers=headers)
+        client = await get_async_client()
+        response = await client.patch(url, json=data, headers=headers)
         response.raise_for_status()
         tc = response.json().get("result", {})
         return {
@@ -251,6 +256,6 @@ def update_time_card(
             "message": "Time card updated successfully",
             "time_card": _format_time_card(tc),
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error updating time card: {e}")
         return {"success": False, "message": f"Error updating time card: {str(e)}"}

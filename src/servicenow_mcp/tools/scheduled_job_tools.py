@@ -9,10 +9,11 @@ and daily reconciliation jobs.
 import logging
 from typing import Any, Dict, List, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -121,7 +122,7 @@ class DeleteScheduledJobParams(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def create_scheduled_job(
+async def create_scheduled_job(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateScheduledJobParams,
@@ -154,9 +155,10 @@ def create_scheduled_job(
         data["condition"] = params.condition_script
 
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             json=data,
             timeout=config.timeout,
         )
@@ -170,7 +172,7 @@ def create_scheduled_job(
             "run_type": params.run_type,
             "record": result,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create scheduled job '{params.name}': {e}")
         return {
             "success": False,
@@ -181,7 +183,7 @@ def create_scheduled_job(
         }
 
 
-def list_scheduled_jobs(
+async def list_scheduled_jobs(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListScheduledJobsParams,
@@ -207,9 +209,10 @@ def list_scheduled_jobs(
     }
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             params=query_params,
             timeout=config.timeout,
         )
@@ -235,7 +238,7 @@ def list_scheduled_jobs(
             "count": len(jobs),
             "jobs": jobs,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to list scheduled jobs: {e}")
         return {
             "success": False,
@@ -245,7 +248,7 @@ def list_scheduled_jobs(
         }
 
 
-def get_scheduled_job(
+async def get_scheduled_job(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetScheduledJobParams,
@@ -254,9 +257,10 @@ def get_scheduled_job(
     url = f"{config.instance_url}/api/now/table/sysauto_script/{params.sys_id}"
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             params={"sysparm_display_value": "false"},
             timeout=config.timeout,
         )
@@ -282,7 +286,7 @@ def get_scheduled_job(
                 "updated_on": result.get("sys_updated_on"),
             },
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to get scheduled job {params.sys_id}: {e}")
         return {
             "success": False,
@@ -291,7 +295,7 @@ def get_scheduled_job(
         }
 
 
-def update_scheduled_job(
+async def update_scheduled_job(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: UpdateScheduledJobParams,
@@ -334,9 +338,10 @@ def update_scheduled_job(
         }
 
     try:
-        response = requests.patch(
+        client = await get_async_client()
+        response = await client.patch(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             json=data,
             timeout=config.timeout,
         )
@@ -348,7 +353,7 @@ def update_scheduled_job(
             "sys_id": params.sys_id,
             "record": result,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to update scheduled job {params.sys_id}: {e}")
         return {
             "success": False,
@@ -358,7 +363,7 @@ def update_scheduled_job(
         }
 
 
-def delete_scheduled_job(
+async def delete_scheduled_job(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: DeleteScheduledJobParams,
@@ -367,9 +372,10 @@ def delete_scheduled_job(
     url = f"{config.instance_url}/api/now/table/sysauto_script/{params.sys_id}"
 
     try:
-        response = requests.delete(
+        client = await get_async_client()
+        response = await client.delete(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -378,7 +384,7 @@ def delete_scheduled_job(
             "message": f"Deleted scheduled job {params.sys_id}",
             "sys_id": params.sys_id,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to delete scheduled job {params.sys_id}: {e}")
         return {
             "success": False,

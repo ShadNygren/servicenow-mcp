@@ -1,5 +1,6 @@
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
 from servicenow_mcp.utils.config import ServerConfig, AuthConfig, AuthType, BasicAuthConfig
 from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.tools.table_api_tools import (
@@ -14,10 +15,10 @@ from servicenow_mcp.tools.table_api_tools import (
     table_update_record,
     table_delete_record,
 )
-import requests
+import httpx
 
 
-class TestTableApiTools(unittest.TestCase):
+class TestTableApiTools(IsolatedAsyncioTestCase):
 
     def setUp(self):
         self.auth_config = AuthConfig(type=AuthType.BASIC, basic=BasicAuthConfig(username='test', password='test'))
@@ -25,11 +26,11 @@ class TestTableApiTools(unittest.TestCase):
     def _create_config_and_auth(self):
         config = ServerConfig(instance_url="https://dev12345.service-now.com", auth=self.auth_config)
         auth_manager = MagicMock(spec=AuthManager)
-        auth_manager.get_headers.return_value = {"Authorization": "Bearer FAKE_TOKEN"}
+        auth_manager.get_headers_async = AsyncMock(return_value={"Authorization": "Bearer FAKE_TOKEN"})
         return config, auth_manager
 
-    @patch('requests.get')
-    def test_table_get_records_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_table_get_records_success(self, mock_get):
         config, auth_manager = self._create_config_and_auth()
 
         mock_response = MagicMock()
@@ -44,7 +45,7 @@ class TestTableApiTools(unittest.TestCase):
         mock_get.return_value = mock_response
 
         params = TableGetRecordsParams(table="incident", query="active=true", limit=10)
-        result = table_get_records(config, auth_manager, params)
+        result = await table_get_records(config, auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["count"], 2)
@@ -53,8 +54,8 @@ class TestTableApiTools(unittest.TestCase):
         self.assertEqual(result["records"][0]["sys_id"], "abc123")
         self.assertIn("Retrieved 2 records", result["message"])
 
-    @patch('requests.get')
-    def test_table_get_record_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_table_get_record_success(self, mock_get):
         config, auth_manager = self._create_config_and_auth()
 
         mock_response = MagicMock()
@@ -71,7 +72,7 @@ class TestTableApiTools(unittest.TestCase):
         mock_get.return_value = mock_response
 
         params = TableGetRecordParams(table="incident", sys_id="abc123")
-        result = table_get_record(config, auth_manager, params)
+        result = await table_get_record(config, auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["table"], "incident")
@@ -79,8 +80,8 @@ class TestTableApiTools(unittest.TestCase):
         self.assertEqual(result["record"]["number"], "INC0010001")
         self.assertIn("Retrieved record abc123", result["message"])
 
-    @patch('requests.post')
-    def test_table_create_record_success(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_table_create_record_success(self, mock_post):
         config, auth_manager = self._create_config_and_auth()
 
         mock_response = MagicMock()
@@ -99,7 +100,7 @@ class TestTableApiTools(unittest.TestCase):
             table="cmdb_ci",
             data={"name": "My CI", "serial_number": "SN123"},
         )
-        result = table_create_record(config, auth_manager, params)
+        result = await table_create_record(config, auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["table"], "cmdb_ci")
@@ -107,8 +108,8 @@ class TestTableApiTools(unittest.TestCase):
         self.assertEqual(result["record"]["name"], "My CI")
         self.assertIn("Created record new789", result["message"])
 
-    @patch('requests.patch')
-    def test_table_update_record_success(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_table_update_record_success(self, mock_patch):
         config, auth_manager = self._create_config_and_auth()
 
         mock_response = MagicMock()
@@ -128,7 +129,7 @@ class TestTableApiTools(unittest.TestCase):
             sys_id="abc123",
             data={"short_description": "Updated description", "state": "2"},
         )
-        result = table_update_record(config, auth_manager, params)
+        result = await table_update_record(config, auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["table"], "incident")
@@ -136,8 +137,8 @@ class TestTableApiTools(unittest.TestCase):
         self.assertEqual(result["record"]["short_description"], "Updated description")
         self.assertIn("Updated record abc123", result["message"])
 
-    @patch('requests.delete')
-    def test_table_delete_record_success(self, mock_delete):
+    @patch.object(httpx.AsyncClient, "delete", new_callable=AsyncMock)
+    async def test_table_delete_record_success(self, mock_delete):
         config, auth_manager = self._create_config_and_auth()
 
         mock_response = MagicMock()
@@ -146,21 +147,21 @@ class TestTableApiTools(unittest.TestCase):
         mock_delete.return_value = mock_response
 
         params = TableDeleteRecordParams(table="incident", sys_id="abc123")
-        result = table_delete_record(config, auth_manager, params)
+        result = await table_delete_record(config, auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["table"], "incident")
         self.assertEqual(result["sys_id"], "abc123")
         self.assertIn("Deleted record abc123", result["message"])
 
-    @patch('requests.get')
-    def test_table_get_records_error(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_table_get_records_error(self, mock_get):
         config, auth_manager = self._create_config_and_auth()
 
-        mock_get.side_effect = requests.RequestException("Connection timeout")
+        mock_get.side_effect = httpx.HTTPError("Connection timeout")
 
         params = TableGetRecordsParams(table="incident")
-        result = table_get_records(config, auth_manager, params)
+        result = await table_get_records(config, auth_manager, params)
 
         self.assertFalse(result["success"])
         self.assertEqual(result["table"], "incident")
