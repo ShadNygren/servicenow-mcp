@@ -5,8 +5,10 @@ This module contains tests for the scripted REST API tools in the ServiceNow MCP
 """
 
 import unittest
-import requests
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import httpx
 
 from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.tools.scripted_rest_tools import (
@@ -16,42 +18,39 @@ from servicenow_mcp.tools.scripted_rest_tools import (
     create_scripted_rest_api,
     create_scripted_rest_resource,
 )
-from servicenow_mcp.utils.config import ServerConfig, AuthConfig, AuthType, BasicAuthConfig
+from servicenow_mcp.utils.config import AuthConfig, AuthType, BasicAuthConfig, ServerConfig
 
 
-class TestScriptedRestTools(unittest.TestCase):
+class TestScriptedRestTools(IsolatedAsyncioTestCase):
     """Tests for the scripted REST API tools."""
 
     def setUp(self):
         """Set up test fixtures."""
         auth_config = AuthConfig(
             type=AuthType.BASIC,
-            basic=BasicAuthConfig(
-                username="test_user",
-                password="test_password"
-            )
+            basic=BasicAuthConfig(username="test_user", password="test_password"),
         )
         self.server_config = ServerConfig(
             instance_url="https://test.service-now.com",
             auth=auth_config,
         )
-        self.auth_manager = MagicMock(spec=AuthManager)
-        self.auth_manager.get_headers.return_value = {
+        self.headers = {
             "Authorization": "Bearer test",
             "Content-Type": "application/json",
         }
+        self.auth_manager = MagicMock(spec=AuthManager)
+        # Phase 9.2: tools call get_headers_async, not get_headers.
+        self.auth_manager.get_headers_async = AsyncMock(return_value=self.headers)
 
-    @patch("servicenow_mcp.tools.scripted_rest_tools.requests.post")
-    def test_create_scripted_rest_api(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_scripted_rest_api(self, mock_post):
         """Test creating a Scripted REST API service."""
         mock_response = MagicMock()
         mock_response.json.return_value = {
-            "result": {
-                "sys_id": "abc123",
-                "name": "NowLLM Chat API",
-            }
+            "result": {"sys_id": "abc123", "name": "NowLLM Chat API"}
         }
         mock_response.status_code = 201
+        mock_response.raise_for_status = MagicMock()
         mock_post.return_value = mock_response
 
         params = CreateScriptedRestApiParams(
@@ -60,7 +59,7 @@ class TestScriptedRestTools(unittest.TestCase):
             short_description="REST API for NowLLM chat integration",
             is_active=True,
         )
-        result = create_scripted_rest_api(self.server_config, self.auth_manager, params)
+        result = await create_scripted_rest_api(self.server_config, self.auth_manager, params)
 
         self.assertTrue(result.success)
         self.assertEqual("abc123", result.sys_id)
@@ -71,27 +70,27 @@ class TestScriptedRestTools(unittest.TestCase):
         self.assertEqual(
             f"{self.server_config.instance_url}/api/now/table/sys_ws_definition", args[0]
         )
-        self.assertEqual(self.auth_manager.get_headers(), kwargs["headers"])
+        self.assertEqual(self.headers, kwargs["headers"])
         self.assertEqual("NowLLM Chat API", kwargs["json"]["name"])
         self.assertEqual("nowllm_chat", kwargs["json"]["service_id"])
         self.assertEqual("true", kwargs["json"]["is_active"])
-        self.assertEqual("REST API for NowLLM chat integration", kwargs["json"]["short_description"])
+        self.assertEqual(
+            "REST API for NowLLM chat integration", kwargs["json"]["short_description"]
+        )
 
-    @patch("servicenow_mcp.tools.scripted_rest_tools.requests.post")
-    def test_create_scripted_rest_api_minimal(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_scripted_rest_api_minimal(self, mock_post):
         """Test creating a Scripted REST API service with only required fields."""
         mock_response = MagicMock()
         mock_response.json.return_value = {
-            "result": {
-                "sys_id": "abc123",
-                "name": "My API",
-            }
+            "result": {"sys_id": "abc123", "name": "My API"}
         }
         mock_response.status_code = 201
+        mock_response.raise_for_status = MagicMock()
         mock_post.return_value = mock_response
 
         params = CreateScriptedRestApiParams(name="My API")
-        result = create_scripted_rest_api(self.server_config, self.auth_manager, params)
+        result = await create_scripted_rest_api(self.server_config, self.auth_manager, params)
 
         self.assertTrue(result.success)
         self.assertEqual("abc123", result.sys_id)
@@ -101,43 +100,42 @@ class TestScriptedRestTools(unittest.TestCase):
         self.assertNotIn("short_description", kwargs["json"])
         self.assertEqual("true", kwargs["json"]["is_active"])
 
-    @patch("servicenow_mcp.tools.scripted_rest_tools.requests.post")
-    def test_create_scripted_rest_api_no_result(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_scripted_rest_api_no_result(self, mock_post):
         """Test creating a Scripted REST API service when response has no result."""
         mock_response = MagicMock()
         mock_response.json.return_value = {}
         mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
         mock_post.return_value = mock_response
 
         params = CreateScriptedRestApiParams(name="My API")
-        result = create_scripted_rest_api(self.server_config, self.auth_manager, params)
+        result = await create_scripted_rest_api(self.server_config, self.auth_manager, params)
 
         self.assertFalse(result.success)
         self.assertIn("Failed to create", result.message)
 
-    @patch("servicenow_mcp.tools.scripted_rest_tools.requests.post")
-    def test_create_scripted_rest_api_error(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_scripted_rest_api_error(self, mock_post):
         """Test creating a Scripted REST API service with an error."""
-        mock_post.side_effect = requests.RequestException("Connection error")
+        mock_post.side_effect = httpx.ConnectError("Connection error")
 
         params = CreateScriptedRestApiParams(name="My API")
-        result = create_scripted_rest_api(self.server_config, self.auth_manager, params)
+        result = await create_scripted_rest_api(self.server_config, self.auth_manager, params)
 
         self.assertFalse(result.success)
         self.assertIn("Error creating Scripted REST API service", result.message)
         self.assertIn("Connection error", result.message)
 
-    @patch("servicenow_mcp.tools.scripted_rest_tools.requests.post")
-    def test_create_scripted_rest_resource(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_scripted_rest_resource(self, mock_post):
         """Test creating a Scripted REST API resource."""
         mock_response = MagicMock()
         mock_response.json.return_value = {
-            "result": {
-                "sys_id": "def456",
-                "name": "Generate",
-            }
+            "result": {"sys_id": "def456", "name": "Generate"}
         }
         mock_response.status_code = 201
+        mock_response.raise_for_status = MagicMock()
         mock_post.return_value = mock_response
 
         params = CreateScriptedRestResourceParams(
@@ -149,7 +147,7 @@ class TestScriptedRestTools(unittest.TestCase):
             short_description="Generate chat response",
             active=True,
         )
-        result = create_scripted_rest_resource(self.server_config, self.auth_manager, params)
+        result = await create_scripted_rest_resource(self.server_config, self.auth_manager, params)
 
         self.assertTrue(result.success)
         self.assertEqual("def456", result.sys_id)
@@ -160,7 +158,7 @@ class TestScriptedRestTools(unittest.TestCase):
         self.assertEqual(
             f"{self.server_config.instance_url}/api/now/table/sys_ws_operation", args[0]
         )
-        self.assertEqual(self.auth_manager.get_headers(), kwargs["headers"])
+        self.assertEqual(self.headers, kwargs["headers"])
         self.assertEqual("abc123", kwargs["json"]["web_service_definition"])
         self.assertEqual("Generate", kwargs["json"]["name"])
         self.assertEqual("POST", kwargs["json"]["http_method"])
@@ -168,17 +166,15 @@ class TestScriptedRestTools(unittest.TestCase):
         self.assertEqual("true", kwargs["json"]["active"])
         self.assertEqual("Generate chat response", kwargs["json"]["short_description"])
 
-    @patch("servicenow_mcp.tools.scripted_rest_tools.requests.post")
-    def test_create_scripted_rest_resource_minimal(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_scripted_rest_resource_minimal(self, mock_post):
         """Test creating a Scripted REST API resource with only required fields."""
         mock_response = MagicMock()
         mock_response.json.return_value = {
-            "result": {
-                "sys_id": "def456",
-                "name": "Get Items",
-            }
+            "result": {"sys_id": "def456", "name": "Get Items"}
         }
         mock_response.status_code = 201
+        mock_response.raise_for_status = MagicMock()
         mock_post.return_value = mock_response
 
         params = CreateScriptedRestResourceParams(
@@ -188,7 +184,7 @@ class TestScriptedRestTools(unittest.TestCase):
             relative_path="/items",
             operation_script="(function process(request, response) { })(request, response);",
         )
-        result = create_scripted_rest_resource(self.server_config, self.auth_manager, params)
+        result = await create_scripted_rest_resource(self.server_config, self.auth_manager, params)
 
         self.assertTrue(result.success)
 
@@ -197,12 +193,13 @@ class TestScriptedRestTools(unittest.TestCase):
         self.assertNotIn("short_description", kwargs["json"])
         self.assertEqual("true", kwargs["json"]["active"])
 
-    @patch("servicenow_mcp.tools.scripted_rest_tools.requests.post")
-    def test_create_scripted_rest_resource_no_result(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_scripted_rest_resource_no_result(self, mock_post):
         """Test creating a Scripted REST API resource when response has no result."""
         mock_response = MagicMock()
         mock_response.json.return_value = {}
         mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
         mock_post.return_value = mock_response
 
         params = CreateScriptedRestResourceParams(
@@ -212,15 +209,15 @@ class TestScriptedRestTools(unittest.TestCase):
             relative_path="/generate",
             operation_script="(function process(request, response) { })(request, response);",
         )
-        result = create_scripted_rest_resource(self.server_config, self.auth_manager, params)
+        result = await create_scripted_rest_resource(self.server_config, self.auth_manager, params)
 
         self.assertFalse(result.success)
         self.assertIn("Failed to create", result.message)
 
-    @patch("servicenow_mcp.tools.scripted_rest_tools.requests.post")
-    def test_create_scripted_rest_resource_error(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_scripted_rest_resource_error(self, mock_post):
         """Test creating a Scripted REST API resource with an error."""
-        mock_post.side_effect = requests.RequestException("Timeout")
+        mock_post.side_effect = httpx.ReadTimeout("Timeout")
 
         params = CreateScriptedRestResourceParams(
             web_service_definition="abc123",
@@ -229,7 +226,7 @@ class TestScriptedRestTools(unittest.TestCase):
             relative_path="/generate",
             operation_script="(function process(request, response) { })(request, response);",
         )
-        result = create_scripted_rest_resource(self.server_config, self.auth_manager, params)
+        result = await create_scripted_rest_resource(self.server_config, self.auth_manager, params)
 
         self.assertFalse(result.success)
         self.assertIn("Error creating Scripted REST API resource", result.message)
@@ -237,7 +234,7 @@ class TestScriptedRestTools(unittest.TestCase):
 
 
 class TestScriptedRestParams(unittest.TestCase):
-    """Tests for the scripted REST API parameters."""
+    """Tests for the scripted REST API parameters (no I/O — sync)."""
 
     def test_create_scripted_rest_api_params(self):
         """Test CreateScriptedRestApiParams model."""

@@ -8,10 +8,10 @@ in ServiceNow.
 import logging
 from typing import Optional
 
-import requests
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -67,7 +67,7 @@ class ScriptedRestResponse(BaseModel):
     name: Optional[str] = Field(None, description="Name of the created record")
 
 
-def create_scripted_rest_api(
+async def create_scripted_rest_api(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateScriptedRestApiParams,
@@ -95,10 +95,11 @@ def create_scripted_rest_api(
     if params.short_description:
         body["short_description"] = params.short_description
 
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
 
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             url,
             json=body,
             headers=headers,
@@ -131,7 +132,7 @@ def create_scripted_rest_api(
         )
 
 
-def create_scripted_rest_resource(
+async def create_scripted_rest_resource(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateScriptedRestResourceParams,
@@ -160,10 +161,11 @@ def create_scripted_rest_resource(
     if params.short_description:
         body["short_description"] = params.short_description
 
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
 
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             url,
             json=body,
             headers=headers,

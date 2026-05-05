@@ -10,10 +10,11 @@ import logging
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
-import requests
+import httpx
 from pydantic import BaseModel, Field, field_validator
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 from servicenow_mcp.utils.helpers import _format_http_error
 
@@ -71,7 +72,7 @@ class BulkOperationsParams(BaseModel):
     )
 
 
-def execute_bulk_operations(
+async def execute_bulk_operations(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: BulkOperationsParams,
@@ -111,14 +112,15 @@ def execute_bulk_operations(
     batch_url = f"{config.api_url}/v1/batch"
 
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             batch_url,
             json=batch_payload,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error("Batch request failed: %s", e)
         return {
             "success": False,

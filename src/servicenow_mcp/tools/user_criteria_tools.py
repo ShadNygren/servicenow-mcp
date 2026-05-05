@@ -10,10 +10,11 @@ location) or a custom script.
 import logging
 from typing import Any, Dict, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -95,7 +96,7 @@ class UserCriteriaResponse(BaseModel):
     )
 
 
-def create_user_criteria(
+async def create_user_criteria(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateUserCriteriaParams,
@@ -145,10 +146,11 @@ def create_user_criteria(
             data[field] = value
 
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -162,7 +164,7 @@ def create_user_criteria(
             details=result,
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create user criteria: {e}")
         return UserCriteriaResponse(
             success=False,

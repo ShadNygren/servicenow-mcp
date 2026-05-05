@@ -660,3 +660,28 @@ def _get_headers(auth_manager: Any, server_config: Any) -> Optional[Dict[str, st
         return cast(Optional[Dict[str, str]], server_config.get_headers())
     logger.error("Cannot find get_headers method in either auth_manager or server_config")
     return None
+
+
+async def _get_headers_async(
+    auth_manager: Any, server_config: Any
+) -> Optional[Dict[str, str]]:
+    """Async version of :func:`_get_headers`.
+
+    Tries ``auth_manager.get_headers_async()`` first (the async OAuth path), then
+    falls back to ``server_config.get_headers_async()``.  Older callers that
+    pass an object with only the sync ``get_headers()`` method still work — we
+    transparently invoke that as a last resort, matching the swap-tolerant
+    behaviour of the sync helper.
+    """
+    if hasattr(auth_manager, "get_headers_async"):
+        return cast(Optional[Dict[str, str]], await auth_manager.get_headers_async())
+    if hasattr(server_config, "get_headers_async"):
+        return cast(Optional[Dict[str, str]], await server_config.get_headers_async())
+    if hasattr(auth_manager, "get_headers"):
+        return cast(Optional[Dict[str, str]], auth_manager.get_headers())
+    if hasattr(server_config, "get_headers"):
+        return cast(Optional[Dict[str, str]], server_config.get_headers())
+    logger.error(
+        "Cannot find get_headers_async/get_headers method in either auth_manager or server_config"
+    )
+    return None
