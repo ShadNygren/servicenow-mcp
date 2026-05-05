@@ -2,10 +2,10 @@
 Tests for the User Criteria tools.
 """
 
-import unittest
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import requests
+import httpx
 
 from servicenow_mcp.tools.user_criteria_tools import (
     CreateUserCriteriaParams,
@@ -15,7 +15,20 @@ from servicenow_mcp.tools.user_criteria_tools import (
 from servicenow_mcp.utils.config import AuthConfig, AuthType, BasicAuthConfig, ServerConfig
 
 
-class TestCreateUserCriteria(unittest.TestCase):
+def _make_response(json_body=None, status_code=200, raise_exc=None):
+    """Build a MagicMock that mimics an httpx.Response."""
+    mock = MagicMock()
+    mock.status_code = status_code
+    mock.headers = {}
+    if raise_exc is not None:
+        mock.raise_for_status = MagicMock(side_effect=raise_exc)
+    else:
+        mock.raise_for_status = MagicMock()
+    mock.json = MagicMock(return_value=json_body or {})
+    return mock
+
+
+class TestCreateUserCriteria(IsolatedAsyncioTestCase):
     """Tests for the create_user_criteria function."""
 
     def setUp(self):
@@ -28,32 +41,34 @@ class TestCreateUserCriteria(unittest.TestCase):
             ),
         )
         self.auth_manager = MagicMock()
-        self.auth_manager.get_headers.return_value = {
-            "Content-Type": "application/json",
-            "Authorization": "Basic dGVzdF91c2VyOnRlc3RfcGFzc3dvcmQ=",
-        }
+        # Phase 9.2: tools now call get_headers_async, not get_headers.
+        self.auth_manager.get_headers_async = AsyncMock(
+            return_value={
+                "Content-Type": "application/json",
+                "Authorization": "Basic dGVzdF91c2VyOnRlc3RfcGFzc3dvcmQ=",
+            }
+        )
 
     # ------------------------------------------------------------------
     # Success paths
     # ------------------------------------------------------------------
 
-    @patch("requests.post")
-    def test_create_minimal(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_minimal(self, mock_post):
         """Create a user criteria with only the required name field."""
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {
-            "result": {
-                "sys_id": "uc_001",
-                "name": "IT Staff Only",
-                "active": "true",
-                "match_all": "false",
+        mock_post.return_value = _make_response(
+            json_body={
+                "result": {
+                    "sys_id": "uc_001",
+                    "name": "IT Staff Only",
+                    "active": "true",
+                    "match_all": "false",
+                }
             }
-        }
-        mock_post.return_value = mock_response
+        )
 
         params = CreateUserCriteriaParams(name="IT Staff Only")
-        result = create_user_criteria(self.config, self.auth_manager, params)
+        result = await create_user_criteria(self.config, self.auth_manager, params)
 
         self.assertTrue(result.success)
         self.assertEqual(result.criteria_id, "uc_001")
@@ -64,25 +79,18 @@ class TestCreateUserCriteria(unittest.TestCase):
         self.assertEqual(sent["name"], "IT Staff Only")
         self.assertEqual(sent["active"], "true")
         self.assertEqual(sent["match_all"], "false")
-        # No optional fields sent
         for field in ("role", "user", "group", "department", "company", "location", "script"):
             self.assertNotIn(field, sent)
 
-    @patch("requests.post")
-    def test_create_with_role(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_with_role(self, mock_post):
         """Create a user criteria scoped to a specific role."""
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {
-            "result": {"sys_id": "uc_002", "name": "ITIL Users"}
-        }
-        mock_post.return_value = mock_response
-
-        params = CreateUserCriteriaParams(
-            name="ITIL Users",
-            role="role_sys_id_itil",
+        mock_post.return_value = _make_response(
+            json_body={"result": {"sys_id": "uc_002", "name": "ITIL Users"}}
         )
-        result = create_user_criteria(self.config, self.auth_manager, params)
+
+        params = CreateUserCriteriaParams(name="ITIL Users", role="role_sys_id_itil")
+        result = await create_user_criteria(self.config, self.auth_manager, params)
 
         self.assertTrue(result.success)
         self.assertEqual(result.criteria_id, "uc_002")
@@ -90,35 +98,26 @@ class TestCreateUserCriteria(unittest.TestCase):
         sent = mock_post.call_args.kwargs["json"]
         self.assertEqual(sent["role"], "role_sys_id_itil")
 
-    @patch("requests.post")
-    def test_create_with_group(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_with_group(self, mock_post):
         """Create a user criteria scoped to a user group."""
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {
-            "result": {"sys_id": "uc_003", "name": "Help Desk Group"}
-        }
-        mock_post.return_value = mock_response
-
-        params = CreateUserCriteriaParams(
-            name="Help Desk Group",
-            group="group_sys_id_helpdesk",
+        mock_post.return_value = _make_response(
+            json_body={"result": {"sys_id": "uc_003", "name": "Help Desk Group"}}
         )
-        result = create_user_criteria(self.config, self.auth_manager, params)
+
+        params = CreateUserCriteriaParams(name="Help Desk Group", group="group_sys_id_helpdesk")
+        result = await create_user_criteria(self.config, self.auth_manager, params)
 
         self.assertTrue(result.success)
         sent = mock_post.call_args.kwargs["json"]
         self.assertEqual(sent["group"], "group_sys_id_helpdesk")
 
-    @patch("requests.post")
-    def test_create_with_all_optional_fields(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_with_all_optional_fields(self, mock_post):
         """Create a user criteria with all optional fields populated."""
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {
-            "result": {"sys_id": "uc_004", "name": "Complex Criteria"}
-        }
-        mock_post.return_value = mock_response
+        mock_post.return_value = _make_response(
+            json_body={"result": {"sys_id": "uc_004", "name": "Complex Criteria"}}
+        )
 
         params = CreateUserCriteriaParams(
             name="Complex Criteria",
@@ -131,7 +130,7 @@ class TestCreateUserCriteria(unittest.TestCase):
             company="company_id",
             location="location_id",
         )
-        result = create_user_criteria(self.config, self.auth_manager, params)
+        result = await create_user_criteria(self.config, self.auth_manager, params)
 
         self.assertTrue(result.success)
         sent = mock_post.call_args.kwargs["json"]
@@ -143,46 +142,39 @@ class TestCreateUserCriteria(unittest.TestCase):
         self.assertEqual(sent["company"], "company_id")
         self.assertEqual(sent["location"], "location_id")
 
-    @patch("requests.post")
-    def test_create_with_script(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_with_script(self, mock_post):
         """Create a user criteria that uses an advanced script."""
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {
-            "result": {"sys_id": "uc_005", "name": "Scripted Criteria"}
-        }
-        mock_post.return_value = mock_response
+        mock_post.return_value = _make_response(
+            json_body={"result": {"sys_id": "uc_005", "name": "Scripted Criteria"}}
+        )
 
         script = "return gs.getUser().getRecord().getValue('vip') == 'true';"
-        params = CreateUserCriteriaParams(
-            name="Scripted Criteria",
-            script=script,
-        )
-        result = create_user_criteria(self.config, self.auth_manager, params)
+        params = CreateUserCriteriaParams(name="Scripted Criteria", script=script)
+        result = await create_user_criteria(self.config, self.auth_manager, params)
 
         self.assertTrue(result.success)
         sent = mock_post.call_args.kwargs["json"]
         self.assertEqual(sent["script"], script)
 
-    @patch("requests.post")
-    def test_create_inactive(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_inactive(self, mock_post):
         """Create a user criteria that starts inactive."""
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {
-            "result": {"sys_id": "uc_006", "name": "Draft Criteria", "active": "false"}
-        }
-        mock_post.return_value = mock_response
+        mock_post.return_value = _make_response(
+            json_body={
+                "result": {"sys_id": "uc_006", "name": "Draft Criteria", "active": "false"}
+            }
+        )
 
         params = CreateUserCriteriaParams(name="Draft Criteria", active=False)
-        result = create_user_criteria(self.config, self.auth_manager, params)
+        result = await create_user_criteria(self.config, self.auth_manager, params)
 
         self.assertTrue(result.success)
         sent = mock_post.call_args.kwargs["json"]
         self.assertEqual(sent["active"], "false")
 
-    @patch("requests.post")
-    def test_response_contains_details(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_response_contains_details(self, mock_post):
         """Verify the full result payload is available in response.details."""
         payload = {
             "sys_id": "uc_007",
@@ -190,28 +182,22 @@ class TestCreateUserCriteria(unittest.TestCase):
             "active": "true",
             "match_all": "false",
         }
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {"result": payload}
-        mock_post.return_value = mock_response
+        mock_post.return_value = _make_response(json_body={"result": payload})
 
         params = CreateUserCriteriaParams(name="My Criteria")
-        result = create_user_criteria(self.config, self.auth_manager, params)
+        result = await create_user_criteria(self.config, self.auth_manager, params)
 
         self.assertIsNotNone(result.details)
         self.assertEqual(result.details["sys_id"], "uc_007")
         self.assertEqual(result.details["name"], "My Criteria")
 
-    @patch("requests.post")
-    def test_api_url_correct(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_api_url_correct(self, mock_post):
         """Verify the correct ServiceNow table endpoint is called."""
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {"result": {"sys_id": "uc_008"}}
-        mock_post.return_value = mock_response
+        mock_post.return_value = _make_response(json_body={"result": {"sys_id": "uc_008"}})
 
         params = CreateUserCriteriaParams(name="URL Check")
-        create_user_criteria(self.config, self.auth_manager, params)
+        await create_user_criteria(self.config, self.auth_manager, params)
 
         call_url = mock_post.call_args.args[0]
         self.assertEqual(
@@ -222,47 +208,50 @@ class TestCreateUserCriteria(unittest.TestCase):
     # Failure paths
     # ------------------------------------------------------------------
 
-    @patch("requests.post")
-    def test_http_error_returns_failure(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_http_error_returns_failure(self, mock_post):
         """HTTP 4xx/5xx should return a failed response, not raise."""
-        mock_response = MagicMock()
-        mock_response.raise_for_status.side_effect = requests.HTTPError(
-            "403 Forbidden"
+        mock_post.return_value = _make_response(
+            status_code=403,
+            raise_exc=httpx.HTTPStatusError(
+                "403 Forbidden",
+                request=httpx.Request("POST", "https://test.service-now.com/x"),
+                response=httpx.Response(403),
+            ),
         )
-        mock_post.return_value = mock_response
 
         params = CreateUserCriteriaParams(name="Forbidden Criteria")
-        result = create_user_criteria(self.config, self.auth_manager, params)
+        result = await create_user_criteria(self.config, self.auth_manager, params)
 
         self.assertFalse(result.success)
         self.assertIn("Failed to create user criteria", result.message)
         self.assertIsNone(result.criteria_id)
 
-    @patch("requests.post")
-    def test_connection_error_returns_failure(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_connection_error_returns_failure(self, mock_post):
         """Network-level errors should return a failed response."""
-        mock_post.side_effect = requests.ConnectionError("Connection refused")
+        mock_post.side_effect = httpx.ConnectError("Connection refused")
 
         params = CreateUserCriteriaParams(name="Network Error Criteria")
-        result = create_user_criteria(self.config, self.auth_manager, params)
+        result = await create_user_criteria(self.config, self.auth_manager, params)
 
         self.assertFalse(result.success)
         self.assertIn("Failed to create user criteria", result.message)
         self.assertIsNone(result.criteria_id)
 
-    @patch("requests.post")
-    def test_timeout_error_returns_failure(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_timeout_error_returns_failure(self, mock_post):
         """Timeout errors should return a failed response."""
-        mock_post.side_effect = requests.Timeout("Request timed out")
+        mock_post.side_effect = httpx.ReadTimeout("Request timed out")
 
         params = CreateUserCriteriaParams(name="Timeout Criteria")
-        result = create_user_criteria(self.config, self.auth_manager, params)
+        result = await create_user_criteria(self.config, self.auth_manager, params)
 
         self.assertFalse(result.success)
         self.assertIn("Failed to create user criteria", result.message)
 
     # ------------------------------------------------------------------
-    # Pydantic model validation
+    # Pydantic model validation (no I/O — unchanged from sync version)
     # ------------------------------------------------------------------
 
     def test_params_defaults(self):
@@ -299,7 +288,3 @@ class TestCreateUserCriteria(unittest.TestCase):
         self.assertFalse(resp.success)
         self.assertIsNone(resp.criteria_id)
         self.assertIsNone(resp.details)
-
-
-if __name__ == "__main__":
-    unittest.main()
