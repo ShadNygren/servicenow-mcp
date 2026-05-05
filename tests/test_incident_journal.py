@@ -4,9 +4,9 @@ Closes echelon Issue #52
 (https://github.com/echelon-ai-labs/servicenow-mcp/issues/52).
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import requests
+import httpx
 
 from servicenow_mcp.tools.incident_tools import (
     GetIncidentJournalParams,
@@ -32,7 +32,7 @@ def _config():
 
 def _auth_manager():
     am = MagicMock()
-    am.get_headers.return_value = {"Authorization": "Basic xxx"}
+    am.get_headers_async = AsyncMock(return_value={"Authorization": "Basic xxx"})
     return am
 
 
@@ -43,7 +43,7 @@ def _mock_response(status_code: int = 200, result=None):
     return response
 
 
-def test_returns_journal_entries_in_order():
+async def test_returns_journal_entries_in_order():
     """Happy path: lookup → journal query → ordered entries returned."""
     lookup_resp = _mock_response(200, [{"sys_id": "abc123", "number": "INC0010001"}])
     journal_resp = _mock_response(
@@ -66,11 +66,9 @@ def test_returns_journal_entries_in_order():
         ],
     )
 
-    with patch(
-        "servicenow_mcp.tools.incident_tools.requests.get",
-        side_effect=[lookup_resp, journal_resp],
+    with patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock, side_effect=[lookup_resp, journal_resp],
     ) as mock_get:
-        result = get_incident_journal(
+        result = await get_incident_journal(
             _config(),
             _auth_manager(),
             GetIncidentJournalParams(incident_number="INC0010001"),
@@ -95,16 +93,14 @@ def test_returns_journal_entries_in_order():
     assert "ORDERBYsys_created_on" in query
 
 
-def test_returns_only_requested_fields():
+async def test_returns_only_requested_fields():
     """When fields=['work_notes'], only that field is queried."""
     lookup_resp = _mock_response(200, [{"sys_id": "abc123"}])
     journal_resp = _mock_response(200, [])
 
-    with patch(
-        "servicenow_mcp.tools.incident_tools.requests.get",
-        side_effect=[lookup_resp, journal_resp],
+    with patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock, side_effect=[lookup_resp, journal_resp],
     ) as mock_get:
-        result = get_incident_journal(
+        result = await get_incident_journal(
             _config(),
             _auth_manager(),
             GetIncidentJournalParams(incident_number="INC0010001", fields=["work_notes"]),
@@ -118,10 +114,10 @@ def test_returns_only_requested_fields():
     assert "element=comments" not in query
 
 
-def test_incident_not_found():
+async def test_incident_not_found():
     lookup_resp = _mock_response(200, [])
-    with patch("servicenow_mcp.tools.incident_tools.requests.get", return_value=lookup_resp):
-        result = get_incident_journal(
+    with patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock, return_value=lookup_resp):
+        result = await get_incident_journal(
             _config(),
             _auth_manager(),
             GetIncidentJournalParams(incident_number="INC9999999"),
@@ -130,10 +126,10 @@ def test_incident_not_found():
     assert "not found" in result["message"]
 
 
-def test_lookup_returns_non_200():
+async def test_lookup_returns_non_200():
     lookup_resp = _mock_response(401, [])
-    with patch("servicenow_mcp.tools.incident_tools.requests.get", return_value=lookup_resp):
-        result = get_incident_journal(
+    with patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock, return_value=lookup_resp):
+        result = await get_incident_journal(
             _config(),
             _auth_manager(),
             GetIncidentJournalParams(incident_number="INC0010001"),
@@ -142,12 +138,10 @@ def test_lookup_returns_non_200():
     assert "401" in result["message"]
 
 
-def test_lookup_network_error():
-    with patch(
-        "servicenow_mcp.tools.incident_tools.requests.get",
-        side_effect=requests.RequestException("connection refused"),
+async def test_lookup_network_error():
+    with patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock, side_effect=httpx.HTTPError("connection refused"),
     ):
-        result = get_incident_journal(
+        result = await get_incident_journal(
             _config(),
             _auth_manager(),
             GetIncidentJournalParams(incident_number="INC0010001"),
@@ -156,14 +150,12 @@ def test_lookup_network_error():
     assert "look up" in result["message"]
 
 
-def test_journal_query_returns_non_200():
+async def test_journal_query_returns_non_200():
     lookup_resp = _mock_response(200, [{"sys_id": "abc"}])
     journal_resp = _mock_response(500, [])
-    with patch(
-        "servicenow_mcp.tools.incident_tools.requests.get",
-        side_effect=[lookup_resp, journal_resp],
+    with patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock, side_effect=[lookup_resp, journal_resp],
     ):
-        result = get_incident_journal(
+        result = await get_incident_journal(
             _config(),
             _auth_manager(),
             GetIncidentJournalParams(incident_number="INC0010001"),
@@ -172,14 +164,12 @@ def test_journal_query_returns_non_200():
     assert "500" in result["message"]
 
 
-def test_limit_parameter_passed_through():
+async def test_limit_parameter_passed_through():
     lookup_resp = _mock_response(200, [{"sys_id": "abc"}])
     journal_resp = _mock_response(200, [])
-    with patch(
-        "servicenow_mcp.tools.incident_tools.requests.get",
-        side_effect=[lookup_resp, journal_resp],
+    with patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock, side_effect=[lookup_resp, journal_resp],
     ) as mock_get:
-        get_incident_journal(
+        await get_incident_journal(
             _config(),
             _auth_manager(),
             GetIncidentJournalParams(incident_number="INC0010001", limit=25),

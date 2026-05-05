@@ -3,9 +3,10 @@ Tests for the ServiceNow MCP catalog tools.
 """
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import requests
+import httpx
 
 from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.tools.catalog_tools import (
@@ -26,7 +27,7 @@ from servicenow_mcp.tools.catalog_tools import (
 from servicenow_mcp.utils.config import AuthConfig, AuthType, BasicAuthConfig, ServerConfig
 
 
-class TestCatalogTools(unittest.TestCase):
+class TestCatalogTools(IsolatedAsyncioTestCase):
     """Test cases for the catalog tools."""
 
     def setUp(self):
@@ -42,10 +43,10 @@ class TestCatalogTools(unittest.TestCase):
 
         # Create a mock auth manager
         self.auth_manager = MagicMock(spec=AuthManager)
-        self.auth_manager.get_headers.return_value = {"Authorization": "Basic YWRtaW46cGFzc3dvcmQ="}
+        self.auth_manager.get_headers_async = AsyncMock(return_value={"Authorization": "Basic YWRtaW46cGFzc3dvcmQ="})
 
-    @patch("servicenow_mcp.tools.catalog_tools.requests.get")
-    def test_list_catalog_items(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_catalog_items(self, mock_get):
         """Test listing catalog items."""
         # Mock the response from ServiceNow
         mock_response = MagicMock()
@@ -74,7 +75,7 @@ class TestCatalogTools(unittest.TestCase):
             query="laptop",
             active=True,
         )
-        result = list_catalog_items(self.config, self.auth_manager, params)
+        result = await list_catalog_items(self.config, self.auth_manager, params)
 
         # Check the result
         self.assertTrue(result["success"])
@@ -102,18 +103,18 @@ class TestCatalogTools(unittest.TestCase):
         self.assertIn("active=true^category=Hardware^nameLIKElaptop", sysparm)
         self.assertIn("^OR", sysparm)
 
-    @patch("servicenow_mcp.tools.catalog_tools.requests.get")
-    def test_list_catalog_items_error(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_catalog_items_error(self, mock_get):
         """Test listing catalog items with an error."""
         # Mock the response from ServiceNow
-        mock_get.side_effect = requests.exceptions.RequestException("Error")
+        mock_get.side_effect = httpx.HTTPError("Error")
 
         # Call the function
         params = ListCatalogItemsParams(
             limit=10,
             offset=0,
         )
-        result = list_catalog_items(self.config, self.auth_manager, params)
+        result = await list_catalog_items(self.config, self.auth_manager, params)
 
         # Check the result
         self.assertFalse(result["success"])
@@ -121,8 +122,8 @@ class TestCatalogTools(unittest.TestCase):
         self.assertIn("Error", result["message"])
 
     @patch("servicenow_mcp.tools.catalog_tools.get_catalog_item_variables")
-    @patch("servicenow_mcp.tools.catalog_tools.requests.get")
-    def test_get_catalog_item(self, mock_get, mock_get_variables):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_catalog_item(self, mock_get, mock_get_variables):
         """Test getting a specific catalog item."""
         # Mock the response from ServiceNow
         mock_response = MagicMock()
@@ -160,7 +161,7 @@ class TestCatalogTools(unittest.TestCase):
 
         # Call the function
         params = GetCatalogItemParams(item_id="item1")
-        result = get_catalog_item(self.config, self.auth_manager, params)
+        result = await get_catalog_item(self.config, self.auth_manager, params)
 
         # Check the result
         self.assertTrue(result.success)
@@ -174,8 +175,8 @@ class TestCatalogTools(unittest.TestCase):
         args, kwargs = mock_get.call_args
         self.assertEqual(args[0], "https://example.service-now.com/api/now/table/sc_cat_item/item1")
 
-    @patch("servicenow_mcp.tools.catalog_tools.requests.get")
-    def test_get_catalog_item_not_found(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_catalog_item_not_found(self, mock_get):
         """Test getting a catalog item that doesn't exist."""
         # Mock the response from ServiceNow
         mock_response = MagicMock()
@@ -185,30 +186,30 @@ class TestCatalogTools(unittest.TestCase):
 
         # Call the function
         params = GetCatalogItemParams(item_id="nonexistent")
-        result = get_catalog_item(self.config, self.auth_manager, params)
+        result = await get_catalog_item(self.config, self.auth_manager, params)
 
         # Check the result
         self.assertFalse(result.success)
         self.assertIn("not found", result.message)
         self.assertIsNone(result.data)
 
-    @patch("servicenow_mcp.tools.catalog_tools.requests.get")
-    def test_get_catalog_item_error(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_catalog_item_error(self, mock_get):
         """Test getting a catalog item with an error."""
         # Mock the response from ServiceNow
-        mock_get.side_effect = requests.exceptions.RequestException("Error")
+        mock_get.side_effect = httpx.HTTPError("Error")
 
         # Call the function
         params = GetCatalogItemParams(item_id="item1")
-        result = get_catalog_item(self.config, self.auth_manager, params)
+        result = await get_catalog_item(self.config, self.auth_manager, params)
 
         # Check the result
         self.assertFalse(result.success)
         self.assertIn("Error", result.message)
         self.assertIsNone(result.data)
 
-    @patch("servicenow_mcp.tools.catalog_tools.requests.get")
-    def test_get_catalog_item_variables(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_catalog_item_variables(self, mock_get):
         """Test getting variables for a catalog item."""
         # Mock the response from ServiceNow
         mock_response = MagicMock()
@@ -230,7 +231,7 @@ class TestCatalogTools(unittest.TestCase):
         mock_get.return_value = mock_response
 
         # Call the function
-        result = get_catalog_item_variables(self.config, self.auth_manager, "item1")
+        result = await get_catalog_item_variables(self.config, self.auth_manager, "item1")
 
         # Check the result
         self.assertEqual(len(result), 1)
@@ -244,20 +245,20 @@ class TestCatalogTools(unittest.TestCase):
         self.assertEqual(args[0], "https://example.service-now.com/api/now/table/item_option_new")
         self.assertEqual(kwargs["params"]["sysparm_query"], "cat_item=item1^ORDERBYorder")
 
-    @patch("servicenow_mcp.tools.catalog_tools.requests.get")
-    def test_get_catalog_item_variables_error(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_catalog_item_variables_error(self, mock_get):
         """Test getting variables for a catalog item with an error."""
         # Mock the response from ServiceNow
-        mock_get.side_effect = requests.exceptions.RequestException("Error")
+        mock_get.side_effect = httpx.HTTPError("Error")
 
         # Call the function
-        result = get_catalog_item_variables(self.config, self.auth_manager, "item1")
+        result = await get_catalog_item_variables(self.config, self.auth_manager, "item1")
 
         # Check the result
         self.assertEqual(len(result), 0)
 
-    @patch("servicenow_mcp.tools.catalog_tools.requests.get")
-    def test_list_catalog_categories(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_catalog_categories(self, mock_get):
         """Test listing catalog categories."""
         # Mock the response from ServiceNow
         mock_response = MagicMock()
@@ -284,7 +285,7 @@ class TestCatalogTools(unittest.TestCase):
             query="hardware",
             active=True,
         )
-        result = list_catalog_categories(self.config, self.auth_manager, params)
+        result = await list_catalog_categories(self.config, self.auth_manager, params)
 
         # Check the result
         self.assertTrue(result["success"])
@@ -306,26 +307,26 @@ class TestCatalogTools(unittest.TestCase):
         self.assertIn("active=true^descriptionLIKEhardware", sysparm)
         self.assertIn("^OR", sysparm)
 
-    @patch("servicenow_mcp.tools.catalog_tools.requests.get")
-    def test_list_catalog_categories_error(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_catalog_categories_error(self, mock_get):
         """Test listing catalog categories with an error."""
         # Mock the response from ServiceNow
-        mock_get.side_effect = requests.exceptions.RequestException("Error")
+        mock_get.side_effect = httpx.HTTPError("Error")
 
         # Call the function
         params = ListCatalogCategoriesParams(
             limit=10,
             offset=0,
         )
-        result = list_catalog_categories(self.config, self.auth_manager, params)
+        result = await list_catalog_categories(self.config, self.auth_manager, params)
 
         # Check the result
         self.assertFalse(result["success"])
         self.assertEqual(len(result["categories"]), 0)
         self.assertIn("Error", result["message"])
 
-    @patch("requests.post")
-    def test_create_catalog_category(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_catalog_category(self, mock_post):
         """Test creating a catalog category."""
         # Mock response
         mock_response = MagicMock()
@@ -352,7 +353,7 @@ class TestCatalogTools(unittest.TestCase):
         )
 
         # Call function
-        result = create_catalog_category(self.config, self.auth_manager, params)
+        result = await create_catalog_category(self.config, self.auth_manager, params)
 
         # Verify result
         self.assertTrue(result.success)
@@ -366,8 +367,8 @@ class TestCatalogTools(unittest.TestCase):
         self.assertEqual(kwargs["json"]["title"], "Test Category")
         self.assertEqual(kwargs["json"]["description"], "Test Description")
 
-    @patch("requests.patch")
-    def test_update_catalog_category(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_catalog_category(self, mock_patch):
         """Test updating a catalog category."""
         # Mock response
         mock_response = MagicMock()
@@ -393,7 +394,7 @@ class TestCatalogTools(unittest.TestCase):
         )
 
         # Call function
-        result = update_catalog_category(self.config, self.auth_manager, params)
+        result = await update_catalog_category(self.config, self.auth_manager, params)
 
         # Verify result
         self.assertTrue(result.success)
@@ -409,8 +410,8 @@ class TestCatalogTools(unittest.TestCase):
         self.assertEqual(kwargs["json"]["description"], "Updated Description")
         self.assertEqual(kwargs["json"]["order"], "200")
 
-    @patch("requests.patch")
-    def test_move_catalog_items(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_move_catalog_items(self, mock_patch):
         """Test moving catalog items."""
         # Mock response
         mock_response = MagicMock()
@@ -424,7 +425,7 @@ class TestCatalogTools(unittest.TestCase):
         )
 
         # Call function
-        result = move_catalog_items(self.config, self.auth_manager, params)
+        result = await move_catalog_items(self.config, self.auth_manager, params)
 
         # Verify result
         self.assertTrue(result.success)

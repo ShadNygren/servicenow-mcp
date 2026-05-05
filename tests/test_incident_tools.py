@@ -1,23 +1,26 @@
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import httpx
 from servicenow_mcp.tools.incident_tools import get_incident_by_number, GetIncidentByNumberParams
 from servicenow_mcp.utils.config import ServerConfig, AuthConfig, AuthType, BasicAuthConfig
 from servicenow_mcp.auth.auth_manager import AuthManager
 
-class TestIncidentTools(unittest.TestCase):
+class TestIncidentTools(IsolatedAsyncioTestCase):
 
     def setUp(self):
         self.auth_config = AuthConfig(type=AuthType.BASIC, basic=BasicAuthConfig(username='test', password='test'))
 
-    @patch('requests.get')
-    def test_get_incident_by_number_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_incident_by_number_success(self, mock_get):
         # Mock the server configuration
         config = ServerConfig(instance_url="https://dev12345.service-now.com", auth=self.auth_config)
 
         # Mock the authentication manager
         auth_manager = MagicMock(spec=AuthManager)
-        auth_manager.get_headers.return_value = {"Authorization": "Bearer FAKE_TOKEN"}
+        auth_manager.get_headers_async = AsyncMock(return_value={"Authorization": "Bearer FAKE_TOKEN"})
 
         # Mock the requests.get call
         mock_response = MagicMock()
@@ -43,7 +46,7 @@ class TestIncidentTools(unittest.TestCase):
 
         # Call the function with test data
         params = GetIncidentByNumberParams(incident_number="INC0010001")
-        result = get_incident_by_number(config, auth_manager, params)
+        result = await get_incident_by_number(config, auth_manager, params)
 
         # Assert the results
         self.assertTrue(result["success"])
@@ -51,14 +54,14 @@ class TestIncidentTools(unittest.TestCase):
         self.assertIn("incident", result)
         self.assertEqual(result["incident"]["number"], "INC0010001")
 
-    @patch('requests.get')
-    def test_get_incident_by_number_not_found(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_incident_by_number_not_found(self, mock_get):
         # Mock the server configuration
         config = ServerConfig(instance_url="https://dev12345.service-now.com", auth=self.auth_config)
 
         # Mock the authentication manager
         auth_manager = MagicMock(spec=AuthManager)
-        auth_manager.get_headers.return_value = {"Authorization": "Bearer FAKE_TOKEN"}
+        auth_manager.get_headers_async = AsyncMock(return_value={"Authorization": "Bearer FAKE_TOKEN"})
 
         # Mock the requests.get call for a not found scenario
         mock_response = MagicMock()
@@ -68,7 +71,7 @@ class TestIncidentTools(unittest.TestCase):
 
         # Call the function with a non-existent incident number
         params = GetIncidentByNumberParams(incident_number="INC9999999")
-        result = get_incident_by_number(config, auth_manager, params)
+        result = await get_incident_by_number(config, auth_manager, params)
 
         # Assert the results
         self.assertFalse(result["success"])

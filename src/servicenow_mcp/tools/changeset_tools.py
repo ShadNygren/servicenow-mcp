@@ -7,12 +7,13 @@ This module provides tools for managing changesets in ServiceNow.
 import logging
 from typing import Any, Dict, Optional, Union
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
-from servicenow_mcp.utils.helpers import _get_headers, _get_instance_url, _unwrap_and_validate_params
+from servicenow_mcp.utils.helpers import _get_headers_async, _get_instance_url, _unwrap_and_validate_params
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,7 @@ class AddFileToChangesetParams(BaseModel):
     file_content: str = Field(..., description="Content of the file")
 
 
-def list_changesets(
+async def list_changesets(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Union[Dict[str, Any], ListChangesetsParams],
@@ -109,7 +110,7 @@ def list_changesets(
         }
     
     # Get the headers
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {
             "success": False,
@@ -152,7 +153,8 @@ def list_changesets(
     url = f"{instance_url}/api/now/table/sys_update_set"
     
     try:
-        response = requests.get(url, params=query_params, headers=headers)
+        client = await get_async_client()
+        response = await client.get(url, params=query_params, headers=headers)
         response.raise_for_status()
         
         result = response.json()
@@ -162,7 +164,7 @@ def list_changesets(
             "changesets": result.get("result", []),
             "count": len(result.get("result", [])),
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error listing changesets: {e}")
         return {
             "success": False,
@@ -170,7 +172,7 @@ def list_changesets(
         }
 
 
-def get_changeset_details(
+async def get_changeset_details(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Union[Dict[str, Any], GetChangesetDetailsParams],
@@ -207,7 +209,7 @@ def get_changeset_details(
         }
     
     # Get the headers
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {
             "success": False,
@@ -218,7 +220,8 @@ def get_changeset_details(
     url = f"{instance_url}/api/now/table/sys_update_set/{validated_params.changeset_id}"
     
     try:
-        response = requests.get(url, headers=headers)
+        client = await get_async_client()
+        response = await client.get(url, headers=headers)
         response.raise_for_status()
         
         result = response.json()
@@ -232,7 +235,8 @@ def get_changeset_details(
             "sysparm_query": f"update_set={validated_params.changeset_id}",
         }
         
-        changes_response = requests.get(changes_url, params=changes_params, headers=headers)
+        client = await get_async_client()
+        changes_response = await client.get(changes_url, params=changes_params, headers=headers)
         changes_response.raise_for_status()
         
         changes_result = changes_response.json()
@@ -244,7 +248,7 @@ def get_changeset_details(
             "changes": changes,
             "change_count": len(changes),
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error getting changeset details: {e}")
         return {
             "success": False,
@@ -252,7 +256,7 @@ def get_changeset_details(
         }
 
 
-def create_changeset(
+async def create_changeset(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Union[Dict[str, Any], CreateChangesetParams],
@@ -301,7 +305,7 @@ def create_changeset(
         }
     
     # Get the headers
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {
             "success": False,
@@ -315,7 +319,8 @@ def create_changeset(
     url = f"{instance_url}/api/now/table/sys_update_set"
     
     try:
-        response = requests.post(url, json=data, headers=headers)
+        client = await get_async_client()
+        response = await client.post(url, json=data, headers=headers)
         response.raise_for_status()
         
         result = response.json()
@@ -325,7 +330,7 @@ def create_changeset(
             "message": "Changeset created successfully",
             "changeset": result["result"],
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error creating changeset: {e}")
         return {
             "success": False,
@@ -333,7 +338,7 @@ def create_changeset(
         }
 
 
-def update_changeset(
+async def update_changeset(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Union[Dict[str, Any], UpdateChangesetParams],
@@ -390,7 +395,7 @@ def update_changeset(
         }
     
     # Get the headers
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {
             "success": False,
@@ -404,7 +409,8 @@ def update_changeset(
     url = f"{instance_url}/api/now/table/sys_update_set/{validated_params.changeset_id}"
     
     try:
-        response = requests.patch(url, json=data, headers=headers)
+        client = await get_async_client()
+        response = await client.patch(url, json=data, headers=headers)
         response.raise_for_status()
         
         result = response.json()
@@ -414,7 +420,7 @@ def update_changeset(
             "message": "Changeset updated successfully",
             "changeset": result["result"],
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error updating changeset: {e}")
         return {
             "success": False,
@@ -422,7 +428,7 @@ def update_changeset(
         }
 
 
-def commit_changeset(
+async def commit_changeset(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Union[Dict[str, Any], CommitChangesetParams],
@@ -468,7 +474,7 @@ def commit_changeset(
         }
     
     # Get the headers
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {
             "success": False,
@@ -482,7 +488,8 @@ def commit_changeset(
     url = f"{instance_url}/api/now/table/sys_update_set/{validated_params.changeset_id}"
     
     try:
-        response = requests.patch(url, json=data, headers=headers)
+        client = await get_async_client()
+        response = await client.patch(url, json=data, headers=headers)
         response.raise_for_status()
         
         result = response.json()
@@ -492,7 +499,7 @@ def commit_changeset(
             "message": "Changeset committed successfully",
             "changeset": result["result"],
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error committing changeset: {e}")
         return {
             "success": False,
@@ -500,7 +507,7 @@ def commit_changeset(
         }
 
 
-def publish_changeset(
+async def publish_changeset(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Union[Dict[str, Any], PublishChangesetParams],
@@ -537,7 +544,7 @@ def publish_changeset(
         }
     
     # Get the headers
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {
             "success": False,
@@ -560,7 +567,8 @@ def publish_changeset(
     url = f"{instance_url}/api/now/table/sys_update_set/{validated_params.changeset_id}"
     
     try:
-        response = requests.patch(url, json=data, headers=headers)
+        client = await get_async_client()
+        response = await client.patch(url, json=data, headers=headers)
         response.raise_for_status()
         
         result = response.json()
@@ -570,7 +578,7 @@ def publish_changeset(
             "message": "Changeset published successfully",
             "changeset": result["result"],
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error publishing changeset: {e}")
         return {
             "success": False,
@@ -578,7 +586,7 @@ def publish_changeset(
         }
 
 
-def add_file_to_changeset(
+async def add_file_to_changeset(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Union[Dict[str, Any], AddFileToChangesetParams],
@@ -615,7 +623,7 @@ def add_file_to_changeset(
         }
     
     # Get the headers
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {
             "success": False,
@@ -637,7 +645,8 @@ def add_file_to_changeset(
     url = f"{instance_url}/api/now/table/sys_update_xml"
     
     try:
-        response = requests.post(url, json=data, headers=headers)
+        client = await get_async_client()
+        response = await client.post(url, json=data, headers=headers)
         response.raise_for_status()
         
         result = response.json()
@@ -647,7 +656,7 @@ def add_file_to_changeset(
             "message": "File added to changeset successfully",
             "file": result["result"],
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error adding file to changeset: {e}")
         return {
             "success": False,

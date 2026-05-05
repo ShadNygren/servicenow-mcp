@@ -5,7 +5,10 @@ This module contains tests for the changeset tools in the ServiceNow MCP server.
 """
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import httpx
 
 from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.tools.changeset_tools import (
@@ -27,7 +30,7 @@ from servicenow_mcp.tools.changeset_tools import (
 from servicenow_mcp.utils.config import ServerConfig, AuthConfig, AuthType, BasicAuthConfig
 
 
-class TestChangesetTools(unittest.TestCase):
+class TestChangesetTools(IsolatedAsyncioTestCase):
     """Tests for the changeset tools."""
 
     def setUp(self):
@@ -44,10 +47,10 @@ class TestChangesetTools(unittest.TestCase):
             auth=auth_config,
         )
         self.auth_manager = MagicMock(spec=AuthManager)
-        self.auth_manager.get_headers.return_value = {"Authorization": "Bearer test"}
+        self.auth_manager.get_headers_async = AsyncMock(return_value={"Authorization": "Bearer test"})
 
-    @patch("servicenow_mcp.tools.changeset_tools.requests.get")
-    def test_list_changesets(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_changesets(self, mock_get):
         """Test listing changesets."""
         # Mock response
         mock_response = MagicMock()
@@ -73,7 +76,7 @@ class TestChangesetTools(unittest.TestCase):
             "application": "Test App",
             "developer": "test.user",
         }
-        result = list_changesets(self.auth_manager, self.server_config, params)
+        result = await list_changesets(self.auth_manager, self.server_config, params)
 
         # Verify the result
         self.assertTrue(result["success"])
@@ -93,8 +96,8 @@ class TestChangesetTools(unittest.TestCase):
         self.assertIn("application=Test App", kwargs["params"]["sysparm_query"])
         self.assertIn("developer=test.user", kwargs["params"]["sysparm_query"])
 
-    @patch("servicenow_mcp.tools.changeset_tools.requests.get")
-    def test_get_changeset_details(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_changeset_details(self, mock_get):
         """Test getting changeset details."""
         # Mock responses
         mock_changeset_response = MagicMock()
@@ -135,7 +138,7 @@ class TestChangesetTools(unittest.TestCase):
 
         # Call the function
         params = {"changeset_id": "123"}
-        result = get_changeset_details(self.auth_manager, self.server_config, params)
+        result = await get_changeset_details(self.auth_manager, self.server_config, params)
 
         # Verify the result
         self.assertTrue(result["success"])
@@ -160,8 +163,8 @@ class TestChangesetTools(unittest.TestCase):
         self.assertEqual(second_call_kwargs["headers"], {"Authorization": "Bearer test"})
         self.assertEqual(second_call_kwargs["params"]["sysparm_query"], "update_set=123")
 
-    @patch("servicenow_mcp.tools.changeset_tools.requests.post")
-    def test_create_changeset(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_changeset(self, mock_post):
         """Test creating a changeset."""
         # Mock response
         mock_response = MagicMock()
@@ -183,7 +186,7 @@ class TestChangesetTools(unittest.TestCase):
             "developer": "test.user",
             "description": "Test description",
         }
-        result = create_changeset(self.auth_manager, self.server_config, params)
+        result = await create_changeset(self.auth_manager, self.server_config, params)
 
         # Verify the result
         self.assertTrue(result["success"])
@@ -202,8 +205,8 @@ class TestChangesetTools(unittest.TestCase):
         self.assertEqual(kwargs["json"]["developer"], "test.user")
         self.assertEqual(kwargs["json"]["description"], "Test description")
 
-    @patch("servicenow_mcp.tools.changeset_tools.requests.patch")
-    def test_update_changeset(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_changeset(self, mock_patch):
         """Test updating a changeset."""
         # Mock response
         mock_response = MagicMock()
@@ -225,7 +228,7 @@ class TestChangesetTools(unittest.TestCase):
             "name": "Updated Changeset",
             "state": "in_progress",
         }
-        result = update_changeset(self.auth_manager, self.server_config, params)
+        result = await update_changeset(self.auth_manager, self.server_config, params)
 
         # Verify the result
         self.assertTrue(result["success"])
@@ -244,8 +247,8 @@ class TestChangesetTools(unittest.TestCase):
         self.assertEqual(kwargs["json"]["name"], "Updated Changeset")
         self.assertEqual(kwargs["json"]["state"], "in_progress")
 
-    @patch("servicenow_mcp.tools.changeset_tools.requests.patch")
-    def test_commit_changeset(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_commit_changeset(self, mock_patch):
         """Test committing a changeset."""
         # Mock response
         mock_response = MagicMock()
@@ -266,7 +269,7 @@ class TestChangesetTools(unittest.TestCase):
             "changeset_id": "123",
             "commit_message": "Commit message",
         }
-        result = commit_changeset(self.auth_manager, self.server_config, params)
+        result = await commit_changeset(self.auth_manager, self.server_config, params)
 
         # Verify the result
         self.assertTrue(result["success"])
@@ -285,8 +288,8 @@ class TestChangesetTools(unittest.TestCase):
         self.assertEqual(kwargs["json"]["state"], "complete")
         self.assertEqual(kwargs["json"]["description"], "Commit message")
 
-    @patch("servicenow_mcp.tools.changeset_tools.requests.patch")
-    def test_publish_changeset(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_publish_changeset(self, mock_patch):
         """Test publishing a changeset."""
         # Mock response
         mock_response = MagicMock()
@@ -307,7 +310,7 @@ class TestChangesetTools(unittest.TestCase):
             "changeset_id": "123",
             "publish_notes": "Publish notes",
         }
-        result = publish_changeset(self.auth_manager, self.server_config, params)
+        result = await publish_changeset(self.auth_manager, self.server_config, params)
 
         # Verify the result
         self.assertTrue(result["success"])
@@ -326,8 +329,8 @@ class TestChangesetTools(unittest.TestCase):
         self.assertEqual(kwargs["json"]["state"], "published")
         self.assertEqual(kwargs["json"]["description"], "Publish notes")
 
-    @patch("servicenow_mcp.tools.changeset_tools.requests.post")
-    def test_add_file_to_changeset(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_add_file_to_changeset(self, mock_post):
         """Test adding a file to a changeset."""
         # Mock response
         mock_response = MagicMock()
@@ -349,7 +352,7 @@ class TestChangesetTools(unittest.TestCase):
             "file_path": "test_file.py",
             "file_content": "print('Hello, world!')",
         }
-        result = add_file_to_changeset(self.auth_manager, self.server_config, params)
+        result = await add_file_to_changeset(self.auth_manager, self.server_config, params)
 
         # Verify the result
         self.assertTrue(result["success"])
@@ -369,10 +372,10 @@ class TestChangesetTools(unittest.TestCase):
         self.assertEqual(kwargs["json"]["type"], "file")
 
 
-class TestChangesetToolsParams(unittest.TestCase):
+class TestChangesetToolsParams(IsolatedAsyncioTestCase):
     """Tests for the changeset tools parameter classes."""
 
-    def test_list_changesets_params(self):
+    async def test_list_changesets_params(self):
         """Test ListChangesetsParams."""
         params = ListChangesetsParams(
             limit=20,
@@ -391,12 +394,12 @@ class TestChangesetToolsParams(unittest.TestCase):
         self.assertEqual(params.timeframe, "recent")
         self.assertEqual(params.query, "name=test")
 
-    def test_get_changeset_details_params(self):
+    async def test_get_changeset_details_params(self):
         """Test GetChangesetDetailsParams."""
         params = GetChangesetDetailsParams(changeset_id="123")
         self.assertEqual(params.changeset_id, "123")
 
-    def test_create_changeset_params(self):
+    async def test_create_changeset_params(self):
         """Test CreateChangesetParams."""
         params = CreateChangesetParams(
             name="Test Changeset",
@@ -409,7 +412,7 @@ class TestChangesetToolsParams(unittest.TestCase):
         self.assertEqual(params.application, "Test App")
         self.assertEqual(params.developer, "test.user")
 
-    def test_update_changeset_params(self):
+    async def test_update_changeset_params(self):
         """Test UpdateChangesetParams."""
         params = UpdateChangesetParams(
             changeset_id="123",
@@ -424,7 +427,7 @@ class TestChangesetToolsParams(unittest.TestCase):
         self.assertEqual(params.state, "in_progress")
         self.assertEqual(params.developer, "test.user")
 
-    def test_commit_changeset_params(self):
+    async def test_commit_changeset_params(self):
         """Test CommitChangesetParams."""
         params = CommitChangesetParams(
             changeset_id="123",
@@ -433,7 +436,7 @@ class TestChangesetToolsParams(unittest.TestCase):
         self.assertEqual(params.changeset_id, "123")
         self.assertEqual(params.commit_message, "Commit message")
 
-    def test_publish_changeset_params(self):
+    async def test_publish_changeset_params(self):
         """Test PublishChangesetParams."""
         params = PublishChangesetParams(
             changeset_id="123",
@@ -442,7 +445,7 @@ class TestChangesetToolsParams(unittest.TestCase):
         self.assertEqual(params.changeset_id, "123")
         self.assertEqual(params.publish_notes, "Publish notes")
 
-    def test_add_file_to_changeset_params(self):
+    async def test_add_file_to_changeset_params(self):
         """Test AddFileToChangesetParams."""
         params = AddFileToChangesetParams(
             changeset_id="123",

@@ -7,10 +7,11 @@ This module provides tools for managing incidents in ServiceNow.
 import logging
 from typing import Any, Dict, List, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 from servicenow_mcp.utils.helpers import (
     _build_sysparm_params,
@@ -135,7 +136,7 @@ class IncidentResponse(BaseModel):
     incident_number: Optional[str] = Field(None, description="Number of the affected incident")
 
 
-def create_incident(
+async def create_incident(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateIncidentParams,
@@ -179,10 +180,11 @@ def create_incident(
 
     # Make request
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -196,7 +198,7 @@ def create_incident(
             incident_number=result.get("number"),
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create incident: {e}")
         return IncidentResponse(
             success=False,
@@ -204,7 +206,7 @@ def create_incident(
         )
 
 
-def update_incident(
+async def update_incident(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: UpdateIncidentParams,
@@ -235,10 +237,11 @@ def update_incident(
                 "sysparm_limit": 1,
             }
 
-            response = requests.get(
+            client = await get_async_client()
+            response = await client.get(
                 query_url,
                 params=query_params,
-                headers=auth_manager.get_headers(),
+                headers=await auth_manager.get_headers_async(),
                 timeout=config.timeout,
             )
             response.raise_for_status()
@@ -253,7 +256,7 @@ def update_incident(
             incident_id = result[0].get("sys_id")
             api_url = f"{config.api_url}/table/incident/{incident_id}"
 
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             logger.error(f"Failed to find incident: {e}")
             return IncidentResponse(
                 success=False,
@@ -292,10 +295,11 @@ def update_incident(
 
     # Make request
     try:
-        response = requests.put(
+        client = await get_async_client()
+        response = await client.put(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -309,7 +313,7 @@ def update_incident(
             incident_number=result.get("number"),
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to update incident: {e}")
         return IncidentResponse(
             success=False,
@@ -317,7 +321,7 @@ def update_incident(
         )
 
 
-def add_comment(
+async def add_comment(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: AddCommentParams,
@@ -348,10 +352,11 @@ def add_comment(
                 "sysparm_limit": 1,
             }
 
-            response = requests.get(
+            client = await get_async_client()
+            response = await client.get(
                 query_url,
                 params=query_params,
-                headers=auth_manager.get_headers(),
+                headers=await auth_manager.get_headers_async(),
                 timeout=config.timeout,
             )
             response.raise_for_status()
@@ -366,7 +371,7 @@ def add_comment(
             incident_id = result[0].get("sys_id")
             api_url = f"{config.api_url}/table/incident/{incident_id}"
 
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             logger.error(f"Failed to find incident: {e}")
             return IncidentResponse(
                 success=False,
@@ -383,10 +388,11 @@ def add_comment(
 
     # Make request
     try:
-        response = requests.put(
+        client = await get_async_client()
+        response = await client.put(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -400,7 +406,7 @@ def add_comment(
             incident_number=result.get("number"),
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to add comment: {e}")
         return IncidentResponse(
             success=False,
@@ -408,7 +414,7 @@ def add_comment(
         )
 
 
-def resolve_incident(
+async def resolve_incident(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ResolveIncidentParams,
@@ -439,10 +445,11 @@ def resolve_incident(
                 "sysparm_limit": 1,
             }
 
-            response = requests.get(
+            client = await get_async_client()
+            response = await client.get(
                 query_url,
                 params=query_params,
-                headers=auth_manager.get_headers(),
+                headers=await auth_manager.get_headers_async(),
                 timeout=config.timeout,
             )
             response.raise_for_status()
@@ -457,7 +464,7 @@ def resolve_incident(
             incident_id = result[0].get("sys_id")
             api_url = f"{config.api_url}/table/incident/{incident_id}"
 
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             logger.error(f"Failed to find incident: {e}")
             return IncidentResponse(
                 success=False,
@@ -474,10 +481,11 @@ def resolve_incident(
 
     # Make request
     try:
-        response = requests.put(
+        client = await get_async_client()
+        response = await client.put(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -491,7 +499,7 @@ def resolve_incident(
             incident_number=result.get("number"),
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to resolve incident: {e}")
         return IncidentResponse(
             success=False,
@@ -499,7 +507,7 @@ def resolve_incident(
         )
 
 
-def list_incidents(
+async def list_incidents(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListIncidentsParams,
@@ -545,10 +553,11 @@ def list_incidents(
     )
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -585,7 +594,7 @@ def list_incidents(
             extra={"message": f"Found {len(incidents)} incidents"},
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to list incidents: {e}")
         return {
             "success": False,
@@ -594,7 +603,7 @@ def list_incidents(
         }
 
 
-def get_incident_by_number(
+async def get_incident_by_number(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetIncidentByNumberParams,
@@ -622,10 +631,11 @@ def get_incident_by_number(
 
     # Make request
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -664,7 +674,7 @@ def get_incident_by_number(
             "incident": incident,
         }
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to fetch incident: {e}")
         return {
             "success": False,
@@ -672,7 +682,7 @@ def get_incident_by_number(
         }
 
 
-def get_incident_journal(
+async def get_incident_journal(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetIncidentJournalParams,
@@ -698,9 +708,10 @@ def get_incident_journal(
     # Step 1: resolve incident number to sys_id.
     incident_url = f"{config.api_url}/table/incident"
     try:
-        lookup = requests.get(
+        client = await get_async_client()
+        lookup = await client.get(
             incident_url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             params={
                 "sysparm_query": f"number={params.incident_number}",
                 "sysparm_limit": "1",
@@ -708,7 +719,7 @@ def get_incident_journal(
             },
             timeout=config.timeout,
         )
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to look up incident: {e}")
         return {
             "success": False,
@@ -738,9 +749,10 @@ def get_incident_journal(
     fields_filter = "^OR".join(f"element={f}" for f in fields)
     journal_query = f"name=incident^element_id={sys_id}^({fields_filter})"
     try:
-        journal_response = requests.get(
+        client = await get_async_client()
+        journal_response = await client.get(
             f"{config.api_url}/table/sys_journal_field",
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             params={
                 "sysparm_query": f"{journal_query}^ORDERBYsys_created_on",
                 "sysparm_limit": str(params.limit),
@@ -750,7 +762,7 @@ def get_incident_journal(
             },
             timeout=config.timeout,
         )
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to fetch journal: {e}")
         return {
             "success": False,

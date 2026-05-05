@@ -1,7 +1,8 @@
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import requests
+import httpx
 
 from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.tools.oauth_tools import (
@@ -23,7 +24,7 @@ from servicenow_mcp.tools.oauth_tools import (
 from servicenow_mcp.utils.config import AuthConfig, AuthType, BasicAuthConfig, ServerConfig
 
 
-class TestOAuthTools(unittest.TestCase):
+class TestOAuthTools(IsolatedAsyncioTestCase):
 
     def setUp(self):
         self.auth_config = AuthConfig(
@@ -35,16 +36,16 @@ class TestOAuthTools(unittest.TestCase):
             auth=self.auth_config,
         )
         self.auth_manager = MagicMock(spec=AuthManager)
-        self.auth_manager.get_headers.return_value = {
+        self.auth_manager.get_headers_async = AsyncMock(return_value={
             "Authorization": "Bearer FAKE_TOKEN"
-        }
+        })
 
     # ------------------------------------------------------------------
     # create_oauth_entity
     # ------------------------------------------------------------------
 
-    @patch("requests.post")
-    def test_create_oauth_entity_success(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_oauth_entity_success(self, mock_post):
         mock_response = MagicMock()
         mock_response.status_code = 201
         mock_response.json.return_value = {
@@ -66,7 +67,7 @@ class TestOAuthTools(unittest.TestCase):
             client_secret="my_client_secret",
             token_url="https://fnt-host/api/oauth/token",
         )
-        result = create_oauth_entity(self.config, self.auth_manager, params)
+        result = await create_oauth_entity(self.config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["sys_id"], "oauth_entity_001")
@@ -74,9 +75,9 @@ class TestOAuthTools(unittest.TestCase):
         self.assertIn("Created OAuth Entity", result["message"])
         mock_post.assert_called_once()
 
-    @patch("requests.post")
-    def test_create_oauth_entity_error(self, mock_post):
-        mock_post.side_effect = requests.RequestException("Connection error")
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_oauth_entity_error(self, mock_post):
+        mock_post.side_effect = httpx.HTTPError("Connection error")
 
         params = CreateOAuthEntityParams(
             name="FNT Command OAuth",
@@ -84,7 +85,7 @@ class TestOAuthTools(unittest.TestCase):
             client_secret="my_client_secret",
             token_url="https://fnt-host/api/oauth/token",
         )
-        result = create_oauth_entity(self.config, self.auth_manager, params)
+        result = await create_oauth_entity(self.config, self.auth_manager, params)
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to create OAuth Entity", result["message"])
@@ -94,8 +95,8 @@ class TestOAuthTools(unittest.TestCase):
     # list_oauth_entities
     # ------------------------------------------------------------------
 
-    @patch("requests.get")
-    def test_list_oauth_entities_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_oauth_entities_success(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -126,7 +127,7 @@ class TestOAuthTools(unittest.TestCase):
         mock_get.return_value = mock_response
 
         params = ListOAuthEntitiesParams(limit=20, offset=0)
-        result = list_oauth_entities(self.config, self.auth_manager, params)
+        result = await list_oauth_entities(self.config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["count"], 2)
@@ -134,12 +135,12 @@ class TestOAuthTools(unittest.TestCase):
         self.assertEqual(result["entities"][0]["sys_id"], "oauth_entity_001")
         mock_get.assert_called_once()
 
-    @patch("requests.get")
-    def test_list_oauth_entities_error(self, mock_get):
-        mock_get.side_effect = requests.RequestException("Timeout")
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_oauth_entities_error(self, mock_get):
+        mock_get.side_effect = httpx.HTTPError("Timeout")
 
         params = ListOAuthEntitiesParams()
-        result = list_oauth_entities(self.config, self.auth_manager, params)
+        result = await list_oauth_entities(self.config, self.auth_manager, params)
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to list OAuth Entities", result["message"])
@@ -150,8 +151,8 @@ class TestOAuthTools(unittest.TestCase):
     # get_oauth_entity
     # ------------------------------------------------------------------
 
-    @patch("requests.get")
-    def test_get_oauth_entity_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_oauth_entity_success(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -168,19 +169,19 @@ class TestOAuthTools(unittest.TestCase):
         mock_get.return_value = mock_response
 
         params = GetOAuthEntityParams(sys_id="oauth_entity_001")
-        result = get_oauth_entity(self.config, self.auth_manager, params)
+        result = await get_oauth_entity(self.config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["entity"]["sys_id"], "oauth_entity_001")
         self.assertEqual(result["entity"]["name"], "FNT Command OAuth")
         mock_get.assert_called_once()
 
-    @patch("requests.get")
-    def test_get_oauth_entity_error(self, mock_get):
-        mock_get.side_effect = requests.RequestException("Not found")
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_oauth_entity_error(self, mock_get):
+        mock_get.side_effect = httpx.HTTPError("Not found")
 
         params = GetOAuthEntityParams(sys_id="oauth_entity_001")
-        result = get_oauth_entity(self.config, self.auth_manager, params)
+        result = await get_oauth_entity(self.config, self.auth_manager, params)
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to get OAuth Entity", result["message"])
@@ -190,8 +191,8 @@ class TestOAuthTools(unittest.TestCase):
     # update_oauth_entity
     # ------------------------------------------------------------------
 
-    @patch("requests.patch")
-    def test_update_oauth_entity_success(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_oauth_entity_success(self, mock_patch):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -212,22 +213,22 @@ class TestOAuthTools(unittest.TestCase):
             name="Updated OAuth App",
             client_id="new_client_id",
         )
-        result = update_oauth_entity(self.config, self.auth_manager, params)
+        result = await update_oauth_entity(self.config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["sys_id"], "oauth_entity_001")
         self.assertIn("Updated OAuth Entity", result["message"])
         mock_patch.assert_called_once()
 
-    @patch("requests.patch")
-    def test_update_oauth_entity_error(self, mock_patch):
-        mock_patch.side_effect = requests.RequestException("Server error")
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_oauth_entity_error(self, mock_patch):
+        mock_patch.side_effect = httpx.HTTPError("Server error")
 
         params = UpdateOAuthEntityParams(
             sys_id="oauth_entity_001",
             name="Updated OAuth App",
         )
-        result = update_oauth_entity(self.config, self.auth_manager, params)
+        result = await update_oauth_entity(self.config, self.auth_manager, params)
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to update OAuth Entity", result["message"])
@@ -237,27 +238,27 @@ class TestOAuthTools(unittest.TestCase):
     # delete_oauth_entity
     # ------------------------------------------------------------------
 
-    @patch("requests.delete")
-    def test_delete_oauth_entity_success(self, mock_delete):
+    @patch.object(httpx.AsyncClient, "delete", new_callable=AsyncMock)
+    async def test_delete_oauth_entity_success(self, mock_delete):
         mock_response = MagicMock()
         mock_response.status_code = 204
         mock_response.raise_for_status.return_value = None
         mock_delete.return_value = mock_response
 
         params = DeleteOAuthEntityParams(sys_id="oauth_entity_001")
-        result = delete_oauth_entity(self.config, self.auth_manager, params)
+        result = await delete_oauth_entity(self.config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["sys_id"], "oauth_entity_001")
         self.assertIn("Deleted OAuth Entity", result["message"])
         mock_delete.assert_called_once()
 
-    @patch("requests.delete")
-    def test_delete_oauth_entity_error(self, mock_delete):
-        mock_delete.side_effect = requests.RequestException("Forbidden")
+    @patch.object(httpx.AsyncClient, "delete", new_callable=AsyncMock)
+    async def test_delete_oauth_entity_error(self, mock_delete):
+        mock_delete.side_effect = httpx.HTTPError("Forbidden")
 
         params = DeleteOAuthEntityParams(sys_id="oauth_entity_001")
-        result = delete_oauth_entity(self.config, self.auth_manager, params)
+        result = await delete_oauth_entity(self.config, self.auth_manager, params)
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to delete OAuth Entity", result["message"])
@@ -267,8 +268,8 @@ class TestOAuthTools(unittest.TestCase):
     # create_oauth_profile
     # ------------------------------------------------------------------
 
-    @patch("requests.post")
-    def test_create_oauth_profile_success(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_oauth_profile_success(self, mock_post):
         mock_response = MagicMock()
         mock_response.status_code = 201
         mock_response.json.return_value = {
@@ -288,7 +289,7 @@ class TestOAuthTools(unittest.TestCase):
             name="FNT Production Profile",
             grant_type="client_credentials",
         )
-        result = create_oauth_profile(self.config, self.auth_manager, params)
+        result = await create_oauth_profile(self.config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["sys_id"], "profile_001")
@@ -296,16 +297,16 @@ class TestOAuthTools(unittest.TestCase):
         self.assertIn("Created OAuth Profile", result["message"])
         mock_post.assert_called_once()
 
-    @patch("requests.post")
-    def test_create_oauth_profile_error(self, mock_post):
-        mock_post.side_effect = requests.RequestException("Connection refused")
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_oauth_profile_error(self, mock_post):
+        mock_post.side_effect = httpx.HTTPError("Connection refused")
 
         params = CreateOAuthProfileParams(
             oauth_entity_sys_id="oauth_entity_001",
             name="FNT Production Profile",
             grant_type="client_credentials",
         )
-        result = create_oauth_profile(self.config, self.auth_manager, params)
+        result = await create_oauth_profile(self.config, self.auth_manager, params)
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to create OAuth Profile", result["message"])
@@ -315,8 +316,8 @@ class TestOAuthTools(unittest.TestCase):
     # list_oauth_profiles
     # ------------------------------------------------------------------
 
-    @patch("requests.get")
-    def test_list_oauth_profiles_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_oauth_profiles_success(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -335,7 +336,7 @@ class TestOAuthTools(unittest.TestCase):
         mock_get.return_value = mock_response
 
         params = ListOAuthProfilesParams(oauth_entity_sys_id="oauth_entity_001")
-        result = list_oauth_profiles(self.config, self.auth_manager, params)
+        result = await list_oauth_profiles(self.config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["count"], 1)
@@ -344,12 +345,12 @@ class TestOAuthTools(unittest.TestCase):
         self.assertEqual(result["profiles"][0]["name"], "FNT Production Profile")
         mock_get.assert_called_once()
 
-    @patch("requests.get")
-    def test_list_oauth_profiles_error(self, mock_get):
-        mock_get.side_effect = requests.RequestException("Timeout")
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_oauth_profiles_error(self, mock_get):
+        mock_get.side_effect = httpx.HTTPError("Timeout")
 
         params = ListOAuthProfilesParams()
-        result = list_oauth_profiles(self.config, self.auth_manager, params)
+        result = await list_oauth_profiles(self.config, self.auth_manager, params)
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to list OAuth Profiles", result["message"])
