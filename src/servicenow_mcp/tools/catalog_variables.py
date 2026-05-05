@@ -7,10 +7,11 @@ This module provides tools for managing variables (form fields) in ServiceNow ca
 import logging
 from typing import Any, Dict, List, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -84,7 +85,7 @@ class UpdateCatalogItemVariableParams(BaseModel):
     max: Optional[int] = Field(None, description="Maximum value for numeric fields")
 
 
-def create_catalog_item_variable(
+async def create_catalog_item_variable(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateCatalogItemVariableParams,
@@ -132,10 +133,11 @@ def create_catalog_item_variable(
 
     # Make request
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -149,7 +151,7 @@ def create_catalog_item_variable(
             details=result,
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create catalog item variable: {e}")
         return CatalogItemVariableResponse(
             success=False,
@@ -157,7 +159,7 @@ def create_catalog_item_variable(
         )
 
 
-def list_catalog_item_variables(
+async def list_catalog_item_variables(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListCatalogItemVariablesParams,
@@ -194,10 +196,11 @@ def list_catalog_item_variables(
 
     # Make request
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -211,7 +214,7 @@ def list_catalog_item_variables(
             count=len(result),
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to list catalog item variables: {e}")
         return ListCatalogItemVariablesResponse(
             success=False,
@@ -219,7 +222,7 @@ def list_catalog_item_variables(
         )
 
 
-def update_catalog_item_variable(
+async def update_catalog_item_variable(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: UpdateCatalogItemVariableParams,
@@ -270,10 +273,11 @@ def update_catalog_item_variable(
 
     # Make request
     try:
-        response = requests.patch(
+        client = await get_async_client()
+        response = await client.patch(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -287,7 +291,7 @@ def update_catalog_item_variable(
             details=result,
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to update catalog item variable: {e}")
         return CatalogItemVariableResponse(
             success=False,
@@ -322,7 +326,7 @@ class CatalogVariableChoiceResponse(BaseModel):
     details: Optional[Dict[str, Any]] = Field(None, description="Additional details about the choice")
 
 
-def create_catalog_variable_choice(
+async def create_catalog_variable_choice(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateCatalogVariableChoiceParams,
@@ -360,10 +364,11 @@ def create_catalog_variable_choice(
         data["price_type"] = params.price_type
 
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -377,7 +382,7 @@ def create_catalog_variable_choice(
             details=result,
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create catalog variable choice: {e}")
         return CatalogVariableChoiceResponse(
             success=False,
@@ -385,7 +390,7 @@ def create_catalog_variable_choice(
         )
 
 
-def delete_catalog_item_variable(
+async def delete_catalog_item_variable(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: DeleteCatalogItemVariableParams,
@@ -404,9 +409,10 @@ def delete_catalog_item_variable(
     api_url = f"{config.instance_url}/api/now/table/item_option_new/{params.variable_id}"
 
     try:
-        response = requests.delete(
+        client = await get_async_client()
+        response = await client.delete(
             api_url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -417,7 +423,7 @@ def delete_catalog_item_variable(
             variable_id=params.variable_id,
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to delete catalog item variable: {e}")
         return CatalogItemVariableResponse(
             success=False,

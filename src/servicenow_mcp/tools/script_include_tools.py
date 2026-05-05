@@ -8,10 +8,11 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -72,7 +73,7 @@ class ScriptIncludeResponse(BaseModel):
     script_include_name: Optional[str] = Field(None, description="Name of the affected script include")
 
 
-def list_script_includes(
+async def list_script_includes(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListScriptIncludesParams,
@@ -116,9 +117,10 @@ def list_script_includes(
             query_params["sysparm_query"] = "^".join(query_parts)
             
         # Make the request
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             url,
             params=query_params,
             headers=headers,
@@ -167,7 +169,7 @@ def list_script_includes(
         }
 
 
-def get_script_include(
+async def get_script_include(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetScriptIncludeParams,
@@ -200,9 +202,10 @@ def get_script_include(
             query_params["sysparm_query"] = f"name={params.script_include_id}"
             
         # Make the request
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             url,
             params=query_params,
             headers=headers,
@@ -260,7 +263,7 @@ def get_script_include(
         }
 
 
-def create_script_include(
+async def create_script_include(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateScriptIncludeParams,
@@ -294,10 +297,11 @@ def create_script_include(
         body["api_name"] = params.api_name
         
     # Make the request
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
     
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             url,
             json=body,
             headers=headers,
@@ -331,7 +335,7 @@ def create_script_include(
         )
 
 
-def update_script_include(
+async def update_script_include(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: UpdateScriptIncludeParams,
@@ -348,7 +352,7 @@ def update_script_include(
     """
     # First, get the script include to update
     get_params = GetScriptIncludeParams(script_include_id=params.script_include_id)
-    get_result = get_script_include(config, auth_manager, get_params)
+    get_result = await get_script_include(config, auth_manager, get_params)
     
     if not get_result["success"]:
         return ScriptIncludeResponse(
@@ -393,10 +397,11 @@ def update_script_include(
         )
         
     # Make the request
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
     
     try:
-        response = requests.patch(
+        client = await get_async_client()
+        response = await client.patch(
             url,
             json=body,
             headers=headers,
@@ -430,7 +435,7 @@ def update_script_include(
         )
 
 
-def delete_script_include(
+async def delete_script_include(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: DeleteScriptIncludeParams,
@@ -447,7 +452,7 @@ def delete_script_include(
     """
     # First, get the script include to delete
     get_params = GetScriptIncludeParams(script_include_id=params.script_include_id)
-    get_result = get_script_include(config, auth_manager, get_params)
+    get_result = await get_script_include(config, auth_manager, get_params)
     
     if not get_result["success"]:
         return ScriptIncludeResponse(
@@ -463,10 +468,11 @@ def delete_script_include(
     url = f"{config.instance_url}/api/now/table/sys_script_include/{sys_id}"
     
     # Make the request
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
     
     try:
-        response = requests.delete(
+        client = await get_async_client()
+        response = await client.delete(
             url,
             headers=headers,
             timeout=30,
@@ -511,7 +517,7 @@ class ExecuteScriptIncludeParams(BaseModel):
     )
 
 
-def execute_script_include(
+async def execute_script_include(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ExecuteScriptIncludeParams,
@@ -547,7 +553,7 @@ def execute_script_include(
     # Step 1: resolve the script include so we know the class name
     # ------------------------------------------------------------------
     get_params = GetScriptIncludeParams(script_include_id=params.script_include_id)
-    get_result = get_script_include(config, auth_manager, get_params)
+    get_result = await get_script_include(config, auth_manager, get_params)
 
     if not get_result["success"]:
         return {
@@ -592,10 +598,11 @@ def execute_script_include(
     # Step 3: POST to the scripting eval endpoint
     # ------------------------------------------------------------------
     url = f"{config.instance_url}/api/now/v1/scripting/eval"
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
 
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             url,
             json={"script": script},
             headers=headers,
@@ -634,7 +641,7 @@ def execute_script_include(
             "output": raw_output or None,
         }
 
-    except requests.HTTPError as exc:
+    except httpx.HTTPStatusError as exc:
         status = exc.response.status_code if exc.response is not None else "unknown"
         body = ""
         if exc.response is not None:

@@ -8,10 +8,10 @@ Data Sources, Transform Maps, Field Mappings, Transform Scripts and Schedulers.
 import logging
 from typing import Any, Dict, List, Optional
 
-import requests
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -90,28 +90,30 @@ class CloneImportConfigurationParams(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _table_get(
+async def _table_get(
     config: ServerConfig,
     auth_manager: AuthManager,
     table: str,
     params: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
     url = f"{config.instance_url}/api/now/table/{table}"
-    response = requests.get(url, headers=auth_manager.get_headers(), params=params, timeout=30)
+    client = await get_async_client()
+    response = await client.get(url, headers=await auth_manager.get_headers_async(), params=params, timeout=30)
     response.raise_for_status()
     return response.json().get("result", [])  # type: ignore[no-any-return]
 
 
-def _table_get_one(
+async def _table_get_one(
     config: ServerConfig,
     auth_manager: AuthManager,
     table: str,
     sys_id: str,
 ) -> Dict[str, Any]:
     url = f"{config.instance_url}/api/now/table/{table}/{sys_id}"
-    response = requests.get(
+    client = await get_async_client()
+    response = await client.get(
         url,
-        headers=auth_manager.get_headers(),
+        headers=await auth_manager.get_headers_async(),
         params={"sysparm_display_value": "true"},
         timeout=30,
     )
@@ -119,14 +121,15 @@ def _table_get_one(
     return response.json().get("result", {})  # type: ignore[no-any-return]
 
 
-def _table_post(
+async def _table_post(
     config: ServerConfig,
     auth_manager: AuthManager,
     table: str,
     data: Dict[str, Any],
 ) -> Dict[str, Any]:
     url = f"{config.instance_url}/api/now/table/{table}"
-    response = requests.post(url, headers=auth_manager.get_headers(), json=data, timeout=30)
+    client = await get_async_client()
+    response = await client.post(url, headers=await auth_manager.get_headers_async(), json=data, timeout=30)
     response.raise_for_status()
     return response.json().get("result", {})  # type: ignore[no-any-return]
 
@@ -155,7 +158,7 @@ def _format_record(record: Dict, fields: List[str]) -> Dict[str, Any]:
 # Existing tools (read)
 # ---------------------------------------------------------------------------
 
-def list_import_sets(
+async def list_import_sets(
     config: ServerConfig, auth_manager: AuthManager, params: ListImportSetsParams
 ) -> List[Dict[str, Any]]:
     """List recent Import Set instances (sys_import_set), deduplicated by staging table."""
@@ -173,7 +176,7 @@ def list_import_sets(
     if query_parts:
         api_params["sysparm_query"] = "^".join(query_parts) + "^ORDERBYDESCsys_created_on"
 
-    records = _table_get(config, auth_manager, "sys_import_set", api_params)
+    records = await _table_get(config, auth_manager, "sys_import_set", api_params)
     seen: set = set()
     result = []
     for r in records:
@@ -188,7 +191,7 @@ def list_import_sets(
     return result
 
 
-def list_data_sources(
+async def list_data_sources(
     config: ServerConfig, auth_manager: AuthManager, params: ListDataSourcesParams
 ) -> List[Dict[str, Any]]:
     """List configured Data Sources (sys_data_source)."""
@@ -209,7 +212,7 @@ def list_data_sources(
     if query_parts:
         api_params["sysparm_query"] = "^".join(query_parts)
 
-    records = _table_get(config, auth_manager, "sys_data_source", api_params)
+    records = await _table_get(config, auth_manager, "sys_data_source", api_params)
     return [
         _format_record(r, ["sys_id", "name", "type", "import_set_table_name",
                             "file_path", "file_name", "format", "active", "sys_updated_on"])
@@ -217,7 +220,7 @@ def list_data_sources(
     ]
 
 
-def list_import_runs(
+async def list_import_runs(
     config: ServerConfig, auth_manager: AuthManager, params: ListImportRunsParams
 ) -> List[Dict[str, Any]]:
     """List Import Set run history (sys_import_set_run), newest first."""
@@ -237,7 +240,7 @@ def list_import_runs(
         "sysparm_query": "^".join(query_parts),
     }
 
-    records = _table_get(config, auth_manager, "sys_import_set_run", api_params)
+    records = await _table_get(config, auth_manager, "sys_import_set_run", api_params)
     return [
         _format_record(r, ["sys_id", "set", "sys_transform_map", "state",
                             "inserts", "updates", "ignored", "errors", "total",
@@ -246,13 +249,14 @@ def list_import_runs(
     ]
 
 
-def trigger_import(
+async def trigger_import(
     config: ServerConfig, auth_manager: AuthManager, params: TriggerImportParams
 ) -> Dict[str, Any]:
     """Trigger an import run for a given Data Source."""
     url_ds = f"{config.instance_url}/api/now/table/sys_data_source/{params.data_source_sys_id}"
-    headers = auth_manager.get_headers()
-    resp = requests.get(url_ds, headers=headers, timeout=30)
+    headers = await auth_manager.get_headers_async()
+    client = await get_async_client()
+    resp = await client.get(url_ds, headers=headers, timeout=30)
     resp.raise_for_status()
     ds = resp.json().get("result", {})
     table_name = _val(ds, "import_set_table_name")
@@ -260,7 +264,8 @@ def trigger_import(
         return {"error": "Could not determine import set table from data source."}
 
     url_import = f"{config.instance_url}/api/now/import/{table_name}"
-    resp2 = requests.post(url_import, headers=headers, json={}, timeout=60)
+    client = await get_async_client()
+    resp2 = await client.post(url_import, headers=headers, json={}, timeout=60)
     resp2.raise_for_status()
     return {
         "status": "triggered",
@@ -274,7 +279,7 @@ def trigger_import(
 # New tools — Transform Maps, Field Mappings, Scripts, Scheduler
 # ---------------------------------------------------------------------------
 
-def list_transform_maps(
+async def list_transform_maps(
     config: ServerConfig, auth_manager: AuthManager, params: ListTransformMapsParams
 ) -> List[Dict[str, Any]]:
     """
@@ -296,7 +301,7 @@ def list_transform_maps(
         "sysparm_display_value": "true",
         "sysparm_query": "^".join(query_parts),
     }
-    records = _table_get(config, auth_manager, "sys_transform_map", api_params)
+    records = await _table_get(config, auth_manager, "sys_transform_map", api_params)
     return [
         _format_record(r, ["sys_id", "name", "source_table", "target_table",
                             "active", "run_script", "order", "sys_updated_on"])
@@ -304,7 +309,7 @@ def list_transform_maps(
     ]
 
 
-def get_transform_map(
+async def get_transform_map(
     config: ServerConfig, auth_manager: AuthManager, params: GetTransformMapParams
 ) -> Dict[str, Any]:
     """
@@ -312,7 +317,7 @@ def get_transform_map(
     Returns the map config, all field mappings (source→target, coalesce, scripts),
     and all event scripts (onBefore, onAfter, onComplete, etc.).
     """
-    map_rec = _table_get_one(config, auth_manager, "sys_transform_map", params.transform_map_sys_id)
+    map_rec = await _table_get_one(config, auth_manager, "sys_transform_map", params.transform_map_sys_id)
     result: Dict[str, Any] = {
         "transform_map": _format_record(map_rec, [
             "sys_id", "name", "source_table", "target_table", "active",
@@ -332,7 +337,7 @@ def get_transform_map(
     return result
 
 
-def list_field_mappings(
+async def list_field_mappings(
     config: ServerConfig, auth_manager: AuthManager, params: ListFieldMappingsParams
 ) -> List[Dict[str, Any]]:
     """
@@ -351,7 +356,7 @@ def list_field_mappings(
         "sysparm_display_value": "true",
         "sysparm_query": f"map={params.transform_map_sys_id}^ORDERBYtarget_field",
     }
-    records = _table_get(config, auth_manager, "sys_transform_entry", api_params)
+    records = await _table_get(config, auth_manager, "sys_transform_entry", api_params)
     return [
         _format_record(r, [
             "sys_id", "source_field", "target_field", "coalesce",
@@ -363,7 +368,7 @@ def list_field_mappings(
     ]
 
 
-def list_transform_scripts(
+async def list_transform_scripts(
     config: ServerConfig, auth_manager: AuthManager, params: ListTransformScriptsParams
 ) -> List[Dict[str, Any]]:
     """
@@ -378,14 +383,14 @@ def list_transform_scripts(
         "sysparm_display_value": "true",
         "sysparm_query": f"map={params.transform_map_sys_id}^ORDERBYorder",
     }
-    records = _table_get(config, auth_manager, "sys_transform_script", api_params)
+    records = await _table_get(config, auth_manager, "sys_transform_script", api_params)
     return [
         _format_record(r, ["sys_id", "when", "active", "script", "order", "sys_updated_on"])
         for r in records
     ]
 
 
-def list_scheduled_imports(
+async def list_scheduled_imports(
     config: ServerConfig, auth_manager: AuthManager, params: ListScheduledImportsParams
 ) -> List[Dict[str, Any]]:
     """
@@ -410,7 +415,7 @@ def list_scheduled_imports(
         "sysparm_display_value": "true",
         "sysparm_query": "^".join(query_parts),
     }
-    records = _table_get(config, auth_manager, "sys_trigger", api_params)
+    records = await _table_get(config, auth_manager, "sys_trigger", api_params)
     return [
         _format_record(r, [
             "sys_id", "name", "state", "next_action", "run_time",
@@ -421,7 +426,7 @@ def list_scheduled_imports(
     ]
 
 
-def clone_import_configuration(
+async def clone_import_configuration(
     config: ServerConfig, auth_manager: AuthManager, params: CloneImportConfigurationParams
 ) -> Dict[str, Any]:
     """
@@ -434,7 +439,7 @@ def clone_import_configuration(
 
     Returns sys_ids of all created records.
     """
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
     prefix = params.new_name_prefix
     created: Dict[str, Any] = {
         "data_source": None,
@@ -446,7 +451,8 @@ def clone_import_configuration(
 
     # 1. Clone Data Source
     ds_url = f"{config.instance_url}/api/now/table/sys_data_source/{params.data_source_sys_id}"
-    ds_resp = requests.get(ds_url, headers=headers, timeout=30)
+    client = await get_async_client()
+    ds_resp = await client.get(ds_url, headers=headers, timeout=30)
     ds_resp.raise_for_status()
     ds = ds_resp.json().get("result", {})
 
@@ -462,7 +468,7 @@ def clone_import_configuration(
         "format": _val_id(ds, "format") or _val(ds, "format"),
         "active": "false",  # start inactive for safety
     }
-    new_ds = _table_post(config, auth_manager, "sys_data_source", new_ds_data)
+    new_ds = await _table_post(config, auth_manager, "sys_data_source", new_ds_data)
     new_ds_id = new_ds.get("sys_id", "")
     created["data_source"] = {"sys_id": new_ds_id, "name": new_ds_data["name"], "table": new_table}
 
@@ -474,7 +480,7 @@ def clone_import_configuration(
         "sysparm_display_value": "true",
         "sysparm_limit": 50,
     }
-    transform_maps = _table_get(config, auth_manager, "sys_transform_map", tm_api_params)
+    transform_maps = await _table_get(config, auth_manager, "sys_transform_map", tm_api_params)
 
     for tm in transform_maps:
         old_tm_id = _val_id(tm, "sys_id") or tm.get("sys_id", "")
@@ -491,7 +497,7 @@ def clone_import_configuration(
             "run_business_rules": _val(tm, "run_business_rules"),
             "order": _val(tm, "order") or "100",
         }
-        new_tm = _table_post(config, auth_manager, "sys_transform_map", new_tm_data)
+        new_tm = await _table_post(config, auth_manager, "sys_transform_map", new_tm_data)
         new_tm_id = new_tm.get("sys_id", "")
         tm_entry: Dict[str, Any] = {
             "sys_id": new_tm_id,
@@ -511,7 +517,7 @@ def clone_import_configuration(
             "sysparm_display_value": "true",
             "sysparm_limit": 200,
         }
-        field_mappings = _table_get(config, auth_manager, "sys_transform_entry", fm_params_api)
+        field_mappings = await _table_get(config, auth_manager, "sys_transform_entry", fm_params_api)
         for fm in field_mappings:
             new_fm_data = {
                 "map": new_tm_id,
@@ -528,7 +534,7 @@ def clone_import_configuration(
                 "date_format": _val(fm, "date_format"),
                 "reference_value_field": _val(fm, "reference_value_field"),
             }
-            new_fm = _table_post(config, auth_manager, "sys_transform_entry", new_fm_data)
+            new_fm = await _table_post(config, auth_manager, "sys_transform_entry", new_fm_data)
             tm_entry["field_mappings"].append(new_fm.get("sys_id", ""))
             created["field_mappings_total"] += 1
 
@@ -539,7 +545,7 @@ def clone_import_configuration(
             "sysparm_display_value": "true",
             "sysparm_limit": 50,
         }
-        scripts = _table_get(config, auth_manager, "sys_transform_script", sc_params_api)
+        scripts = await _table_get(config, auth_manager, "sys_transform_script", sc_params_api)
         for sc in scripts:
             new_sc_data = {
                 "map": new_tm_id,
@@ -548,7 +554,7 @@ def clone_import_configuration(
                 "script": _val(sc, "script"),
                 "order": _val(sc, "order") or "100",
             }
-            new_sc = _table_post(config, auth_manager, "sys_transform_script", new_sc_data)
+            new_sc = await _table_post(config, auth_manager, "sys_transform_script", new_sc_data)
             tm_entry["transform_scripts"].append(new_sc.get("sys_id", ""))
             created["transform_scripts_total"] += 1
 
@@ -562,7 +568,7 @@ def clone_import_configuration(
             "sysparm_display_value": "true",
             "sysparm_limit": 5,
         }
-        schedulers = _table_get(config, auth_manager, "sys_trigger", sched_params_api)
+        schedulers = await _table_get(config, auth_manager, "sys_trigger", sched_params_api)
         cloned_scheds = []
         for sched in schedulers:
             new_sched_data = {
@@ -578,7 +584,7 @@ def clone_import_configuration(
                 "time_zone": _val(sched, "time_zone"),
                 "script": _val(sched, "script"),
             }
-            new_sched = _table_post(config, auth_manager, "sys_trigger", new_sched_data)
+            new_sched = await _table_post(config, auth_manager, "sys_trigger", new_sched_data)
             cloned_scheds.append({"sys_id": new_sched.get("sys_id", ""), "name": new_sched_data["name"]})
         created["scheduler"] = cloned_scheds
 

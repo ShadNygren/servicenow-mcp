@@ -14,10 +14,11 @@ the internals swap without changing the API surface.
 import logging
 from typing import Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.tools.case_tools import LIST_FIELDS, extract_case
 from servicenow_mcp.utils.config import ServerConfig
 
@@ -30,7 +31,7 @@ MAX_LIMIT = 200
 # Shared helper: search cases via task table
 # ---------------------------------------------------------------------------
 
-def _search_cases_by_query(
+async def _search_cases_by_query(
     config: ServerConfig,
     auth_manager: AuthManager,
     query_str: str,
@@ -56,10 +57,11 @@ def _search_cases_by_query(
         "sysparm_fields": LIST_FIELDS,
     }
 
-    response = requests.get(
+    client = await get_async_client()
+    response = await client.get(
         api_url,
         params=query_params,  # type: ignore[arg-type]
-        headers=auth_manager.get_headers(),
+        headers=await auth_manager.get_headers_async(),
         timeout=config.timeout,
     )
     response.raise_for_status()
@@ -148,7 +150,7 @@ class GetCaseHistoryParams(BaseModel):
 # Reference data tools
 # ---------------------------------------------------------------------------
 
-def list_accounts(
+async def list_accounts(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListAccountsParams,
@@ -181,10 +183,11 @@ def list_accounts(
         query_params["sysparm_query"] = "^".join(filters)
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,  # type: ignore[arg-type]
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -198,7 +201,7 @@ def list_accounts(
             "accounts": accounts,
         }
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to list accounts: {e}")
         return {
             "success": False,
@@ -207,7 +210,7 @@ def list_accounts(
         }
 
 
-def list_locations(
+async def list_locations(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListLocationsParams,
@@ -242,10 +245,11 @@ def list_locations(
         query_params["sysparm_query"] = "^".join(filters)
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,  # type: ignore[arg-type]
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -259,7 +263,7 @@ def list_locations(
             "locations": locations,
         }
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to list locations: {e}")
         return {
             "success": False,
@@ -268,7 +272,7 @@ def list_locations(
         }
 
 
-def list_products(
+async def list_products(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListProductsParams,
@@ -303,10 +307,11 @@ def list_products(
         query_params["sysparm_query"] = "^".join(filters)
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,  # type: ignore[arg-type]
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -320,7 +325,7 @@ def list_products(
             "products": products,
         }
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to list products: {e}")
         return {
             "success": False,
@@ -333,7 +338,7 @@ def list_products(
 # Case correlation tools
 # ---------------------------------------------------------------------------
 
-def get_cases_by_account(
+async def get_cases_by_account(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetCasesByAccountParams,
@@ -348,14 +353,15 @@ def get_cases_by_account(
     # Step 1: validate account exists
     acct_url = f"{config.api_url}/table/customer_account"
     try:
-        acct_resp = requests.get(
+        client = await get_async_client()
+        acct_resp = await client.get(
             acct_url,
             params={  # type: ignore[arg-type]
                 "sysparm_query": f"nameLIKE{params.account_name}",
                 "sysparm_limit": 1,
                 "sysparm_fields": "sys_id,name",
             },
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         acct_resp.raise_for_status()
@@ -366,7 +372,7 @@ def get_cases_by_account(
                 "message": f"Account not found: {params.account_name}",
                 "cases": [],
             }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to look up account: {e}")
         return {
             "success": False,
@@ -387,13 +393,13 @@ def get_cases_by_account(
     query_str = "^".join(query_parts)
 
     try:
-        cases = _search_cases_by_query(config, auth_manager, query_str, params.limit, params.offset)
+        cases = await _search_cases_by_query(config, auth_manager, query_str, params.limit, params.offset)
         return {
             "success": True,
             "message": f"Found {len(cases)} cases for account '{params.account_name}'",
             "cases": cases,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to search cases by account: {e}")
         return {
             "success": False,
@@ -402,7 +408,7 @@ def get_cases_by_account(
         }
 
 
-def get_cases_by_location(
+async def get_cases_by_location(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetCasesByLocationParams,
@@ -424,13 +430,13 @@ def get_cases_by_location(
     query_str = "^".join(query_parts)
 
     try:
-        cases = _search_cases_by_query(config, auth_manager, query_str, params.limit, params.offset)
+        cases = await _search_cases_by_query(config, auth_manager, query_str, params.limit, params.offset)
         return {
             "success": True,
             "message": f"Found {len(cases)} cases for location '{params.location_name}'",
             "cases": cases,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to search cases by location: {e}")
         return {
             "success": False,
@@ -439,7 +445,7 @@ def get_cases_by_location(
         }
 
 
-def get_cases_by_product(
+async def get_cases_by_product(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetCasesByProductParams,
@@ -464,13 +470,13 @@ def get_cases_by_product(
     query_str = "^".join(query_parts)
 
     try:
-        cases = _search_cases_by_query(config, auth_manager, query_str, params.limit, params.offset)
+        cases = await _search_cases_by_query(config, auth_manager, query_str, params.limit, params.offset)
         return {
             "success": True,
             "message": f"Found {len(cases)} cases for product '{params.product_name}'",
             "cases": cases,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to search cases by product: {e}")
         return {
             "success": False,
@@ -479,7 +485,7 @@ def get_cases_by_product(
         }
 
 
-def get_cases_by_integration(
+async def get_cases_by_integration(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetCasesByIntegrationParams,
@@ -504,13 +510,13 @@ def get_cases_by_integration(
     query_str = "^".join(query_parts)
 
     try:
-        cases = _search_cases_by_query(config, auth_manager, query_str, params.limit, params.offset)
+        cases = await _search_cases_by_query(config, auth_manager, query_str, params.limit, params.offset)
         return {
             "success": True,
             "message": f"Found {len(cases)} cases for integration '{params.integration_name}'",
             "cases": cases,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to search cases by integration: {e}")
         return {
             "success": False,
@@ -542,7 +548,7 @@ HISTORY_FIELDS = ",".join([
 ])
 
 
-def get_case_history(
+async def get_case_history(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetCaseHistoryParams,
@@ -563,10 +569,11 @@ def get_case_history(
     }
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,  # type: ignore[arg-type]
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -592,7 +599,7 @@ def get_case_history(
             "case": case,
         }
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to get case history: {e}")
         return {
             "success": False,

@@ -7,10 +7,10 @@ This module provides tools for managing Service Portal widgets in ServiceNow.
 import logging
 from typing import Any, Dict, Optional
 
-import requests
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -188,7 +188,7 @@ def _add_optional_bool(body: Dict, key: str, value: Optional[bool]) -> None:
         body[key] = str(value).lower()
 
 
-def _resolve_widget_id(
+async def _resolve_widget_id(
     config: ServerConfig, headers: Dict, widget_id: str
 ) -> Optional[str]:
     """
@@ -212,7 +212,8 @@ def _resolve_widget_id(
     }
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             url, params=query_params, headers=headers, timeout=30
         )
         response.raise_for_status()
@@ -231,7 +232,7 @@ def _resolve_widget_id(
 # ============================================================================
 
 
-def get_widget(
+async def get_widget(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetWidgetParams,
@@ -254,7 +255,7 @@ def get_widget(
                 "message": "Either sys_id or name must be provided",
             }
 
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         base_url = f"{config.instance_url}/api/now/table/sp_widget"
 
         # Search by sys_id (exact match)
@@ -266,7 +267,8 @@ def get_widget(
                 "sysparm_fields": WIDGET_FIELDS,
             }
 
-            response = requests.get(
+            client = await get_async_client()
+            response = await client.get(
                 url, params=query_params, headers=headers, timeout=30
             )
             response.raise_for_status()
@@ -295,7 +297,8 @@ def get_widget(
             "sysparm_fields": WIDGET_FIELDS,
         }
 
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             base_url, params=query_params, headers=headers, timeout=30
         )
         response.raise_for_status()
@@ -317,7 +320,7 @@ def get_widget(
         return {"success": False, "message": f"Error getting widget: {str(e)}"}
 
 
-def create_widget(
+async def create_widget(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateWidgetParams,
@@ -356,8 +359,9 @@ def create_widget(
     _add_optional_field(body, "roles", params.roles)
 
     try:
-        headers = auth_manager.get_headers()
-        response = requests.post(url, json=body, headers=headers, timeout=30)
+        headers = await auth_manager.get_headers_async()
+        client = await get_async_client()
+        response = await client.post(url, json=body, headers=headers, timeout=30)
         response.raise_for_status()
 
         data = response.json()
@@ -379,7 +383,7 @@ def create_widget(
         )
 
 
-def update_widget(
+async def update_widget(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: UpdateWidgetParams,
@@ -395,7 +399,7 @@ def update_widget(
         A response indicating the result of the operation.
     """
     try:
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
 
         # Resolve widget_id to sys_id
         sys_id = _resolve_widget_id(config, headers, params.widget_id)
@@ -430,7 +434,8 @@ def update_widget(
             )
 
         url = f"{config.instance_url}/api/now/table/sp_widget/{sys_id}"
-        response = requests.patch(url, json=body, headers=headers, timeout=30)
+        client = await get_async_client()
+        response = await client.patch(url, json=body, headers=headers, timeout=30)
         response.raise_for_status()
 
         data = response.json()

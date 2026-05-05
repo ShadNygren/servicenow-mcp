@@ -4,9 +4,9 @@ Tests for the script include tools.
 This module contains tests for the script include tools in the ServiceNow MCP server.
 """
 
-import unittest
-import requests
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+import httpx
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.tools.script_include_tools import (
@@ -25,7 +25,7 @@ from servicenow_mcp.tools.script_include_tools import (
 from servicenow_mcp.utils.config import ServerConfig, AuthConfig, AuthType, BasicAuthConfig
 
 
-class TestScriptIncludeTools(unittest.TestCase):
+class TestScriptIncludeTools(IsolatedAsyncioTestCase):
     """Tests for the script include tools."""
 
     def setUp(self):
@@ -42,13 +42,13 @@ class TestScriptIncludeTools(unittest.TestCase):
             auth=auth_config,
         )
         self.auth_manager = MagicMock(spec=AuthManager)
-        self.auth_manager.get_headers.return_value = {
+        self.auth_manager.get_headers_async = AsyncMock(return_value={
             "Authorization": "Bearer test",
             "Content-Type": "application/json",
-        }
+        })
 
-    @patch("servicenow_mcp.tools.script_include_tools.requests.get")
-    def test_list_script_includes(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_script_includes(self, mock_get):
         """Test listing script includes."""
         # Mock response
         mock_response = MagicMock()
@@ -81,7 +81,7 @@ class TestScriptIncludeTools(unittest.TestCase):
             client_callable=True,
             query="Test"
         )
-        result = list_script_includes(self.server_config, self.auth_manager, params)
+        result = await list_script_includes(self.server_config, self.auth_manager, params)
 
         # Verify the result
         self.assertTrue(result["success"])
@@ -95,13 +95,13 @@ class TestScriptIncludeTools(unittest.TestCase):
         mock_get.assert_called_once()
         args, kwargs = mock_get.call_args
         self.assertEqual(f"{self.server_config.instance_url}/api/now/table/sys_script_include", args[0])
-        self.assertEqual(self.auth_manager.get_headers(), kwargs["headers"])
+        self.assertEqual(self.auth_manager.get_headers_async.return_value, kwargs["headers"])
         self.assertEqual(10, kwargs["params"]["sysparm_limit"])
         self.assertEqual(0, kwargs["params"]["sysparm_offset"])
         self.assertEqual("active=true^client_callable=true^nameLIKETest", kwargs["params"]["sysparm_query"])
 
-    @patch("servicenow_mcp.tools.script_include_tools.requests.get")
-    def test_get_script_include(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_script_include(self, mock_get):
         """Test getting a script include."""
         # Mock response
         mock_response = MagicMock()
@@ -126,7 +126,7 @@ class TestScriptIncludeTools(unittest.TestCase):
 
         # Call the method
         params = GetScriptIncludeParams(script_include_id="123")
-        result = get_script_include(self.server_config, self.auth_manager, params)
+        result = await get_script_include(self.server_config, self.auth_manager, params)
 
         # Verify the result
         self.assertTrue(result["success"])
@@ -139,11 +139,11 @@ class TestScriptIncludeTools(unittest.TestCase):
         mock_get.assert_called_once()
         args, kwargs = mock_get.call_args
         self.assertEqual(f"{self.server_config.instance_url}/api/now/table/sys_script_include", args[0])
-        self.assertEqual(self.auth_manager.get_headers(), kwargs["headers"])
+        self.assertEqual(self.auth_manager.get_headers_async.return_value, kwargs["headers"])
         self.assertEqual("name=123", kwargs["params"]["sysparm_query"])
 
-    @patch("servicenow_mcp.tools.script_include_tools.requests.post")
-    def test_create_script_include(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_script_include(self, mock_post):
         """Test creating a script include."""
         # Mock response
         mock_response = MagicMock()
@@ -166,7 +166,7 @@ class TestScriptIncludeTools(unittest.TestCase):
             active=True,
             access="public"
         )
-        result = create_script_include(self.server_config, self.auth_manager, params)
+        result = await create_script_include(self.server_config, self.auth_manager, params)
 
         # Verify the result
         self.assertTrue(result.success)
@@ -177,15 +177,15 @@ class TestScriptIncludeTools(unittest.TestCase):
         mock_post.assert_called_once()
         args, kwargs = mock_post.call_args
         self.assertEqual(f"{self.server_config.instance_url}/api/now/table/sys_script_include", args[0])
-        self.assertEqual(self.auth_manager.get_headers(), kwargs["headers"])
+        self.assertEqual(self.auth_manager.get_headers_async.return_value, kwargs["headers"])
         self.assertEqual("TestScriptInclude", kwargs["json"]["name"])
         self.assertEqual("true", kwargs["json"]["client_callable"])
         self.assertEqual("true", kwargs["json"]["active"])
         self.assertEqual("public", kwargs["json"]["access"])
 
     @patch("servicenow_mcp.tools.script_include_tools.get_script_include")
-    @patch("servicenow_mcp.tools.script_include_tools.requests.patch")
-    def test_update_script_include(self, mock_patch, mock_get_script_include):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_script_include(self, mock_patch, mock_get_script_include):
         """Test updating a script include."""
         # Mock get_script_include response
         mock_get_script_include.return_value = {
@@ -221,7 +221,7 @@ class TestScriptIncludeTools(unittest.TestCase):
             description="Updated Test Script Include",
             client_callable=False,
         )
-        result = update_script_include(self.server_config, self.auth_manager, params)
+        result = await update_script_include(self.server_config, self.auth_manager, params)
 
         # Verify the result
         self.assertTrue(result.success)
@@ -232,13 +232,13 @@ class TestScriptIncludeTools(unittest.TestCase):
         mock_patch.assert_called_once()
         args, kwargs = mock_patch.call_args
         self.assertEqual(f"{self.server_config.instance_url}/api/now/table/sys_script_include/123", args[0])
-        self.assertEqual(self.auth_manager.get_headers(), kwargs["headers"])
+        self.assertEqual(self.auth_manager.get_headers_async.return_value, kwargs["headers"])
         self.assertEqual("Updated Test Script Include", kwargs["json"]["description"])
         self.assertEqual("false", kwargs["json"]["client_callable"])
 
     @patch("servicenow_mcp.tools.script_include_tools.get_script_include")
-    @patch("servicenow_mcp.tools.script_include_tools.requests.delete")
-    def test_delete_script_include(self, mock_delete, mock_get_script_include):
+    @patch.object(httpx.AsyncClient, "delete", new_callable=AsyncMock)
+    async def test_delete_script_include(self, mock_delete, mock_get_script_include):
         """Test deleting a script include."""
         # Mock get_script_include response
         mock_get_script_include.return_value = {
@@ -257,7 +257,7 @@ class TestScriptIncludeTools(unittest.TestCase):
 
         # Call the method
         params = DeleteScriptIncludeParams(script_include_id="123")
-        result = delete_script_include(self.server_config, self.auth_manager, params)
+        result = await delete_script_include(self.server_config, self.auth_manager, params)
 
         # Verify the result
         self.assertTrue(result.success)
@@ -268,58 +268,58 @@ class TestScriptIncludeTools(unittest.TestCase):
         mock_delete.assert_called_once()
         args, kwargs = mock_delete.call_args
         self.assertEqual(f"{self.server_config.instance_url}/api/now/table/sys_script_include/123", args[0])
-        self.assertEqual(self.auth_manager.get_headers(), kwargs["headers"])
+        self.assertEqual(self.auth_manager.get_headers_async.return_value, kwargs["headers"])
 
-    @patch("servicenow_mcp.tools.script_include_tools.requests.get")
-    def test_list_script_includes_error(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_script_includes_error(self, mock_get):
         """Test listing script includes with an error."""
         # Mock response
-        mock_get.side_effect = requests.RequestException("Test error")
+        mock_get.side_effect = httpx.HTTPError("Test error")
 
         # Call the method
         params = ListScriptIncludesParams()
-        result = list_script_includes(self.server_config, self.auth_manager, params)
+        result = await list_script_includes(self.server_config, self.auth_manager, params)
 
         # Verify the result
         self.assertFalse(result["success"])
         self.assertIn("Error listing script includes", result["message"])
 
-    @patch("servicenow_mcp.tools.script_include_tools.requests.get")
-    def test_get_script_include_error(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_script_include_error(self, mock_get):
         """Test getting a script include with an error."""
         # Mock response
-        mock_get.side_effect = requests.RequestException("Test error")
+        mock_get.side_effect = httpx.HTTPError("Test error")
 
         # Call the method
         params = GetScriptIncludeParams(script_include_id="123")
-        result = get_script_include(self.server_config, self.auth_manager, params)
+        result = await get_script_include(self.server_config, self.auth_manager, params)
 
         # Verify the result
         self.assertFalse(result["success"])
         self.assertIn("Error getting script include", result["message"])
 
-    @patch("servicenow_mcp.tools.script_include_tools.requests.post")
-    def test_create_script_include_error(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_script_include_error(self, mock_post):
         """Test creating a script include with an error."""
         # Mock response
-        mock_post.side_effect = requests.RequestException("Test error")
+        mock_post.side_effect = httpx.HTTPError("Test error")
 
         # Call the method
         params = CreateScriptIncludeParams(
             name="TestScriptInclude",
             script="var TestScriptInclude = Class.create();\nTestScriptInclude.prototype = {\n    initialize: function() {\n    },\n\n    type: 'TestScriptInclude'\n};",
         )
-        result = create_script_include(self.server_config, self.auth_manager, params)
+        result = await create_script_include(self.server_config, self.auth_manager, params)
 
         # Verify the result
         self.assertFalse(result.success)
         self.assertIn("Error creating script include", result.message)
 
 
-class TestScriptIncludeParams(unittest.TestCase):
+class TestScriptIncludeParams(IsolatedAsyncioTestCase):
     """Tests for the script include parameters."""
 
-    def test_list_script_includes_params(self):
+    async def test_list_script_includes_params(self):
         """Test list script includes parameters."""
         params = ListScriptIncludesParams(
             limit=20,
@@ -334,12 +334,12 @@ class TestScriptIncludeParams(unittest.TestCase):
         self.assertFalse(params.client_callable)
         self.assertEqual("Test", params.query)
 
-    def test_get_script_include_params(self):
+    async def test_get_script_include_params(self):
         """Test get script include parameters."""
         params = GetScriptIncludeParams(script_include_id="123")
         self.assertEqual("123", params.script_include_id)
 
-    def test_create_script_include_params(self):
+    async def test_create_script_include_params(self):
         """Test create script include parameters."""
         params = CreateScriptIncludeParams(
             name="TestScriptInclude",
@@ -355,7 +355,7 @@ class TestScriptIncludeParams(unittest.TestCase):
         self.assertTrue(params.active)
         self.assertEqual("public", params.access)
 
-    def test_update_script_include_params(self):
+    async def test_update_script_include_params(self):
         """Test update script include parameters."""
         params = UpdateScriptIncludeParams(
             script_include_id="123",
@@ -367,12 +367,12 @@ class TestScriptIncludeParams(unittest.TestCase):
         self.assertEqual("Updated Test Script Include", params.description)
         self.assertFalse(params.client_callable)
 
-    def test_delete_script_include_params(self):
+    async def test_delete_script_include_params(self):
         """Test delete script include parameters."""
         params = DeleteScriptIncludeParams(script_include_id="123")
         self.assertEqual("123", params.script_include_id)
 
-    def test_script_include_response(self):
+    async def test_script_include_response(self):
         """Test script include response."""
         response = ScriptIncludeResponse(
             success=True,
