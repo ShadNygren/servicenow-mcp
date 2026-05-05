@@ -90,8 +90,19 @@ def register_tool(
 
     new_signature = inspect.Signature(sig_params, return_annotation=Any)
 
-    def wrapper(**kwargs: Any) -> Any:
-        return impl(config, auth_manager, params_model(**kwargs))
+    # Phase 9.1: dispatch on whether impl is sync or async.  FastMCP's add_tool
+    # accepts both shapes; we just pick the matching wrapper so an awaitable
+    # impl is awaited and a sync impl is called.  Sync impls continue to work
+    # unchanged (FastMCP runs them in a threadpool).
+    if inspect.iscoroutinefunction(impl):
+
+        async def wrapper(**kwargs: Any) -> Any:
+            return await impl(config, auth_manager, params_model(**kwargs))
+
+    else:
+
+        def wrapper(**kwargs: Any) -> Any:  # type: ignore[misc]
+            return impl(config, auth_manager, params_model(**kwargs))
 
     wrapper.__name__ = name
     wrapper.__qualname__ = name
