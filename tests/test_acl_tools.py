@@ -4,9 +4,9 @@ Tests for Access Control List (ACL) and Security tools.
 This module contains unit tests for ACL, Role, and Security Attribute management.
 """
 
-import requests
+import httpx
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 from servicenow_mcp.tools.acl_tools import (
     list_acls,
     get_acl,
@@ -49,18 +49,18 @@ def mock_config():
 def mock_auth_manager():
     """Create a mock AuthManager."""
     auth_manager = Mock(spec=AuthManager)
-    auth_manager.get_headers.return_value = {
+    auth_manager.get_headers_async = AsyncMock(return_value={
         "Authorization": "Bearer token",
         "Content-Type": "application/json",
-    }
+    })
     return auth_manager
 
 
 class TestListACLs:
     """Tests for list_acls function."""
 
-    @patch("servicenow_mcp.tools.acl_tools.requests.get")
-    def test_list_acls_success(self, mock_get, mock_config, mock_auth_manager):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_acls_success(self, mock_get, mock_config, mock_auth_manager):
         """Test successful ACL listing."""
         mock_response = Mock()
         mock_response.json.return_value = {
@@ -83,15 +83,15 @@ class TestListACLs:
         mock_get.return_value = mock_response
 
         params = ListACLsParams(limit=10, offset=0)
-        result = list_acls(mock_config, mock_auth_manager, params)
+        result = await list_acls(mock_config, mock_auth_manager, params)
 
         assert result["success"] is True
         assert len(result["acls"]) == 1
         assert result["acls"][0]["name"] == "incident.read"
         assert result["total"] == 1
 
-    @patch("servicenow_mcp.tools.acl_tools.requests.get")
-    def test_list_acls_with_filters(self, mock_get, mock_config, mock_auth_manager):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_acls_with_filters(self, mock_get, mock_config, mock_auth_manager):
         """Test ACL listing with filters."""
         mock_response = Mock()
         mock_response.json.return_value = {"result": []}
@@ -101,7 +101,7 @@ class TestListACLs:
         params = ListACLsParams(
             limit=10, offset=0, table_name="incident", operation="read", active=True
         )
-        list_acls(mock_config, mock_auth_manager, params)
+        await list_acls(mock_config, mock_auth_manager, params)
 
         call_args = mock_get.call_args
         assert "sysparm_query" in call_args[1]["params"]
@@ -110,8 +110,8 @@ class TestListACLs:
 class TestGetACL:
     """Tests for get_acl function."""
 
-    @patch("servicenow_mcp.tools.acl_tools.requests.get")
-    def test_get_acl_success(self, mock_get, mock_config, mock_auth_manager):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_acl_success(self, mock_get, mock_config, mock_auth_manager):
         """Test successful ACL retrieval."""
         mock_response = Mock()
         mock_response.json.return_value = {
@@ -132,14 +132,14 @@ class TestGetACL:
         mock_get.return_value = mock_response
 
         params = GetACLParams(acl_id="acl123")
-        result = get_acl(mock_config, mock_auth_manager, params)
+        result = await get_acl(mock_config, mock_auth_manager, params)
 
         assert result.success is True
         assert result.data["name"] == "incident.read"
         assert result.data["operation"] == "read"
 
-    @patch("servicenow_mcp.tools.acl_tools.requests.get")
-    def test_get_acl_not_found(self, mock_get, mock_config, mock_auth_manager):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_acl_not_found(self, mock_get, mock_config, mock_auth_manager):
         """Test ACL not found."""
         mock_response = Mock()
         mock_response.json.return_value = {"result": {}}
@@ -147,7 +147,7 @@ class TestGetACL:
         mock_get.return_value = mock_response
 
         params = GetACLParams(acl_id="nonexistent")
-        result = get_acl(mock_config, mock_auth_manager, params)
+        result = await get_acl(mock_config, mock_auth_manager, params)
 
         assert result.success is False
         assert "not found" in result.message.lower()
@@ -156,8 +156,8 @@ class TestGetACL:
 class TestCreateACL:
     """Tests for create_acl function."""
 
-    @patch("servicenow_mcp.tools.acl_tools.requests.post")
-    def test_create_acl_success(self, mock_post, mock_config, mock_auth_manager):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_acl_success(self, mock_post, mock_config, mock_auth_manager):
         """Test successful ACL creation."""
         mock_response = Mock()
         mock_response.json.return_value = {
@@ -180,7 +180,7 @@ class TestCreateACL:
             active=True,
             admin_overrides=False,
         )
-        result = create_acl(mock_config, mock_auth_manager, params)
+        result = await create_acl(mock_config, mock_auth_manager, params)
 
         assert result.success is True
         assert result.data["name"] == "incident.write"
@@ -190,8 +190,8 @@ class TestCreateACL:
 class TestUpdateACL:
     """Tests for update_acl function."""
 
-    @patch("servicenow_mcp.tools.acl_tools.requests.patch")
-    def test_update_acl_success(self, mock_patch, mock_config, mock_auth_manager):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_acl_success(self, mock_patch, mock_config, mock_auth_manager):
         """Test successful ACL update."""
         mock_response = Mock()
         mock_response.json.return_value = {
@@ -208,7 +208,7 @@ class TestUpdateACL:
         params = UpdateACLParams(
             acl_id="acl123", name="incident.read.updated", description="Updated description"
         )
-        result = update_acl(mock_config, mock_auth_manager, params)
+        result = await update_acl(mock_config, mock_auth_manager, params)
 
         assert result.success is True
         assert result.data["name"] == "incident.read.updated"
@@ -217,15 +217,15 @@ class TestUpdateACL:
 class TestDeleteACL:
     """Tests for delete_acl function."""
 
-    @patch("servicenow_mcp.tools.acl_tools.requests.delete")
-    def test_delete_acl_success(self, mock_delete, mock_config, mock_auth_manager):
+    @patch.object(httpx.AsyncClient, "delete", new_callable=AsyncMock)
+    async def test_delete_acl_success(self, mock_delete, mock_config, mock_auth_manager):
         """Test successful ACL deletion."""
         mock_response = Mock()
         mock_response.raise_for_status.return_value = None
         mock_delete.return_value = mock_response
 
         params = DeleteACLParams(acl_id="acl123")
-        result = delete_acl(mock_config, mock_auth_manager, params)
+        result = await delete_acl(mock_config, mock_auth_manager, params)
 
         assert result.success is True
         assert "deleted successfully" in result.message.lower()
@@ -234,8 +234,8 @@ class TestDeleteACL:
 class TestListRoles:
     """Tests for list_roles function."""
 
-    @patch("servicenow_mcp.tools.acl_tools.requests.get")
-    def test_list_roles_success(self, mock_get, mock_config, mock_auth_manager):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_roles_success(self, mock_get, mock_config, mock_auth_manager):
         """Test successful role listing."""
         mock_response = Mock()
         mock_response.json.return_value = {
@@ -254,7 +254,7 @@ class TestListRoles:
         mock_get.return_value = mock_response
 
         params = ListRolesParams(limit=10, offset=0)
-        result = list_roles(mock_config, mock_auth_manager, params)
+        result = await list_roles(mock_config, mock_auth_manager, params)
 
         assert result["success"] is True
         assert len(result["roles"]) == 1
@@ -264,8 +264,8 @@ class TestListRoles:
 class TestGetRole:
     """Tests for get_role function."""
 
-    @patch("servicenow_mcp.tools.acl_tools.requests.get")
-    def test_get_role_by_sys_id(self, mock_get, mock_config, mock_auth_manager):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_role_by_sys_id(self, mock_get, mock_config, mock_auth_manager):
         """Test role retrieval by sys_id."""
         mock_response = Mock()
         mock_response.json.return_value = {
@@ -281,13 +281,13 @@ class TestGetRole:
         mock_get.return_value = mock_response
 
         params = GetRoleParams(role_id="12345678901234567890123456789012")
-        result = get_role(mock_config, mock_auth_manager, params)
+        result = await get_role(mock_config, mock_auth_manager, params)
 
         assert result.success is True
         assert result.data["name"] == "admin"
 
-    @patch("servicenow_mcp.tools.acl_tools.requests.get")
-    def test_get_role_by_name(self, mock_get, mock_config, mock_auth_manager):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_role_by_name(self, mock_get, mock_config, mock_auth_manager):
         """Test role retrieval by name."""
         mock_response = Mock()
         mock_response.json.return_value = {
@@ -305,7 +305,7 @@ class TestGetRole:
         mock_get.return_value = mock_response
 
         params = GetRoleParams(role_id="admin")
-        result = get_role(mock_config, mock_auth_manager, params)
+        result = await get_role(mock_config, mock_auth_manager, params)
 
         assert result.success is True
         assert result.data["name"] == "admin"
@@ -314,8 +314,8 @@ class TestGetRole:
 class TestCreateRole:
     """Tests for create_role function."""
 
-    @patch("servicenow_mcp.tools.acl_tools.requests.post")
-    def test_create_role_success(self, mock_post, mock_config, mock_auth_manager):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_role_success(self, mock_post, mock_config, mock_auth_manager):
         """Test successful role creation."""
         mock_response = Mock()
         mock_response.json.return_value = {
@@ -333,7 +333,7 @@ class TestCreateRole:
             description="Custom role for specific access",
             elevated_privilege=False,
         )
-        result = create_role(mock_config, mock_auth_manager, params)
+        result = await create_role(mock_config, mock_auth_manager, params)
 
         assert result.success is True
         assert result.data["name"] == "custom_role"
@@ -342,8 +342,8 @@ class TestCreateRole:
 class TestUpdateRole:
     """Tests for update_role function."""
 
-    @patch("servicenow_mcp.tools.acl_tools.requests.patch")
-    def test_update_role_success(self, mock_patch, mock_config, mock_auth_manager):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_role_success(self, mock_patch, mock_config, mock_auth_manager):
         """Test successful role update."""
         mock_response = Mock()
         mock_response.json.return_value = {
@@ -361,7 +361,7 @@ class TestUpdateRole:
             name="custom_role_updated",
             description="Updated description",
         )
-        result = update_role(mock_config, mock_auth_manager, params)
+        result = await update_role(mock_config, mock_auth_manager, params)
 
         assert result.success is True
         assert result.data["name"] == "custom_role_updated"
@@ -370,8 +370,8 @@ class TestUpdateRole:
 class TestListSecurityAttributes:
     """Tests for list_security_attributes function."""
 
-    @patch("servicenow_mcp.tools.acl_tools.requests.get")
-    def test_list_security_attributes_success(
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_security_attributes_success(
         self, mock_get, mock_config, mock_auth_manager
     ):
         """Test successful security attributes listing."""
@@ -391,7 +391,7 @@ class TestListSecurityAttributes:
         mock_get.return_value = mock_response
 
         params = ListSecurityAttributesParams(limit=10, offset=0)
-        result = list_security_attributes(mock_config, mock_auth_manager, params)
+        result = await list_security_attributes(mock_config, mock_auth_manager, params)
 
         assert result["success"] is True
         assert len(result["attributes"]) == 1
@@ -401,8 +401,8 @@ class TestListSecurityAttributes:
 class TestCreateSecurityAttribute:
     """Tests for create_security_attribute function."""
 
-    @patch("servicenow_mcp.tools.acl_tools.requests.post")
-    def test_create_security_attribute_success(
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_security_attribute_success(
         self, mock_post, mock_config, mock_auth_manager
     ):
         """Test successful security attribute creation."""
@@ -422,7 +422,7 @@ class TestCreateSecurityAttribute:
             description="Confidentiality level",
             type="string",
         )
-        result = create_security_attribute(mock_config, mock_auth_manager, params)
+        result = await create_security_attribute(mock_config, mock_auth_manager, params)
 
         assert result.success is True
         assert result.data["name"] == "confidentiality"
@@ -431,26 +431,26 @@ class TestCreateSecurityAttribute:
 class TestErrorHandling:
     """Tests for error handling in ACL tools."""
 
-    @patch("servicenow_mcp.tools.acl_tools.requests.get")
-    def test_list_acls_request_error(self, mock_get, mock_config, mock_auth_manager):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_acls_request_error(self, mock_get, mock_config, mock_auth_manager):
         """Test error handling in list_acls."""
-        mock_get.side_effect = requests.exceptions.RequestException("Connection error")
+        mock_get.side_effect = httpx.HTTPError("Connection error")
 
         params = ListACLsParams(limit=10, offset=0)
-        result = list_acls(mock_config, mock_auth_manager, params)
+        result = await list_acls(mock_config, mock_auth_manager, params)
 
         assert result["success"] is False
         assert "error" in result["message"].lower() or "failed" in result["message"].lower()
 
-    @patch("servicenow_mcp.tools.acl_tools.requests.post")
-    def test_create_acl_request_error(self, mock_post, mock_config, mock_auth_manager):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_acl_request_error(self, mock_post, mock_config, mock_auth_manager):
         """Test error handling in create_acl."""
-        mock_post.side_effect = requests.exceptions.RequestException("API error")
+        mock_post.side_effect = httpx.HTTPError("API error")
 
         params = CreateACLParams(
             name="test.acl", type="record", operation="read", active=True
         )
-        result = create_acl(mock_config, mock_auth_manager, params)
+        result = await create_acl(mock_config, mock_auth_manager, params)
 
         assert result.success is False
         assert "error" in result.message.lower() or "failed" in result.message.lower()

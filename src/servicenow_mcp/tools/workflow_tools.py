@@ -7,10 +7,11 @@ This module provides tools for viewing and managing workflows in ServiceNow.
 import logging
 from typing import Any, Dict, List, Optional, Type, TypeVar, Union, cast
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -179,7 +180,7 @@ def _get_auth_and_config(
     return cast(AuthManager, auth_manager), cast(ServerConfig, server_config)
 
 
-def list_workflows(
+async def list_workflows(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -227,10 +228,11 @@ def list_workflows(
     
     # Make the API request
     try:
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         url = f"{server_config.instance_url}/api/now/table/wf_workflow"
         
-        response = requests.get(url, headers=headers, params=query_params)
+        client = await get_async_client()
+        response = await client.get(url, headers=headers, params=query_params)
         response.raise_for_status()
         
         result = response.json()
@@ -239,7 +241,7 @@ def list_workflows(
             "count": len(result.get("result", [])),
             "total": int(response.headers.get("X-Total-Count", 0)),
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error listing workflows: {e}")
         return {"error": str(e)}
     except Exception as e:
@@ -247,7 +249,7 @@ def list_workflows(
         return {"error": str(e)}
 
 
-def get_workflow_details(
+async def get_workflow_details(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -278,17 +280,18 @@ def get_workflow_details(
     
     # Make the API request
     try:
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         url = f"{server_config.instance_url}/api/now/table/wf_workflow/{workflow_id}"
         
-        response = requests.get(url, headers=headers)
+        client = await get_async_client()
+        response = await client.get(url, headers=headers)
         response.raise_for_status()
         
         result = response.json()
         return {
             "workflow": result.get("result", {}),
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error getting workflow details: {e}")
         return {"error": str(e)}
     except Exception as e:
@@ -296,7 +299,7 @@ def get_workflow_details(
         return {"error": str(e)}
 
 
-def list_workflow_versions(
+async def list_workflow_versions(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -335,10 +338,11 @@ def list_workflow_versions(
     
     # Make the API request
     try:
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         url = f"{server_config.instance_url}/api/now/table/wf_workflow_version"
         
-        response = requests.get(url, headers=headers, params=query_params)
+        client = await get_async_client()
+        response = await client.get(url, headers=headers, params=query_params)
         response.raise_for_status()
         
         result = response.json()
@@ -348,7 +352,7 @@ def list_workflow_versions(
             "total": int(response.headers.get("X-Total-Count", 0)),
             "workflow_id": workflow_id,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error listing workflow versions: {e}")
         return {"error": str(e)}
     except Exception as e:
@@ -356,7 +360,7 @@ def list_workflow_versions(
         return {"error": str(e)}
 
 
-def get_workflow_activities(
+async def get_workflow_activities(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -391,7 +395,7 @@ def get_workflow_activities(
     # If no version specified, get the latest published version
     if not version_id:
         try:
-            headers = auth_manager.get_headers()
+            headers = await auth_manager.get_headers_async()
             version_url = f"{server_config.instance_url}/api/now/table/wf_workflow_version"
             version_params: Dict[str, Any] = {
                 "sysparm_query": f"workflow={workflow_id}^published=true",
@@ -399,7 +403,8 @@ def get_workflow_activities(
                 "sysparm_orderby": "version DESC",
             }
             
-            version_response = requests.get(version_url, headers=headers, params=version_params)
+            client = await get_async_client()
+            version_response = await client.get(version_url, headers=headers, params=version_params)
             version_response.raise_for_status()
             
             version_result = version_response.json()
@@ -412,7 +417,7 @@ def get_workflow_activities(
                 }
             
             version_id = versions[0]["sys_id"]
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             logger.error(f"Error getting workflow version: {e}")
             return {"error": str(e)}
         except Exception as e:
@@ -421,14 +426,15 @@ def get_workflow_activities(
     
     # Get activities for the version
     try:
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         activities_url = f"{server_config.instance_url}/api/now/table/wf_activity"
         activities_params = {
             "sysparm_query": f"workflow_version={version_id}",
             "sysparm_orderby": "order",
         }
         
-        activities_response = requests.get(activities_url, headers=headers, params=activities_params)
+        client = await get_async_client()
+        activities_response = await client.get(activities_url, headers=headers, params=activities_params)
         activities_response.raise_for_status()
         
         activities_result = activities_response.json()
@@ -438,7 +444,7 @@ def get_workflow_activities(
             "workflow_id": workflow_id,
             "version_id": version_id,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error getting workflow activities: {e}")
         return {"error": str(e)}
     except Exception as e:
@@ -446,7 +452,7 @@ def get_workflow_activities(
         return {"error": str(e)}
 
 
-def create_workflow(
+async def create_workflow(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -496,10 +502,11 @@ def create_workflow(
     
     # Make the API request
     try:
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         url = f"{server_config.instance_url}/api/now/table/wf_workflow"
         
-        response = requests.post(url, headers=headers, json=data)
+        client = await get_async_client()
+        response = await client.post(url, headers=headers, json=data)
         response.raise_for_status()
         
         result = response.json()
@@ -507,7 +514,7 @@ def create_workflow(
             "workflow": result.get("result", {}),
             "message": "Workflow created successfully",
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error creating workflow: {e}")
         return {"error": str(e)}
     except Exception as e:
@@ -515,7 +522,7 @@ def create_workflow(
         return {"error": str(e)}
 
 
-def update_workflow(
+async def update_workflow(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -569,10 +576,11 @@ def update_workflow(
     
     # Make the API request
     try:
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         url = f"{server_config.instance_url}/api/now/table/wf_workflow/{workflow_id}"
         
-        response = requests.patch(url, headers=headers, json=data)
+        client = await get_async_client()
+        response = await client.patch(url, headers=headers, json=data)
         response.raise_for_status()
         
         result = response.json()
@@ -580,7 +588,7 @@ def update_workflow(
             "workflow": result.get("result", {}),
             "message": "Workflow updated successfully",
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error updating workflow: {e}")
         return {"error": str(e)}
     except Exception as e:
@@ -588,7 +596,7 @@ def update_workflow(
         return {"error": str(e)}
 
 
-def activate_workflow(
+async def activate_workflow(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -625,10 +633,11 @@ def activate_workflow(
     
     # Make the API request
     try:
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         url = f"{server_config.instance_url}/api/now/table/wf_workflow/{workflow_id}"
         
-        response = requests.patch(url, headers=headers, json=data)
+        client = await get_async_client()
+        response = await client.patch(url, headers=headers, json=data)
         response.raise_for_status()
         
         result = response.json()
@@ -636,7 +645,7 @@ def activate_workflow(
             "workflow": result.get("result", {}),
             "message": "Workflow activated successfully",
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error activating workflow: {e}")
         return {"error": str(e)}
     except Exception as e:
@@ -644,7 +653,7 @@ def activate_workflow(
         return {"error": str(e)}
 
 
-def deactivate_workflow(
+async def deactivate_workflow(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -681,10 +690,11 @@ def deactivate_workflow(
     
     # Make the API request
     try:
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         url = f"{server_config.instance_url}/api/now/table/wf_workflow/{workflow_id}"
         
-        response = requests.patch(url, headers=headers, json=data)
+        client = await get_async_client()
+        response = await client.patch(url, headers=headers, json=data)
         response.raise_for_status()
         
         result = response.json()
@@ -692,7 +702,7 @@ def deactivate_workflow(
             "workflow": result.get("result", {}),
             "message": "Workflow deactivated successfully",
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error deactivating workflow: {e}")
         return {"error": str(e)}
     except Exception as e:
@@ -700,7 +710,7 @@ def deactivate_workflow(
         return {"error": str(e)}
 
 
-def add_workflow_activity(
+async def add_workflow_activity(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -753,10 +763,11 @@ def add_workflow_activity(
     
     # Make the API request
     try:
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         url = f"{server_config.instance_url}/api/now/table/wf_activity"
         
-        response = requests.post(url, headers=headers, json=data)
+        client = await get_async_client()
+        response = await client.post(url, headers=headers, json=data)
         response.raise_for_status()
         
         result = response.json()
@@ -764,7 +775,7 @@ def add_workflow_activity(
             "activity": result.get("result", {}),
             "message": "Workflow activity added successfully",
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error adding workflow activity: {e}")
         return {"error": str(e)}
     except Exception as e:
@@ -772,7 +783,7 @@ def add_workflow_activity(
         return {"error": str(e)}
 
 
-def update_workflow_activity(
+async def update_workflow_activity(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -820,10 +831,11 @@ def update_workflow_activity(
     
     # Make the API request
     try:
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         url = f"{server_config.instance_url}/api/now/table/wf_activity/{activity_id}"
         
-        response = requests.patch(url, headers=headers, json=data)
+        client = await get_async_client()
+        response = await client.patch(url, headers=headers, json=data)
         response.raise_for_status()
         
         result = response.json()
@@ -831,7 +843,7 @@ def update_workflow_activity(
             "activity": result.get("result", {}),
             "message": "Activity updated successfully",
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error updating workflow activity: {e}")
         return {"error": str(e)}
     except Exception as e:
@@ -839,7 +851,7 @@ def update_workflow_activity(
         return {"error": str(e)}
 
 
-def delete_workflow_activity(
+async def delete_workflow_activity(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -871,17 +883,18 @@ def delete_workflow_activity(
     
     # Make the API request
     try:
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         url = f"{server_config.instance_url}/api/now/table/wf_activity/{activity_id}"
         
-        response = requests.delete(url, headers=headers)
+        client = await get_async_client()
+        response = await client.delete(url, headers=headers)
         response.raise_for_status()
         
         return {
             "message": "Activity deleted successfully",
             "activity_id": activity_id,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error deleting workflow activity: {e}")
         return {"error": str(e)}
     except Exception as e:
@@ -889,7 +902,7 @@ def delete_workflow_activity(
         return {"error": str(e)}
 
 
-def reorder_workflow_activities(
+async def reorder_workflow_activities(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -925,7 +938,7 @@ def reorder_workflow_activities(
     
     # Make the API requests to update the order of each activity
     try:
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         results = []
         
         for i, activity_id in enumerate(activity_ids):
@@ -936,7 +949,8 @@ def reorder_workflow_activities(
             data = {"order": new_order}
             
             try:
-                response = requests.patch(url, headers=headers, json=data)
+                client = await get_async_client()
+                response = await client.patch(url, headers=headers, json=data)
                 response.raise_for_status()
                 
                 results.append({
@@ -944,7 +958,7 @@ def reorder_workflow_activities(
                     "new_order": new_order,
                     "success": True,
                 })
-            except requests.RequestException as e:
+            except httpx.HTTPError as e:
                 logger.error(f"Error updating activity order: {e}")
                 results.append({
                     "activity_id": activity_id,
@@ -962,7 +976,7 @@ def reorder_workflow_activities(
         return {"error": str(e)}
 
 
-def delete_workflow(
+async def delete_workflow(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -994,17 +1008,18 @@ def delete_workflow(
     
     # Make the API request
     try:
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         url = f"{server_config.instance_url}/api/now/table/wf_workflow/{workflow_id}"
         
-        response = requests.delete(url, headers=headers)
+        client = await get_async_client()
+        response = await client.delete(url, headers=headers)
         response.raise_for_status()
         
         return {
             "message": f"Workflow {workflow_id} deleted successfully",
             "workflow_id": workflow_id,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error deleting workflow: {e}")
         return {"error": str(e)}
     except Exception as e:

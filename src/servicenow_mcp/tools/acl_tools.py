@@ -8,10 +8,11 @@ and related security configurations in ServiceNow.
 import logging
 from typing import Any, Dict, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -135,7 +136,7 @@ class ACLResponse(BaseModel):
     data: Optional[Dict[str, Any]] = Field(None, description="Response data")
 
 
-def list_acls(
+async def list_acls(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListACLsParams,
@@ -179,10 +180,11 @@ def list_acls(
     
     # Make request
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -214,7 +216,7 @@ def list_acls(
             "offset": params.offset,
         }
         
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to list ACLs: {e}")
         return {
             "success": False,
@@ -224,7 +226,7 @@ def list_acls(
         }
 
 
-def get_acl(
+async def get_acl(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetACLParams,
@@ -250,10 +252,11 @@ def get_acl(
     }
     
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -287,7 +290,7 @@ def get_acl(
             data=acl,
         )
         
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to get ACL: {e}")
         return ACLResponse(
             success=False,
@@ -296,7 +299,7 @@ def get_acl(
         )
 
 
-def create_acl(
+async def create_acl(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateACLParams,
@@ -331,10 +334,11 @@ def create_acl(
         data["script"] = params.script
     
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -352,7 +356,7 @@ def create_acl(
             },
         )
         
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create ACL: {e}")
         return ACLResponse(
             success=False,
@@ -361,7 +365,7 @@ def create_acl(
         )
 
 
-def update_acl(
+async def update_acl(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: UpdateACLParams,
@@ -395,10 +399,11 @@ def update_acl(
         data["admin_overrides"] = str(params.admin_overrides).lower()
     
     try:
-        response = requests.patch(
+        client = await get_async_client()
+        response = await client.patch(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -416,7 +421,7 @@ def update_acl(
             },
         )
         
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to update ACL: {e}")
         return ACLResponse(
             success=False,
@@ -425,7 +430,7 @@ def update_acl(
         )
 
 
-def delete_acl(
+async def delete_acl(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: DeleteACLParams,
@@ -446,9 +451,10 @@ def delete_acl(
     api_url = f"{config.api_url}/table/sys_security_acl/{params.acl_id}"
     
     try:
-        response = requests.delete(
+        client = await get_async_client()
+        response = await client.delete(
             api_url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -459,7 +465,7 @@ def delete_acl(
             data={"sys_id": params.acl_id},
         )
         
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to delete ACL: {e}")
         return ACLResponse(
             success=False,
@@ -468,7 +474,7 @@ def delete_acl(
         )
 
 
-def list_roles(
+async def list_roles(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListRolesParams,
@@ -507,10 +513,11 @@ def list_roles(
         query_params["sysparm_query"] = "^".join(filters)
     
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -536,7 +543,7 @@ def list_roles(
             "total": len(roles),
         }
         
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to list roles: {e}")
         return {
             "success": False,
@@ -546,7 +553,7 @@ def list_roles(
         }
 
 
-def get_role(
+async def get_role(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetRoleParams,
@@ -583,10 +590,11 @@ def get_role(
         }
     
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -626,7 +634,7 @@ def get_role(
             data=role,
         )
         
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to get role: {e}")
         return ACLResponse(
             success=False,
@@ -635,7 +643,7 @@ def get_role(
         )
 
 
-def create_role(
+async def create_role(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateRoleParams,
@@ -666,10 +674,11 @@ def create_role(
         data["requires_subscription"] = params.requires_subscription
     
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -686,7 +695,7 @@ def create_role(
             },
         )
         
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create role: {e}")
         return ACLResponse(
             success=False,
@@ -695,7 +704,7 @@ def create_role(
         )
 
 
-def update_role(
+async def update_role(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: UpdateRoleParams,
@@ -726,10 +735,11 @@ def update_role(
         data["elevated_privilege"] = str(params.elevated_privilege).lower()
     
     try:
-        response = requests.patch(
+        client = await get_async_client()
+        response = await client.patch(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -746,7 +756,7 @@ def update_role(
             },
         )
         
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to update role: {e}")
         return ACLResponse(
             success=False,
@@ -755,7 +765,7 @@ def update_role(
         )
 
 
-def list_security_attributes(
+async def list_security_attributes(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListSecurityAttributesParams,
@@ -786,10 +796,11 @@ def list_security_attributes(
         query_params["sysparm_query"] = f"nameLIKE{params.query}^ORdescriptionLIKE{params.query}"
     
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -814,7 +825,7 @@ def list_security_attributes(
             "total": len(attributes),
         }
         
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to list security attributes: {e}")
         return {
             "success": False,
@@ -824,7 +835,7 @@ def list_security_attributes(
         }
 
 
-def create_security_attribute(
+async def create_security_attribute(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateSecurityAttributeParams,
@@ -853,10 +864,11 @@ def create_security_attribute(
         data["description"] = params.description
     
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -873,7 +885,7 @@ def create_security_attribute(
             },
         )
         
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create security attribute: {e}")
         return ACLResponse(
             success=False,

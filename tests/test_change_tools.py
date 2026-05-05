@@ -3,9 +3,10 @@ Tests for the change management tools.
 """
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import requests
+import httpx
 
 from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.tools.change_tools import (
@@ -15,7 +16,7 @@ from servicenow_mcp.tools.change_tools import (
 from servicenow_mcp.utils.config import AuthConfig, AuthType, BasicAuthConfig, ServerConfig
 
 
-class TestChangeTools(unittest.TestCase):
+class TestChangeTools(IsolatedAsyncioTestCase):
     """Tests for the change management tools."""
 
     def setUp(self):
@@ -30,8 +31,8 @@ class TestChangeTools(unittest.TestCase):
         )
         self.auth_manager = AuthManager(self.auth_config)
 
-    @patch("servicenow_mcp.tools.change_tools.requests.get")
-    def test_list_change_requests_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_change_requests_success(self, mock_get):
         """Test listing change requests successfully."""
         # Mock the response
         mock_response = MagicMock()
@@ -61,7 +62,7 @@ class TestChangeTools(unittest.TestCase):
             "limit": 10,
             "timeframe": "upcoming",
         }
-        result = list_change_requests(self.auth_manager, self.server_config, params)
+        result = await list_change_requests(self.auth_manager, self.server_config, params)
 
         # Verify the result
         self.assertTrue(result["success"])
@@ -71,8 +72,8 @@ class TestChangeTools(unittest.TestCase):
         self.assertEqual(result["change_requests"][0]["sys_id"], "change123")
         self.assertEqual(result["change_requests"][1]["sys_id"], "change456")
 
-    @patch("servicenow_mcp.tools.change_tools.requests.get")
-    def test_list_change_requests_empty_result(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_change_requests_empty_result(self, mock_get):
         """Test listing change requests with empty result."""
         # Mock the response
         mock_response = MagicMock()
@@ -85,7 +86,7 @@ class TestChangeTools(unittest.TestCase):
             "limit": 10,
             "timeframe": "upcoming",
         }
-        result = list_change_requests(self.auth_manager, self.server_config, params)
+        result = await list_change_requests(self.auth_manager, self.server_config, params)
 
         # Verify the result
         self.assertTrue(result["success"])
@@ -93,8 +94,8 @@ class TestChangeTools(unittest.TestCase):
         self.assertEqual(result["count"], 0)
         self.assertEqual(result["total"], 0)
 
-    @patch("servicenow_mcp.tools.change_tools.requests.get")
-    def test_list_change_requests_missing_result(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_change_requests_missing_result(self, mock_get):
         """Test listing change requests with missing result key."""
         # Mock the response
         mock_response = MagicMock()
@@ -107,7 +108,7 @@ class TestChangeTools(unittest.TestCase):
             "limit": 10,
             "timeframe": "upcoming",
         }
-        result = list_change_requests(self.auth_manager, self.server_config, params)
+        result = await list_change_requests(self.auth_manager, self.server_config, params)
 
         # Verify the result
         self.assertTrue(result["success"])
@@ -115,25 +116,25 @@ class TestChangeTools(unittest.TestCase):
         self.assertEqual(result["count"], 0)
         self.assertEqual(result["total"], 0)
 
-    @patch("servicenow_mcp.tools.change_tools.requests.get")
-    def test_list_change_requests_error(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_change_requests_error(self, mock_get):
         """Test listing change requests with error."""
         # Mock the response
-        mock_get.side_effect = requests.exceptions.RequestException("Test error")
+        mock_get.side_effect = httpx.HTTPError("Test error")
 
         # Call the function
         params = {
             "limit": 10,
             "timeframe": "upcoming",
         }
-        result = list_change_requests(self.auth_manager, self.server_config, params)
+        result = await list_change_requests(self.auth_manager, self.server_config, params)
 
         # Verify the result
         self.assertFalse(result["success"])
         self.assertIn("Error listing change requests", result["message"])
 
-    @patch("servicenow_mcp.tools.change_tools.requests.get")
-    def test_list_change_requests_with_filters(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_change_requests_with_filters(self, mock_get):
         """Test listing change requests with filters."""
         # Mock the response
         mock_response = MagicMock()
@@ -161,7 +162,7 @@ class TestChangeTools(unittest.TestCase):
             "timeframe": "upcoming",
             "query": "short_description=Test",
         }
-        result = list_change_requests(self.auth_manager, self.server_config, params)
+        result = await list_change_requests(self.auth_manager, self.server_config, params)
 
         # Verify the result
         self.assertTrue(result["success"])
@@ -181,8 +182,8 @@ class TestChangeTools(unittest.TestCase):
         self.assertIn("short_description=Test", query)
         # The timeframe filter adds a date comparison, which is harder to test exactly
 
-    @patch("servicenow_mcp.tools.change_tools.requests.post")
-    def test_create_change_request_with_swapped_parameters(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_change_request_with_swapped_parameters(self, mock_post):
         """Test creating a change request with swapped parameters (server_config used as auth_manager)."""
         # Mock the response
         mock_response = MagicMock()
@@ -200,7 +201,7 @@ class TestChangeTools(unittest.TestCase):
         # Create a server_config with a get_headers method to simulate what might happen in Claude Desktop
         server_config_with_headers = MagicMock()
         server_config_with_headers.instance_url = "https://test.service-now.com"
-        server_config_with_headers.get_headers.return_value = {"Authorization": "Basic dGVzdF91c2VyOnRlc3RfcGFzc3dvcmQ="}
+        server_config_with_headers.get_headers_async = AsyncMock(return_value={"Authorization": "Basic dGVzdF91c2VyOnRlc3RfcGFzc3dvcmQ="})
 
         # Call the function with swapped parameters (server_config as auth_manager)
         params = {
@@ -209,15 +210,15 @@ class TestChangeTools(unittest.TestCase):
             "risk": "low",
             "impact": "medium",
         }
-        result = create_change_request(server_config_with_headers, self.auth_manager, params)
+        result = await create_change_request(server_config_with_headers, self.auth_manager, params)
 
         # Verify the result
         self.assertTrue(result["success"])
         self.assertEqual(result["change_request"]["sys_id"], "change123")
         self.assertEqual(result["change_request"]["number"], "CHG0010001")
 
-    @patch("servicenow_mcp.tools.change_tools.requests.post")
-    def test_create_change_request_with_serverconfig_no_get_headers(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_change_request_with_serverconfig_no_get_headers(self, mock_post):
         """Test creating a change request with ServerConfig object that doesn't have get_headers method."""
         # This test simulates the exact error we're seeing in Claude Desktop
         
@@ -237,12 +238,18 @@ class TestChangeTools(unittest.TestCase):
         )
         
         mock_auth_manager = MagicMock()
-        # Explicitly remove get_headers method to simulate the error
+        # Explicitly remove get_headers/get_headers_async to simulate the error.
+        # MagicMock auto-creates any attribute on access, so the spec helper
+        # would return a MagicMock that can't be awaited; deleting both
+        # variants forces _get_headers_async() down to its "neither has it"
+        # path and produces the expected error message.
         if hasattr(mock_auth_manager, 'get_headers'):
             delattr(mock_auth_manager, 'get_headers')
+        if hasattr(mock_auth_manager, 'get_headers_async'):
+            delattr(mock_auth_manager, 'get_headers_async')
         
         # Call the function with parameters that will cause the error
-        result = create_change_request(real_server_config, mock_auth_manager, params)
+        result = await create_change_request(real_server_config, mock_auth_manager, params)
         
         # The function should detect the issue and return an error message
         self.assertFalse(result["success"])
@@ -251,8 +258,8 @@ class TestChangeTools(unittest.TestCase):
         # Verify that the post method was never called
         mock_post.assert_not_called()
 
-    @patch("servicenow_mcp.tools.change_tools.requests.post")
-    def test_create_change_request_with_swapped_parameters_real(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_change_request_with_swapped_parameters_real(self, mock_post):
         """Test creating a change request with swapped parameters (auth_manager and server_config)."""
         # Mock the response
         mock_response = MagicMock()
@@ -276,7 +283,7 @@ class TestChangeTools(unittest.TestCase):
         }
         
         # Call the function with swapped parameters (server_config as first parameter, auth_manager as second)
-        result = create_change_request(self.server_config, self.auth_manager, params)
+        result = await create_change_request(self.server_config, self.auth_manager, params)
         
         # The function should still work correctly
         self.assertTrue(result["success"])
