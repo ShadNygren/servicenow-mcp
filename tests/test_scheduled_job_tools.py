@@ -5,9 +5,10 @@ This module contains tests for the scheduled job tools in the ServiceNow MCP ser
 """
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import requests
+import httpx
 
 from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.tools.scheduled_job_tools import (
@@ -25,7 +26,7 @@ from servicenow_mcp.tools.scheduled_job_tools import (
 from servicenow_mcp.utils.config import ServerConfig, AuthConfig, AuthType, BasicAuthConfig
 
 
-class TestScheduledJobTools(unittest.TestCase):
+class TestScheduledJobTools(IsolatedAsyncioTestCase):
     """Tests for the scheduled job tools."""
 
     def setUp(self):
@@ -42,10 +43,10 @@ class TestScheduledJobTools(unittest.TestCase):
             auth=auth_config,
         )
         self.auth_manager = MagicMock(spec=AuthManager)
-        self.auth_manager.get_headers.return_value = {
+        self.auth_manager.get_headers_async = AsyncMock(return_value={
             "Authorization": "Bearer test",
             "Content-Type": "application/json",
-        }
+        })
 
     def _mock_response(self, status_code=200, json_data=None):
         """Create a mock response object."""
@@ -59,8 +60,8 @@ class TestScheduledJobTools(unittest.TestCase):
     # create_scheduled_job
     # ------------------------------------------------------------------
 
-    @patch("requests.post")
-    def test_create_scheduled_job_success(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_scheduled_job_success(self, mock_post):
         """Test successfully creating a scheduled job."""
         mock_post.return_value = self._mock_response(
             status_code=201,
@@ -82,7 +83,7 @@ class TestScheduledJobTools(unittest.TestCase):
             active=True,
             description="Runs nightly data import",
         )
-        result = create_scheduled_job(self.server_config, self.auth_manager, params)
+        result = await create_scheduled_job(self.server_config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["sys_id"], "job123")
@@ -101,17 +102,17 @@ class TestScheduledJobTools(unittest.TestCase):
         self.assertEqual(kwargs["json"]["run_time"], "02:00:00")
         self.assertEqual(kwargs["json"]["comments"], "Runs nightly data import")
 
-    @patch("requests.post")
-    def test_create_scheduled_job_error(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_scheduled_job_error(self, mock_post):
         """Test creating a scheduled job with a RequestException."""
-        mock_post.side_effect = requests.RequestException("Connection error")
+        mock_post.side_effect = httpx.HTTPError("Connection error")
 
         params = CreateScheduledJobParams(
             name="Failing Job",
             script="gs.log('fail');",
             run_type="daily",
         )
-        result = create_scheduled_job(self.server_config, self.auth_manager, params)
+        result = await create_scheduled_job(self.server_config, self.auth_manager, params)
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to create scheduled job", result["message"])
@@ -122,8 +123,8 @@ class TestScheduledJobTools(unittest.TestCase):
     # list_scheduled_jobs
     # ------------------------------------------------------------------
 
-    @patch("requests.get")
-    def test_list_scheduled_jobs_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_scheduled_jobs_success(self, mock_get):
         """Test successfully listing scheduled jobs."""
         mock_get.return_value = self._mock_response(
             json_data={
@@ -161,7 +162,7 @@ class TestScheduledJobTools(unittest.TestCase):
             limit=10,
             offset=0,
         )
-        result = list_scheduled_jobs(self.server_config, self.auth_manager, params)
+        result = await list_scheduled_jobs(self.server_config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["count"], 2)
@@ -179,8 +180,8 @@ class TestScheduledJobTools(unittest.TestCase):
     # get_scheduled_job
     # ------------------------------------------------------------------
 
-    @patch("requests.get")
-    def test_get_scheduled_job_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_scheduled_job_success(self, mock_get):
         """Test successfully getting a single scheduled job."""
         mock_get.return_value = self._mock_response(
             json_data={
@@ -204,7 +205,7 @@ class TestScheduledJobTools(unittest.TestCase):
         )
 
         params = GetScheduledJobParams(sys_id="job123")
-        result = get_scheduled_job(self.server_config, self.auth_manager, params)
+        result = await get_scheduled_job(self.server_config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertIn("Retrieved scheduled job", result["message"])
@@ -223,8 +224,8 @@ class TestScheduledJobTools(unittest.TestCase):
     # update_scheduled_job
     # ------------------------------------------------------------------
 
-    @patch("requests.patch")
-    def test_update_scheduled_job_success(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_scheduled_job_success(self, mock_patch):
         """Test successfully updating a scheduled job."""
         mock_patch.return_value = self._mock_response(
             json_data={
@@ -242,7 +243,7 @@ class TestScheduledJobTools(unittest.TestCase):
             time_of_day="04:00:00",
             active=True,
         )
-        result = update_scheduled_job(self.server_config, self.auth_manager, params)
+        result = await update_scheduled_job(self.server_config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["sys_id"], "job123")
@@ -259,8 +260,8 @@ class TestScheduledJobTools(unittest.TestCase):
     # delete_scheduled_job
     # ------------------------------------------------------------------
 
-    @patch("requests.delete")
-    def test_delete_scheduled_job_success(self, mock_delete):
+    @patch.object(httpx.AsyncClient, "delete", new_callable=AsyncMock)
+    async def test_delete_scheduled_job_success(self, mock_delete):
         """Test successfully deleting a scheduled job."""
         mock_resp = MagicMock()
         mock_resp.status_code = 204
@@ -268,7 +269,7 @@ class TestScheduledJobTools(unittest.TestCase):
         mock_delete.return_value = mock_resp
 
         params = DeleteScheduledJobParams(sys_id="job123")
-        result = delete_scheduled_job(self.server_config, self.auth_manager, params)
+        result = await delete_scheduled_job(self.server_config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["sys_id"], "job123")

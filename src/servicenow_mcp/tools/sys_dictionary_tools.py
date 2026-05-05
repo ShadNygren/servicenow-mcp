@@ -8,10 +8,11 @@ ServiceNow tables via the sys_dictionary table.
 import logging
 from typing import Any, Dict, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -119,7 +120,7 @@ _SN_TYPE_MAP = {
 # ---------------------------------------------------------------------------
 
 
-def create_field(
+async def create_field(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateFieldParams,
@@ -159,9 +160,10 @@ def create_field(
         data["comments"] = params.description
 
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             json=data,
             timeout=config.timeout,
         )
@@ -175,7 +177,7 @@ def create_field(
             "column_name": params.column_name,
             "record": result,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create field {params.column_name}: {e}")
         return {
             "success": False,
@@ -187,7 +189,7 @@ def create_field(
         }
 
 
-def list_fields(
+async def list_fields(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListFieldsParams,
@@ -219,9 +221,10 @@ def list_fields(
     }
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             params=query_params,
             timeout=config.timeout,
         )
@@ -250,7 +253,7 @@ def list_fields(
             "count": len(fields),
             "fields": fields,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to list fields for {params.table_name}: {e}")
         return {
             "success": False,
@@ -261,7 +264,7 @@ def list_fields(
         }
 
 
-def update_field(
+async def update_field(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: UpdateFieldParams,
@@ -304,9 +307,10 @@ def update_field(
         }
 
     try:
-        response = requests.patch(
+        client = await get_async_client()
+        response = await client.patch(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             json=data,
             timeout=config.timeout,
         )
@@ -318,7 +322,7 @@ def update_field(
             "sys_id": params.sys_id,
             "record": result,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to update field {params.sys_id}: {e}")
         return {
             "success": False,

@@ -8,10 +8,11 @@ in ServiceNow. Business Rules execute server-side logic on record operations.
 import logging
 from typing import Any, Dict, List, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -107,7 +108,7 @@ class DeleteBusinessRuleParams(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def create_business_rule(
+async def create_business_rule(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateBusinessRuleParams,
@@ -134,9 +135,10 @@ def create_business_rule(
         data["comments"] = params.description
 
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             json=data,
             timeout=config.timeout,
         )
@@ -150,7 +152,7 @@ def create_business_rule(
             "table": params.table,
             "record": result,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create business rule '{params.name}': {e}")
         return {
             "success": False,
@@ -162,7 +164,7 @@ def create_business_rule(
         }
 
 
-def list_business_rules(
+async def list_business_rules(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListBusinessRulesParams,
@@ -188,9 +190,10 @@ def list_business_rules(
     }
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             params=query_params,
             timeout=config.timeout,
         )
@@ -218,7 +221,7 @@ def list_business_rules(
             "count": len(rules),
             "rules": rules,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to list business rules: {e}")
         return {
             "success": False,
@@ -228,7 +231,7 @@ def list_business_rules(
         }
 
 
-def get_business_rule(
+async def get_business_rule(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetBusinessRuleParams,
@@ -237,9 +240,10 @@ def get_business_rule(
     url = f"{config.instance_url}/api/now/table/sys_script/{params.sys_id}"
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             params={"sysparm_display_value": "false"},
             timeout=config.timeout,
         )
@@ -265,7 +269,7 @@ def get_business_rule(
                 "updated_on": result.get("sys_updated_on"),
             },
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to get business rule {params.sys_id}: {e}")
         return {
             "success": False,
@@ -274,7 +278,7 @@ def get_business_rule(
         }
 
 
-def update_business_rule(
+async def update_business_rule(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: UpdateBusinessRuleParams,
@@ -315,9 +319,10 @@ def update_business_rule(
         }
 
     try:
-        response = requests.patch(
+        client = await get_async_client()
+        response = await client.patch(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             json=data,
             timeout=config.timeout,
         )
@@ -329,7 +334,7 @@ def update_business_rule(
             "sys_id": params.sys_id,
             "record": result,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to update business rule {params.sys_id}: {e}")
         return {
             "success": False,
@@ -339,7 +344,7 @@ def update_business_rule(
         }
 
 
-def delete_business_rule(
+async def delete_business_rule(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: DeleteBusinessRuleParams,
@@ -348,9 +353,10 @@ def delete_business_rule(
     url = f"{config.instance_url}/api/now/table/sys_script/{params.sys_id}"
 
     try:
-        response = requests.delete(
+        client = await get_async_client()
+        response = await client.delete(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -359,7 +365,7 @@ def delete_business_rule(
             "message": f"Deleted business rule {params.sys_id}",
             "sys_id": params.sys_id,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to delete business rule {params.sys_id}: {e}")
         return {
             "success": False,

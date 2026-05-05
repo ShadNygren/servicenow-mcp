@@ -9,10 +9,11 @@ This enables flexible access to tables that don't have dedicated tool modules
 import logging
 from typing import Any, Dict, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -142,7 +143,7 @@ def _build_params(
 # ---------------------------------------------------------------------------
 
 
-def table_get_records(
+async def table_get_records(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: TableGetRecordsParams,
@@ -169,9 +170,10 @@ def table_get_records(
     )
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             params=query_params,
             timeout=config.timeout,
         )
@@ -184,7 +186,7 @@ def table_get_records(
             "count": len(records),
             "records": records,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to get records from {params.table}: {e}")
         return {
             "success": False,
@@ -195,7 +197,7 @@ def table_get_records(
         }
 
 
-def table_get_record(
+async def table_get_record(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: TableGetRecordParams,
@@ -218,9 +220,10 @@ def table_get_record(
     )
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             params=query_params,
             timeout=config.timeout,
         )
@@ -232,7 +235,7 @@ def table_get_record(
             "table": params.table,
             "record": record,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to get record {params.sys_id} from {params.table}: {e}")
         return {
             "success": False,
@@ -242,7 +245,7 @@ def table_get_record(
         }
 
 
-def table_create_record(
+async def table_create_record(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: TableCreateRecordParams,
@@ -262,9 +265,10 @@ def table_create_record(
     query_params = _build_params(fields=params.fields)
 
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             json=params.data,
             params=query_params,
             timeout=config.timeout,
@@ -279,7 +283,7 @@ def table_create_record(
             "sys_id": sys_id,
             "record": record,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create record in {params.table}: {e}")
         return {
             "success": False,
@@ -290,7 +294,7 @@ def table_create_record(
         }
 
 
-def table_update_record(
+async def table_update_record(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: TableUpdateRecordParams,
@@ -310,9 +314,10 @@ def table_update_record(
     query_params = _build_params(fields=params.fields)
 
     try:
-        response = requests.patch(
+        client = await get_async_client()
+        response = await client.patch(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             json=params.data,
             params=query_params,
             timeout=config.timeout,
@@ -326,7 +331,7 @@ def table_update_record(
             "sys_id": params.sys_id,
             "record": record,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to update record {params.sys_id} in {params.table}: {e}")
         return {
             "success": False,
@@ -337,7 +342,7 @@ def table_update_record(
         }
 
 
-def table_delete_record(
+async def table_delete_record(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: TableDeleteRecordParams,
@@ -356,9 +361,10 @@ def table_delete_record(
     url = f"{config.instance_url}/api/now/table/{params.table}/{params.sys_id}"
 
     try:
-        response = requests.delete(
+        client = await get_async_client()
+        response = await client.delete(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -368,7 +374,7 @@ def table_delete_record(
             "table": params.table,
             "sys_id": params.sys_id,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to delete record {params.sys_id} from {params.table}: {e}")
         return {
             "success": False,

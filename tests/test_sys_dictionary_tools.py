@@ -1,5 +1,8 @@
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import httpx
 from servicenow_mcp.utils.config import ServerConfig, AuthConfig, AuthType, BasicAuthConfig
 from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.tools.sys_dictionary_tools import (
@@ -12,7 +15,7 @@ from servicenow_mcp.tools.sys_dictionary_tools import (
 )
 
 
-class TestSysDictionaryTools(unittest.TestCase):
+class TestSysDictionaryTools(IsolatedAsyncioTestCase):
 
     def setUp(self):
         self.auth_config = AuthConfig(type=AuthType.BASIC, basic=BasicAuthConfig(username='test', password='test'))
@@ -20,11 +23,11 @@ class TestSysDictionaryTools(unittest.TestCase):
     def _create_config_and_auth(self):
         config = ServerConfig(instance_url="https://dev12345.service-now.com", auth=self.auth_config)
         auth_manager = MagicMock(spec=AuthManager)
-        auth_manager.get_headers.return_value = {"Authorization": "Bearer FAKE_TOKEN"}
+        auth_manager.get_headers_async = AsyncMock(return_value={"Authorization": "Bearer FAKE_TOKEN"})
         return config, auth_manager
 
-    @patch('requests.post')
-    def test_create_field_success(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_field_success(self, mock_post):
         config, auth_manager = self._create_config_and_auth()
 
         mock_response = MagicMock()
@@ -48,7 +51,7 @@ class TestSysDictionaryTools(unittest.TestCase):
             column_type="string",
             max_length=100,
         )
-        result = create_field(config, auth_manager, params)
+        result = await create_field(config, auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["sys_id"], "field001")
@@ -57,8 +60,8 @@ class TestSysDictionaryTools(unittest.TestCase):
         self.assertIn("Created field", result["message"])
         self.assertEqual(result["record"]["element"], "u_fnt_elid")
 
-    @patch('requests.get')
-    def test_list_fields_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_fields_success(self, mock_get):
         config, auth_manager = self._create_config_and_auth()
 
         mock_response = MagicMock()
@@ -99,7 +102,7 @@ class TestSysDictionaryTools(unittest.TestCase):
         mock_get.return_value = mock_response
 
         params = ListFieldsParams(table_name="cmdb_ci")
-        result = list_fields(config, auth_manager, params)
+        result = await list_fields(config, auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["table_name"], "cmdb_ci")
@@ -109,8 +112,8 @@ class TestSysDictionaryTools(unittest.TestCase):
         self.assertEqual(result["fields"][1]["column_name"], "name")
         self.assertIn("Found 2 fields", result["message"])
 
-    @patch('requests.get')
-    def test_list_fields_custom_only(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_fields_custom_only(self, mock_get):
         config, auth_manager = self._create_config_and_auth()
 
         mock_response = MagicMock()
@@ -137,7 +140,7 @@ class TestSysDictionaryTools(unittest.TestCase):
         mock_get.return_value = mock_response
 
         params = ListFieldsParams(table_name="cmdb_ci", custom_only=True)
-        result = list_fields(config, auth_manager, params)
+        result = await list_fields(config, auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["count"], 1)
@@ -148,8 +151,8 @@ class TestSysDictionaryTools(unittest.TestCase):
         query_params = call_args[1]["params"]
         self.assertIn("elementSTARTSWITHu_", query_params["sysparm_query"])
 
-    @patch('requests.patch')
-    def test_update_field_success(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_field_success(self, mock_patch):
         config, auth_manager = self._create_config_and_auth()
 
         mock_response = MagicMock()
@@ -169,18 +172,18 @@ class TestSysDictionaryTools(unittest.TestCase):
             column_label="Updated Label",
             mandatory=True,
         )
-        result = update_field(config, auth_manager, params)
+        result = await update_field(config, auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["sys_id"], "field001")
         self.assertIn("Updated field definition", result["message"])
         self.assertEqual(result["record"]["column_label"], "Updated Label")
 
-    def test_update_field_no_changes(self):
+    async def test_update_field_no_changes(self):
         config, auth_manager = self._create_config_and_auth()
 
         params = UpdateFieldParams(sys_id="field001")
-        result = update_field(config, auth_manager, params)
+        result = await update_field(config, auth_manager, params)
 
         self.assertFalse(result["success"])
         self.assertEqual(result["sys_id"], "field001")

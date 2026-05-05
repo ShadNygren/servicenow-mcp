@@ -7,12 +7,13 @@ This module provides tools for managing Service Catalog Tasks (sc_task table).
 import logging
 from typing import Any, Dict, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
-from servicenow_mcp.utils.helpers import _get_headers, _get_instance_url, _unwrap_and_validate_params
+from servicenow_mcp.utils.helpers import _get_headers_async, _get_instance_url, _unwrap_and_validate_params
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ class ListSCTasksParams(BaseModel):
     query: Optional[str] = Field(None, description="Additional ServiceNow query string")
 
 
-def get_sctask(
+async def get_sctask(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -69,7 +70,7 @@ def get_sctask(
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
 
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
@@ -82,7 +83,8 @@ def get_sctask(
     }
 
     try:
-        response = requests.get(url, headers=headers, params=query_params)
+        client = await get_async_client()
+        response = await client.get(url, headers=headers, params=query_params)
         response.raise_for_status()
         records = response.json().get("result", [])
 
@@ -111,12 +113,12 @@ def get_sctask(
                 "close_notes": task.get("close_notes"),
             },
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error fetching SCTASK: {e}")
         return {"success": False, "message": f"Error fetching SCTASK: {str(e)}"}
 
 
-def list_sctasks(
+async def list_sctasks(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -132,7 +134,7 @@ def list_sctasks(
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
 
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
@@ -157,7 +159,8 @@ def list_sctasks(
         query_params["sysparm_query"] = "^".join(query_parts)
 
     try:
-        response = requests.get(url, headers=headers, params=query_params)
+        client = await get_async_client()
+        response = await client.get(url, headers=headers, params=query_params)
         response.raise_for_status()
         tasks = response.json().get("result", [])
 
@@ -166,12 +169,12 @@ def list_sctasks(
             "sctasks": tasks,
             "count": len(tasks),
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error listing SCTASKs: {e}")
         return {"success": False, "message": f"Error listing SCTASKs: {str(e)}"}
 
 
-def update_sctask(
+async def update_sctask(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -187,7 +190,7 @@ def update_sctask(
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
 
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
     headers["Content-Type"] = "application/json"
@@ -202,13 +205,14 @@ def update_sctask(
             "sysparm_fields": "sys_id",
         }
         try:
-            lookup_resp = requests.get(lookup_url, headers=headers, params=lookup_params)
+            client = await get_async_client()
+            lookup_resp = await client.get(lookup_url, headers=headers, params=lookup_params)
             lookup_resp.raise_for_status()
             records = lookup_resp.json().get("result", [])
             if not records:
                 return {"success": False, "message": f"SCTASK not found: {task_id}"}
             task_id = records[0]["sys_id"]
-        except requests.exceptions.RequestException as e:
+        except httpx.HTTPError as e:
             return {"success": False, "message": f"Error resolving SCTASK number: {str(e)}"}
 
     data: Dict[str, Any] = {}
@@ -228,7 +232,8 @@ def update_sctask(
         # Read current time_worked and add to it instead of replacing
         try:
             lookup_url = f"{instance_url}/api/now/table/sc_task/{task_id}"
-            lookup_resp = requests.get(lookup_url, headers=headers, params={"sysparm_fields": "time_worked"})
+            client = await get_async_client()
+            lookup_resp = await client.get(lookup_url, headers=headers, params={"sysparm_fields": "time_worked"})
             lookup_resp.raise_for_status()
             current_raw = lookup_resp.json().get("result", {}).get("time_worked", "")
             # Parse current value (format: "1970-01-01 HH:MM:SS")
@@ -254,13 +259,14 @@ def update_sctask(
     url = f"{instance_url}/api/now/table/sc_task/{task_id}"
 
     try:
-        response = requests.patch(url, json=data, headers=headers)
+        client = await get_async_client()
+        response = await client.patch(url, json=data, headers=headers)
         response.raise_for_status()
         return {
             "success": True,
             "message": f"SCTASK {validated.task_number} updated successfully",
             "sctask": response.json().get("result", {}),
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error updating SCTASK: {e}")
         return {"success": False, "message": f"Error updating SCTASK: {str(e)}"}

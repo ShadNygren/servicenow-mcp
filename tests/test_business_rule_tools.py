@@ -5,9 +5,10 @@ This module contains tests for the business rule tools in the ServiceNow MCP ser
 """
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import requests
+import httpx
 
 from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.tools.business_rule_tools import (
@@ -25,7 +26,7 @@ from servicenow_mcp.tools.business_rule_tools import (
 from servicenow_mcp.utils.config import ServerConfig, AuthConfig, AuthType, BasicAuthConfig
 
 
-class TestBusinessRuleTools(unittest.TestCase):
+class TestBusinessRuleTools(IsolatedAsyncioTestCase):
     """Tests for the business rule tools."""
 
     def setUp(self):
@@ -42,10 +43,10 @@ class TestBusinessRuleTools(unittest.TestCase):
             auth=auth_config,
         )
         self.auth_manager = MagicMock(spec=AuthManager)
-        self.auth_manager.get_headers.return_value = {
+        self.auth_manager.get_headers_async = AsyncMock(return_value={
             "Authorization": "Bearer test",
             "Content-Type": "application/json",
-        }
+        })
 
     def _mock_response(self, status_code=200, json_data=None):
         """Create a mock response object."""
@@ -59,8 +60,8 @@ class TestBusinessRuleTools(unittest.TestCase):
     # create_business_rule
     # ------------------------------------------------------------------
 
-    @patch("requests.post")
-    def test_create_business_rule_success(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_business_rule_success(self, mock_post):
         """Test successfully creating a business rule."""
         mock_post.return_value = self._mock_response(
             status_code=201,
@@ -85,7 +86,7 @@ class TestBusinessRuleTools(unittest.TestCase):
             active=True,
             description="Validates CI records before insert/update",
         )
-        result = create_business_rule(self.server_config, self.auth_manager, params)
+        result = await create_business_rule(self.server_config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["sys_id"], "abc123")
@@ -107,17 +108,17 @@ class TestBusinessRuleTools(unittest.TestCase):
         self.assertEqual(kwargs["json"]["action_update"], "true")
         self.assertEqual(kwargs["json"]["comments"], "Validates CI records before insert/update")
 
-    @patch("requests.post")
-    def test_create_business_rule_error(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_business_rule_error(self, mock_post):
         """Test creating a business rule with a RequestException."""
-        mock_post.side_effect = requests.RequestException("Connection error")
+        mock_post.side_effect = httpx.HTTPError("Connection error")
 
         params = CreateBusinessRuleParams(
             name="Failing Rule",
             table="incident",
             script="gs.log('test');",
         )
-        result = create_business_rule(self.server_config, self.auth_manager, params)
+        result = await create_business_rule(self.server_config, self.auth_manager, params)
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to create business rule", result["message"])
@@ -128,8 +129,8 @@ class TestBusinessRuleTools(unittest.TestCase):
     # list_business_rules
     # ------------------------------------------------------------------
 
-    @patch("requests.get")
-    def test_list_business_rules_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_business_rules_success(self, mock_get):
         """Test successfully listing business rules."""
         mock_get.return_value = self._mock_response(
             json_data={
@@ -172,7 +173,7 @@ class TestBusinessRuleTools(unittest.TestCase):
             limit=10,
             offset=0,
         )
-        result = list_business_rules(self.server_config, self.auth_manager, params)
+        result = await list_business_rules(self.server_config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["count"], 2)
@@ -190,8 +191,8 @@ class TestBusinessRuleTools(unittest.TestCase):
     # get_business_rule
     # ------------------------------------------------------------------
 
-    @patch("requests.get")
-    def test_get_business_rule_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_business_rule_success(self, mock_get):
         """Test successfully getting a single business rule."""
         mock_get.return_value = self._mock_response(
             json_data={
@@ -215,7 +216,7 @@ class TestBusinessRuleTools(unittest.TestCase):
         )
 
         params = GetBusinessRuleParams(sys_id="abc123")
-        result = get_business_rule(self.server_config, self.auth_manager, params)
+        result = await get_business_rule(self.server_config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertIn("Retrieved business rule", result["message"])
@@ -234,8 +235,8 @@ class TestBusinessRuleTools(unittest.TestCase):
     # update_business_rule
     # ------------------------------------------------------------------
 
-    @patch("requests.patch")
-    def test_update_business_rule_success(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_business_rule_success(self, mock_patch):
         """Test successfully updating a business rule."""
         mock_patch.return_value = self._mock_response(
             json_data={
@@ -253,7 +254,7 @@ class TestBusinessRuleTools(unittest.TestCase):
             script="current.setValue('state', 'active'); current.update();",
             active=True,
         )
-        result = update_business_rule(self.server_config, self.auth_manager, params)
+        result = await update_business_rule(self.server_config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["sys_id"], "abc123")
@@ -269,8 +270,8 @@ class TestBusinessRuleTools(unittest.TestCase):
     # delete_business_rule
     # ------------------------------------------------------------------
 
-    @patch("requests.delete")
-    def test_delete_business_rule_success(self, mock_delete):
+    @patch.object(httpx.AsyncClient, "delete", new_callable=AsyncMock)
+    async def test_delete_business_rule_success(self, mock_delete):
         """Test successfully deleting a business rule."""
         mock_resp = MagicMock()
         mock_resp.status_code = 204
@@ -278,7 +279,7 @@ class TestBusinessRuleTools(unittest.TestCase):
         mock_delete.return_value = mock_resp
 
         params = DeleteBusinessRuleParams(sys_id="abc123")
-        result = delete_business_rule(self.server_config, self.auth_manager, params)
+        result = await delete_business_rule(self.server_config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["sys_id"], "abc123")
