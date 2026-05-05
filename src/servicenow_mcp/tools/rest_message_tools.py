@@ -9,10 +9,11 @@ Used for configuring outbound REST integrations (e.g. ServiceNow → external AP
 import logging
 from typing import Any, Dict, List, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -160,7 +161,7 @@ class DeleteHttpMethodParams(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def create_rest_message(
+async def create_rest_message(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateRestMessageParams,
@@ -188,9 +189,10 @@ def create_rest_message(
         data["mid_server"] = params.mid_server
 
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             json=data,
             timeout=config.timeout,
         )
@@ -203,7 +205,7 @@ def create_rest_message(
             "name": params.name,
             "record": result,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create REST Message '{params.name}': {e}")
         return {
             "success": False,
@@ -214,7 +216,7 @@ def create_rest_message(
         }
 
 
-def list_rest_messages(
+async def list_rest_messages(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListRestMessagesParams,
@@ -236,9 +238,10 @@ def list_rest_messages(
     }
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             params=query_params,
             timeout=config.timeout,
         )
@@ -261,7 +264,7 @@ def list_rest_messages(
             "count": len(messages),
             "rest_messages": messages,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to list REST Messages: {e}")
         return {
             "success": False,
@@ -271,7 +274,7 @@ def list_rest_messages(
         }
 
 
-def get_rest_message(
+async def get_rest_message(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetRestMessageParams,
@@ -280,9 +283,10 @@ def get_rest_message(
     url = f"{config.instance_url}/api/now/table/sys_rest_message/{params.sys_id}"
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -292,7 +296,7 @@ def get_rest_message(
             "message": f"Retrieved REST Message '{result.get('name', params.sys_id)}'",
             "rest_message": result,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to get REST Message {params.sys_id}: {e}")
         return {
             "success": False,
@@ -301,7 +305,7 @@ def get_rest_message(
         }
 
 
-def update_rest_message(
+async def update_rest_message(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: UpdateRestMessageParams,
@@ -334,9 +338,10 @@ def update_rest_message(
         }
 
     try:
-        response = requests.patch(
+        client = await get_async_client()
+        response = await client.patch(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             json=data,
             timeout=config.timeout,
         )
@@ -348,7 +353,7 @@ def update_rest_message(
             "sys_id": params.sys_id,
             "record": result,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to update REST Message {params.sys_id}: {e}")
         return {
             "success": False,
@@ -358,7 +363,7 @@ def update_rest_message(
         }
 
 
-def delete_rest_message(
+async def delete_rest_message(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: DeleteRestMessageParams,
@@ -367,9 +372,10 @@ def delete_rest_message(
     url = f"{config.instance_url}/api/now/table/sys_rest_message/{params.sys_id}"
 
     try:
-        response = requests.delete(
+        client = await get_async_client()
+        response = await client.delete(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -378,7 +384,7 @@ def delete_rest_message(
             "message": f"Deleted REST Message {params.sys_id}",
             "sys_id": params.sys_id,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to delete REST Message {params.sys_id}: {e}")
         return {
             "success": False,
@@ -392,7 +398,7 @@ def delete_rest_message(
 # ---------------------------------------------------------------------------
 
 
-def create_http_method(
+async def create_http_method(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateHttpMethodParams,
@@ -413,9 +419,10 @@ def create_http_method(
         data["authentication_type"] = params.authentication_type
 
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             json=data,
             timeout=config.timeout,
         )
@@ -429,7 +436,7 @@ def create_http_method(
             "http_method": params.http_method,
             "record": result,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create HTTP Method '{params.name}': {e}")
         return {
             "success": False,
@@ -440,7 +447,7 @@ def create_http_method(
         }
 
 
-def list_http_methods(
+async def list_http_methods(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListHttpMethodsParams,
@@ -456,9 +463,10 @@ def list_http_methods(
     }
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             params=query_params,
             timeout=config.timeout,
         )
@@ -480,7 +488,7 @@ def list_http_methods(
             "count": len(methods),
             "methods": methods,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to list HTTP Methods: {e}")
         return {
             "success": False,
@@ -490,7 +498,7 @@ def list_http_methods(
         }
 
 
-def update_http_method(
+async def update_http_method(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: UpdateHttpMethodParams,
@@ -517,9 +525,10 @@ def update_http_method(
         }
 
     try:
-        response = requests.patch(
+        client = await get_async_client()
+        response = await client.patch(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             json=data,
             timeout=config.timeout,
         )
@@ -531,7 +540,7 @@ def update_http_method(
             "sys_id": params.sys_id,
             "record": result,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to update HTTP Method {params.sys_id}: {e}")
         return {
             "success": False,
@@ -541,7 +550,7 @@ def update_http_method(
         }
 
 
-def delete_http_method(
+async def delete_http_method(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: DeleteHttpMethodParams,
@@ -550,9 +559,10 @@ def delete_http_method(
     url = f"{config.instance_url}/api/now/table/sys_rest_message_fn/{params.sys_id}"
 
     try:
-        response = requests.delete(
+        client = await get_async_client()
+        response = await client.delete(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -561,7 +571,7 @@ def delete_http_method(
             "message": f"Deleted HTTP Method {params.sys_id}",
             "sys_id": params.sys_id,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to delete HTTP Method {params.sys_id}: {e}")
         return {
             "success": False,

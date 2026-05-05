@@ -1,7 +1,8 @@
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import requests
+import httpx
 
 from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.tools.rest_message_tools import (
@@ -23,7 +24,7 @@ from servicenow_mcp.tools.rest_message_tools import (
 from servicenow_mcp.utils.config import AuthConfig, AuthType, BasicAuthConfig, ServerConfig
 
 
-class TestRestMessageTools(unittest.TestCase):
+class TestRestMessageTools(IsolatedAsyncioTestCase):
 
     def setUp(self):
         self.auth_config = AuthConfig(
@@ -35,16 +36,16 @@ class TestRestMessageTools(unittest.TestCase):
             auth=self.auth_config,
         )
         self.auth_manager = MagicMock(spec=AuthManager)
-        self.auth_manager.get_headers.return_value = {
+        self.auth_manager.get_headers_async = AsyncMock(return_value={
             "Authorization": "Bearer FAKE_TOKEN"
-        }
+        })
 
     # ------------------------------------------------------------------
     # create_rest_message
     # ------------------------------------------------------------------
 
-    @patch("requests.post")
-    def test_create_rest_message_success(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_rest_message_success(self, mock_post):
         mock_response = MagicMock()
         mock_response.status_code = 201
         mock_response.json.return_value = {
@@ -62,7 +63,7 @@ class TestRestMessageTools(unittest.TestCase):
             name="FNT Command API",
             rest_endpoint="https://fnt-host/api",
         )
-        result = create_rest_message(self.config, self.auth_manager, params)
+        result = await create_rest_message(self.config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["sys_id"], "abc123")
@@ -70,15 +71,15 @@ class TestRestMessageTools(unittest.TestCase):
         self.assertIn("Created REST Message", result["message"])
         mock_post.assert_called_once()
 
-    @patch("requests.post")
-    def test_create_rest_message_error(self, mock_post):
-        mock_post.side_effect = requests.RequestException("Connection error")
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_rest_message_error(self, mock_post):
+        mock_post.side_effect = httpx.HTTPError("Connection error")
 
         params = CreateRestMessageParams(
             name="FNT Command API",
             rest_endpoint="https://fnt-host/api",
         )
-        result = create_rest_message(self.config, self.auth_manager, params)
+        result = await create_rest_message(self.config, self.auth_manager, params)
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to create REST Message", result["message"])
@@ -88,8 +89,8 @@ class TestRestMessageTools(unittest.TestCase):
     # list_rest_messages
     # ------------------------------------------------------------------
 
-    @patch("requests.get")
-    def test_list_rest_messages_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_rest_messages_success(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -118,7 +119,7 @@ class TestRestMessageTools(unittest.TestCase):
         mock_get.return_value = mock_response
 
         params = ListRestMessagesParams(limit=20, offset=0)
-        result = list_rest_messages(self.config, self.auth_manager, params)
+        result = await list_rest_messages(self.config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["count"], 2)
@@ -126,12 +127,12 @@ class TestRestMessageTools(unittest.TestCase):
         self.assertEqual(result["rest_messages"][0]["sys_id"], "abc123")
         mock_get.assert_called_once()
 
-    @patch("requests.get")
-    def test_list_rest_messages_error(self, mock_get):
-        mock_get.side_effect = requests.RequestException("Timeout")
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_rest_messages_error(self, mock_get):
+        mock_get.side_effect = httpx.HTTPError("Timeout")
 
         params = ListRestMessagesParams()
-        result = list_rest_messages(self.config, self.auth_manager, params)
+        result = await list_rest_messages(self.config, self.auth_manager, params)
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to list REST Messages", result["message"])
@@ -142,8 +143,8 @@ class TestRestMessageTools(unittest.TestCase):
     # get_rest_message
     # ------------------------------------------------------------------
 
-    @patch("requests.get")
-    def test_get_rest_message_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_rest_message_success(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -158,19 +159,19 @@ class TestRestMessageTools(unittest.TestCase):
         mock_get.return_value = mock_response
 
         params = GetRestMessageParams(sys_id="abc123")
-        result = get_rest_message(self.config, self.auth_manager, params)
+        result = await get_rest_message(self.config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["rest_message"]["sys_id"], "abc123")
         self.assertEqual(result["rest_message"]["name"], "FNT Command API")
         mock_get.assert_called_once()
 
-    @patch("requests.get")
-    def test_get_rest_message_error(self, mock_get):
-        mock_get.side_effect = requests.RequestException("Not found")
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_rest_message_error(self, mock_get):
+        mock_get.side_effect = httpx.HTTPError("Not found")
 
         params = GetRestMessageParams(sys_id="abc123")
-        result = get_rest_message(self.config, self.auth_manager, params)
+        result = await get_rest_message(self.config, self.auth_manager, params)
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to get REST Message", result["message"])
@@ -180,8 +181,8 @@ class TestRestMessageTools(unittest.TestCase):
     # update_rest_message
     # ------------------------------------------------------------------
 
-    @patch("requests.patch")
-    def test_update_rest_message_success(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_rest_message_success(self, mock_patch):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -200,19 +201,19 @@ class TestRestMessageTools(unittest.TestCase):
             name="Updated API",
             rest_endpoint="https://fnt-host/api/v2",
         )
-        result = update_rest_message(self.config, self.auth_manager, params)
+        result = await update_rest_message(self.config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["sys_id"], "abc123")
         self.assertIn("Updated REST Message", result["message"])
         mock_patch.assert_called_once()
 
-    @patch("requests.patch")
-    def test_update_rest_message_error(self, mock_patch):
-        mock_patch.side_effect = requests.RequestException("Server error")
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_rest_message_error(self, mock_patch):
+        mock_patch.side_effect = httpx.HTTPError("Server error")
 
         params = UpdateRestMessageParams(sys_id="abc123", name="Updated API")
-        result = update_rest_message(self.config, self.auth_manager, params)
+        result = await update_rest_message(self.config, self.auth_manager, params)
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to update REST Message", result["message"])
@@ -222,27 +223,27 @@ class TestRestMessageTools(unittest.TestCase):
     # delete_rest_message
     # ------------------------------------------------------------------
 
-    @patch("requests.delete")
-    def test_delete_rest_message_success(self, mock_delete):
+    @patch.object(httpx.AsyncClient, "delete", new_callable=AsyncMock)
+    async def test_delete_rest_message_success(self, mock_delete):
         mock_response = MagicMock()
         mock_response.status_code = 204
         mock_response.raise_for_status.return_value = None
         mock_delete.return_value = mock_response
 
         params = DeleteRestMessageParams(sys_id="abc123")
-        result = delete_rest_message(self.config, self.auth_manager, params)
+        result = await delete_rest_message(self.config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["sys_id"], "abc123")
         self.assertIn("Deleted REST Message", result["message"])
         mock_delete.assert_called_once()
 
-    @patch("requests.delete")
-    def test_delete_rest_message_error(self, mock_delete):
-        mock_delete.side_effect = requests.RequestException("Forbidden")
+    @patch.object(httpx.AsyncClient, "delete", new_callable=AsyncMock)
+    async def test_delete_rest_message_error(self, mock_delete):
+        mock_delete.side_effect = httpx.HTTPError("Forbidden")
 
         params = DeleteRestMessageParams(sys_id="abc123")
-        result = delete_rest_message(self.config, self.auth_manager, params)
+        result = await delete_rest_message(self.config, self.auth_manager, params)
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to delete REST Message", result["message"])
@@ -252,8 +253,8 @@ class TestRestMessageTools(unittest.TestCase):
     # create_http_method
     # ------------------------------------------------------------------
 
-    @patch("requests.post")
-    def test_create_http_method_success(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_http_method_success(self, mock_post):
         mock_response = MagicMock()
         mock_response.status_code = 201
         mock_response.json.return_value = {
@@ -274,7 +275,7 @@ class TestRestMessageTools(unittest.TestCase):
             http_method="PUT",
             rest_endpoint="/object/${elid}",
         )
-        result = create_http_method(self.config, self.auth_manager, params)
+        result = await create_http_method(self.config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["sys_id"], "method789")
@@ -283,9 +284,9 @@ class TestRestMessageTools(unittest.TestCase):
         self.assertIn("Created HTTP Method", result["message"])
         mock_post.assert_called_once()
 
-    @patch("requests.post")
-    def test_create_http_method_error(self, mock_post):
-        mock_post.side_effect = requests.RequestException("Connection refused")
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_http_method_error(self, mock_post):
+        mock_post.side_effect = httpx.HTTPError("Connection refused")
 
         params = CreateHttpMethodParams(
             rest_message_sys_id="abc123",
@@ -293,7 +294,7 @@ class TestRestMessageTools(unittest.TestCase):
             http_method="PUT",
             rest_endpoint="/object/${elid}",
         )
-        result = create_http_method(self.config, self.auth_manager, params)
+        result = await create_http_method(self.config, self.auth_manager, params)
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to create HTTP Method", result["message"])
@@ -303,8 +304,8 @@ class TestRestMessageTools(unittest.TestCase):
     # list_http_methods
     # ------------------------------------------------------------------
 
-    @patch("requests.get")
-    def test_list_http_methods_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_http_methods_success(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -323,7 +324,7 @@ class TestRestMessageTools(unittest.TestCase):
         mock_get.return_value = mock_response
 
         params = ListHttpMethodsParams(rest_message_sys_id="abc123")
-        result = list_http_methods(self.config, self.auth_manager, params)
+        result = await list_http_methods(self.config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["count"], 1)
@@ -332,12 +333,12 @@ class TestRestMessageTools(unittest.TestCase):
         self.assertEqual(result["methods"][0]["name"], "Update CI")
         mock_get.assert_called_once()
 
-    @patch("requests.get")
-    def test_list_http_methods_error(self, mock_get):
-        mock_get.side_effect = requests.RequestException("Timeout")
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_http_methods_error(self, mock_get):
+        mock_get.side_effect = httpx.HTTPError("Timeout")
 
         params = ListHttpMethodsParams(rest_message_sys_id="abc123")
-        result = list_http_methods(self.config, self.auth_manager, params)
+        result = await list_http_methods(self.config, self.auth_manager, params)
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to list HTTP Methods", result["message"])

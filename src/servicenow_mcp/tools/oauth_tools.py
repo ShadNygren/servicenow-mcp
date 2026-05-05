@@ -9,10 +9,11 @@ Used for configuring OAuth2 credentials for outbound integrations.
 import logging
 from typing import Any, Dict, List, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -154,7 +155,7 @@ class DeleteOAuthProfileParams(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def create_oauth_entity(
+async def create_oauth_entity(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateOAuthEntityParams,
@@ -179,9 +180,10 @@ def create_oauth_entity(
         data["comments"] = params.comments
 
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             json=data,
             timeout=config.timeout,
         )
@@ -194,7 +196,7 @@ def create_oauth_entity(
             "name": params.name,
             "record": result,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create OAuth Entity '{params.name}': {e}")
         return {
             "success": False,
@@ -205,7 +207,7 @@ def create_oauth_entity(
         }
 
 
-def list_oauth_entities(
+async def list_oauth_entities(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListOAuthEntitiesParams,
@@ -229,9 +231,10 @@ def list_oauth_entities(
     }
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             params=query_params,
             timeout=config.timeout,
         )
@@ -255,7 +258,7 @@ def list_oauth_entities(
             "count": len(entities),
             "entities": entities,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to list OAuth Entities: {e}")
         return {
             "success": False,
@@ -265,7 +268,7 @@ def list_oauth_entities(
         }
 
 
-def get_oauth_entity(
+async def get_oauth_entity(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetOAuthEntityParams,
@@ -274,9 +277,10 @@ def get_oauth_entity(
     url = f"{config.instance_url}/api/now/table/oauth_entity/{params.sys_id}"
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -286,7 +290,7 @@ def get_oauth_entity(
             "message": f"Retrieved OAuth Entity '{result.get('name', params.sys_id)}'",
             "entity": result,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to get OAuth Entity {params.sys_id}: {e}")
         return {
             "success": False,
@@ -295,7 +299,7 @@ def get_oauth_entity(
         }
 
 
-def update_oauth_entity(
+async def update_oauth_entity(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: UpdateOAuthEntityParams,
@@ -330,9 +334,10 @@ def update_oauth_entity(
         }
 
     try:
-        response = requests.patch(
+        client = await get_async_client()
+        response = await client.patch(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             json=data,
             timeout=config.timeout,
         )
@@ -344,7 +349,7 @@ def update_oauth_entity(
             "sys_id": params.sys_id,
             "record": result,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to update OAuth Entity {params.sys_id}: {e}")
         return {
             "success": False,
@@ -354,7 +359,7 @@ def update_oauth_entity(
         }
 
 
-def delete_oauth_entity(
+async def delete_oauth_entity(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: DeleteOAuthEntityParams,
@@ -363,9 +368,10 @@ def delete_oauth_entity(
     url = f"{config.instance_url}/api/now/table/oauth_entity/{params.sys_id}"
 
     try:
-        response = requests.delete(
+        client = await get_async_client()
+        response = await client.delete(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -374,7 +380,7 @@ def delete_oauth_entity(
             "message": f"Deleted OAuth Entity {params.sys_id}",
             "sys_id": params.sys_id,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to delete OAuth Entity {params.sys_id}: {e}")
         return {
             "success": False,
@@ -388,7 +394,7 @@ def delete_oauth_entity(
 # ---------------------------------------------------------------------------
 
 
-def create_oauth_profile(
+async def create_oauth_profile(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateOAuthProfileParams,
@@ -409,9 +415,10 @@ def create_oauth_profile(
         data["password"] = params.password
 
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             json=data,
             timeout=config.timeout,
         )
@@ -424,7 +431,7 @@ def create_oauth_profile(
             "name": params.name,
             "record": result,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create OAuth Profile '{params.name}': {e}")
         return {
             "success": False,
@@ -435,7 +442,7 @@ def create_oauth_profile(
         }
 
 
-def list_oauth_profiles(
+async def list_oauth_profiles(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListOAuthProfilesParams,
@@ -455,9 +462,10 @@ def list_oauth_profiles(
     }
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             params=query_params,
             timeout=config.timeout,
         )
@@ -479,7 +487,7 @@ def list_oauth_profiles(
             "count": len(profiles),
             "profiles": profiles,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to list OAuth Profiles: {e}")
         return {
             "success": False,
@@ -489,7 +497,7 @@ def list_oauth_profiles(
         }
 
 
-def update_oauth_profile(
+async def update_oauth_profile(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: UpdateOAuthProfileParams,
@@ -518,9 +526,10 @@ def update_oauth_profile(
         }
 
     try:
-        response = requests.patch(
+        client = await get_async_client()
+        response = await client.patch(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             json=data,
             timeout=config.timeout,
         )
@@ -532,7 +541,7 @@ def update_oauth_profile(
             "sys_id": params.sys_id,
             "record": result,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to update OAuth Profile {params.sys_id}: {e}")
         return {
             "success": False,
@@ -542,7 +551,7 @@ def update_oauth_profile(
         }
 
 
-def delete_oauth_profile(
+async def delete_oauth_profile(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: DeleteOAuthProfileParams,
@@ -551,9 +560,10 @@ def delete_oauth_profile(
     url = f"{config.instance_url}/api/now/table/oauth_entity_profile/{params.sys_id}"
 
     try:
-        response = requests.delete(
+        client = await get_async_client()
+        response = await client.delete(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -562,7 +572,7 @@ def delete_oauth_profile(
             "message": f"Deleted OAuth Profile {params.sys_id}",
             "sys_id": params.sys_id,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to delete OAuth Profile {params.sys_id}: {e}")
         return {
             "success": False,

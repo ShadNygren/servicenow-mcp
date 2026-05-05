@@ -7,10 +7,11 @@ This module provides tools for querying and viewing the service catalog in Servi
 import logging
 from typing import Any, Dict, List, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -91,7 +92,7 @@ class MoveCatalogItemsParams(BaseModel):
     target_category_id: str = Field(..., description="Target category ID to move items to")
 
 
-def list_catalog_items(
+async def list_catalog_items(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListCatalogItemsParams,
@@ -150,11 +151,12 @@ def list_catalog_items(
         query_params["sysparm_query"] = "^".join(filters)
 
     # Make the API request
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
     headers["Accept"] = "application/json"
     
     try:
-        response = requests.get(url, headers=headers, params=query_params)
+        client = await get_async_client()
+        response = await client.get(url, headers=headers, params=query_params)
         response.raise_for_status()
         
         # Process the response
@@ -184,7 +186,7 @@ def list_catalog_items(
             "offset": params.offset,
         }
     
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error listing catalog items: {str(e)}")
         return {
             "success": False,
@@ -196,7 +198,7 @@ def list_catalog_items(
         }
 
 
-def get_catalog_item(
+async def get_catalog_item(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetCatalogItemParams,
@@ -224,11 +226,12 @@ def get_catalog_item(
     }
     
     # Make the API request
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
     headers["Accept"] = "application/json"
     
     try:
-        response = requests.get(url, headers=headers, params=query_params)
+        client = await get_async_client()
+        response = await client.get(url, headers=headers, params=query_params)
         response.raise_for_status()
         
         # Process the response
@@ -255,7 +258,7 @@ def get_catalog_item(
             "order": item.get("order", ""),
             "delivery_time": item.get("delivery_time", ""),
             "availability": item.get("availability", ""),
-            "variables": get_catalog_item_variables(config, auth_manager, params.item_id),
+            "variables": await get_catalog_item_variables(config, auth_manager, params.item_id),
         }
         
         return CatalogResponse(
@@ -264,7 +267,7 @@ def get_catalog_item(
             data=formatted_item,
         )
     
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error getting catalog item: {str(e)}")
         return CatalogResponse(
             success=False,
@@ -273,7 +276,7 @@ def get_catalog_item(
         )
 
 
-def get_catalog_item_variables(
+async def get_catalog_item_variables(
     config: ServerConfig,
     auth_manager: AuthManager,
     item_id: str,
@@ -302,11 +305,12 @@ def get_catalog_item_variables(
     }
     
     # Make the API request
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
     headers["Accept"] = "application/json"
     
     try:
-        response = requests.get(url, headers=headers, params=query_params)
+        client = await get_async_client()
+        response = await client.get(url, headers=headers, params=query_params)
         response.raise_for_status()
         
         # Process the response
@@ -329,12 +333,12 @@ def get_catalog_item_variables(
         
         return formatted_variables
     
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error getting catalog item variables: {str(e)}")
         return []
 
 
-def create_catalog_item(
+async def create_catalog_item(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateCatalogItemParams,
@@ -369,12 +373,13 @@ def create_catalog_item(
     if params.order is not None:
         body["order"] = str(params.order)
 
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
     headers["Accept"] = "application/json"
     headers["Content-Type"] = "application/json"
 
     try:
-        response = requests.post(url, headers=headers, json=body)
+        client = await get_async_client()
+        response = await client.post(url, headers=headers, json=body)
         response.raise_for_status()
 
         item = response.json().get("result", {})
@@ -393,7 +398,7 @@ def create_catalog_item(
             },
         )
 
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error creating catalog item: {str(e)}")
         return CatalogResponse(
             success=False,
@@ -402,7 +407,7 @@ def create_catalog_item(
         )
 
 
-def list_catalog_categories(
+async def list_catalog_categories(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListCatalogCategoriesParams,
@@ -455,11 +460,12 @@ def list_catalog_categories(
         query_params["sysparm_query"] = "^".join(filters)
 
     # Make the API request
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
     headers["Accept"] = "application/json"
     
     try:
-        response = requests.get(url, headers=headers, params=query_params)
+        client = await get_async_client()
+        response = await client.get(url, headers=headers, params=query_params)
         response.raise_for_status()
         
         # Process the response
@@ -488,7 +494,7 @@ def list_catalog_categories(
             "offset": params.offset,
         }
     
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error listing catalog categories: {str(e)}")
         return {
             "success": False,
@@ -500,7 +506,7 @@ def list_catalog_categories(
         }
 
 
-def create_catalog_category(
+async def create_catalog_category(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateCatalogCategoryParams,
@@ -538,12 +544,13 @@ def create_catalog_category(
         body["order"] = str(params.order)
     
     # Make the API request
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
     headers["Accept"] = "application/json"
     headers["Content-Type"] = "application/json"
     
     try:
-        response = requests.post(url, headers=headers, json=body)
+        client = await get_async_client()
+        response = await client.post(url, headers=headers, json=body)
         response.raise_for_status()
         
         # Process the response
@@ -567,7 +574,7 @@ def create_catalog_category(
             data=formatted_category,
         )
     
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error creating catalog category: {str(e)}")
         return CatalogResponse(
             success=False,
@@ -576,7 +583,7 @@ def create_catalog_category(
         )
 
 
-def update_catalog_category(
+async def update_catalog_category(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: UpdateCatalogCategoryParams,
@@ -613,12 +620,13 @@ def update_catalog_category(
         body["order"] = str(params.order)
     
     # Make the API request
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
     headers["Accept"] = "application/json"
     headers["Content-Type"] = "application/json"
     
     try:
-        response = requests.patch(url, headers=headers, json=body)
+        client = await get_async_client()
+        response = await client.patch(url, headers=headers, json=body)
         response.raise_for_status()
         
         # Process the response
@@ -642,7 +650,7 @@ def update_catalog_category(
             data=formatted_category,
         )
     
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error updating catalog category: {str(e)}")
         return CatalogResponse(
             success=False,
@@ -651,7 +659,7 @@ def update_catalog_category(
         )
 
 
-def move_catalog_items(
+async def move_catalog_items(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: MoveCatalogItemsParams,
@@ -673,7 +681,7 @@ def move_catalog_items(
     url = f"{config.instance_url}/api/now/table/sc_cat_item"
     
     # Make the API request for each item
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
     headers["Accept"] = "application/json"
     headers["Content-Type"] = "application/json"
     
@@ -688,10 +696,11 @@ def move_catalog_items(
             }
             
             try:
-                response = requests.patch(item_url, headers=headers, json=body)
+                client = await get_async_client()
+                response = await client.patch(item_url, headers=headers, json=body)
                 response.raise_for_status()
                 success_count += 1
-            except requests.exceptions.RequestException as e:
+            except httpx.HTTPError as e:
                 logger.error(f"Error moving catalog item {item_id}: {str(e)}")
                 failed_items.append({"item_id": item_id, "error": str(e)})
         

@@ -7,10 +7,11 @@ This module provides tools for managing knowledge bases, categories, and article
 import logging
 from typing import Any, Dict, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 from servicenow_mcp.utils.helpers import _paginated_list_response
 
@@ -135,7 +136,7 @@ class ListCategoriesParams(BaseModel):
     query: Optional[str] = Field(None, description="Search query for categories")
 
 
-def create_knowledge_base(
+async def create_knowledge_base(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateKnowledgeBaseParams,
@@ -171,10 +172,11 @@ def create_knowledge_base(
 
     # Make request
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -188,7 +190,7 @@ def create_knowledge_base(
             kb_name=result.get("title"),
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create knowledge base: {e}")
         return KnowledgeBaseResponse(
             success=False,
@@ -196,7 +198,7 @@ def create_knowledge_base(
         )
 
 
-def list_knowledge_bases(
+async def list_knowledge_bases(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListKnowledgeBasesParams,
@@ -233,10 +235,11 @@ def list_knowledge_bases(
 
     # Make request
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -310,7 +313,7 @@ def list_knowledge_bases(
             extra={"message": f"Found {len(knowledge_bases)} knowledge bases"},
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to list knowledge bases: {e}")
         return {
             "success": False,
@@ -322,7 +325,7 @@ def list_knowledge_bases(
         }
 
 
-def create_category(
+async def create_category(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateCategoryParams,
@@ -360,10 +363,11 @@ def create_category(
 
     # Make request
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -386,7 +390,7 @@ def create_category(
             category_name=result.get("label"),
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create category: {e}")
         return CategoryResponse(
             success=False,
@@ -394,7 +398,7 @@ def create_category(
         )
 
 
-def create_article(
+async def create_article(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateArticleParams,
@@ -428,10 +432,11 @@ def create_article(
 
     # Make request
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -446,7 +451,7 @@ def create_article(
             workflow_state=result.get("workflow_state"),
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create article: {e}")
         return ArticleResponse(
             success=False,
@@ -454,7 +459,7 @@ def create_article(
         )
 
 
-def update_article(
+async def update_article(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: UpdateArticleParams,
@@ -488,10 +493,11 @@ def update_article(
 
     # Make request
     try:
-        response = requests.patch(
+        client = await get_async_client()
+        response = await client.patch(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -506,7 +512,7 @@ def update_article(
             workflow_state=result.get("workflow_state"),
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to update article: {e}")
         return ArticleResponse(
             success=False,
@@ -514,7 +520,7 @@ def update_article(
         )
 
 
-def publish_article(
+async def publish_article(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: PublishArticleParams,
@@ -542,10 +548,11 @@ def publish_article(
 
     # Make request
     try:
-        response = requests.patch(
+        client = await get_async_client()
+        response = await client.patch(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -560,7 +567,7 @@ def publish_article(
             workflow_state=result.get("workflow_state"),
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to publish article: {e}")
         return ArticleResponse(
             success=False,
@@ -568,7 +575,7 @@ def publish_article(
         )
 
 
-def list_articles(
+async def list_articles(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListArticlesParams,
@@ -614,10 +621,11 @@ def list_articles(
 
     # Make request
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -690,7 +698,7 @@ def list_articles(
             extra={"message": f"Found {len(articles)} articles"},
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to list articles: {e}")
         return {
             "success": False,
@@ -702,7 +710,7 @@ def list_articles(
         }
 
 
-def get_article(
+async def get_article(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetArticleParams,
@@ -727,10 +735,11 @@ def get_article(
 
     # Make request
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -803,7 +812,7 @@ def get_article(
             "article": article,
         }
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to get article: {e}")
         return {
             "success": False,
@@ -811,7 +820,7 @@ def get_article(
         }
 
 
-def list_categories(
+async def list_categories(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListCategoriesParams,
@@ -858,10 +867,11 @@ def list_categories(
 
     # Make request
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -960,7 +970,7 @@ def list_categories(
             extra={"message": f"Found {len(categories)} categories"},
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to list categories: {e}")
         return {
             "success": False,

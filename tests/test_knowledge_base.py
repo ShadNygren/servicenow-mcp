@@ -5,9 +5,10 @@ This module contains tests for the knowledge base tools in the ServiceNow MCP se
 """
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import requests
+import httpx
 
 from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.tools.knowledge_base import (
@@ -33,7 +34,7 @@ from servicenow_mcp.tools.knowledge_base import (
 from servicenow_mcp.utils.config import AuthConfig, AuthType, BasicAuthConfig, ServerConfig
 
 
-class TestKnowledgeBaseTools(unittest.TestCase):
+class TestKnowledgeBaseTools(IsolatedAsyncioTestCase):
     """Tests for the knowledge base tools."""
 
     def setUp(self):
@@ -50,13 +51,13 @@ class TestKnowledgeBaseTools(unittest.TestCase):
             auth=auth_config,
         )
         self.auth_manager = MagicMock(spec=AuthManager)
-        self.auth_manager.get_headers.return_value = {
+        self.auth_manager.get_headers_async = AsyncMock(return_value={
             "Authorization": "Bearer test",
             "Content-Type": "application/json",
-        }
+        })
 
-    @patch("servicenow_mcp.tools.knowledge_base.requests.post")
-    def test_create_knowledge_base(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_knowledge_base(self, mock_post):
         """Test creating a knowledge base."""
         # Mock response
         mock_response = MagicMock()
@@ -81,7 +82,7 @@ class TestKnowledgeBaseTools(unittest.TestCase):
             owner="admin",
             managers="it_managers"
         )
-        result = create_knowledge_base(self.server_config, self.auth_manager, params)
+        result = await create_knowledge_base(self.server_config, self.auth_manager, params)
 
         # Verify the result
         self.assertTrue(result.success)
@@ -92,14 +93,14 @@ class TestKnowledgeBaseTools(unittest.TestCase):
         mock_post.assert_called_once()
         args, kwargs = mock_post.call_args
         self.assertEqual(f"{self.server_config.api_url}/table/kb_knowledge_base", args[0])
-        self.assertEqual(self.auth_manager.get_headers(), kwargs["headers"])
+        self.assertEqual(self.auth_manager.get_headers_async.return_value, kwargs["headers"])
         self.assertEqual("Test Knowledge Base", kwargs["json"]["title"])
         self.assertEqual("Test Description", kwargs["json"]["description"])
         self.assertEqual("admin", kwargs["json"]["owner"])
         self.assertEqual("it_managers", kwargs["json"]["kb_managers"])
 
-    @patch("servicenow_mcp.tools.knowledge_base.requests.post")
-    def test_create_category(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_category(self, mock_post):
         """Test creating a category."""
         # Mock response
         mock_response = MagicMock()
@@ -123,7 +124,7 @@ class TestKnowledgeBaseTools(unittest.TestCase):
             knowledge_base="kb001",
             active=True
         )
-        result = create_category(self.server_config, self.auth_manager, params)
+        result = await create_category(self.server_config, self.auth_manager, params)
 
         # Verify the result
         self.assertTrue(result.success)
@@ -134,14 +135,14 @@ class TestKnowledgeBaseTools(unittest.TestCase):
         mock_post.assert_called_once()
         args, kwargs = mock_post.call_args
         self.assertEqual(f"{self.server_config.api_url}/table/kb_category", args[0])
-        self.assertEqual(self.auth_manager.get_headers(), kwargs["headers"])
+        self.assertEqual(self.auth_manager.get_headers_async.return_value, kwargs["headers"])
         self.assertEqual("Test Category", kwargs["json"]["label"])
         self.assertEqual("Test Category Description", kwargs["json"]["description"])
         self.assertEqual("kb001", kwargs["json"]["kb_knowledge_base"])
         self.assertEqual("true", kwargs["json"]["active"])
 
-    @patch("servicenow_mcp.tools.knowledge_base.requests.post")
-    def test_create_article(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_article(self, mock_post):
         """Test creating a knowledge article."""
         # Mock response
         mock_response = MagicMock()
@@ -170,7 +171,7 @@ class TestKnowledgeBaseTools(unittest.TestCase):
             keywords="test,article,knowledge",
             article_type="text"
         )
-        result = create_article(self.server_config, self.auth_manager, params)
+        result = await create_article(self.server_config, self.auth_manager, params)
 
         # Verify the result
         self.assertTrue(result.success)
@@ -181,7 +182,7 @@ class TestKnowledgeBaseTools(unittest.TestCase):
         mock_post.assert_called_once()
         args, kwargs = mock_post.call_args
         self.assertEqual(f"{self.server_config.api_url}/table/kb_knowledge", args[0])
-        self.assertEqual(self.auth_manager.get_headers(), kwargs["headers"])
+        self.assertEqual(self.auth_manager.get_headers_async.return_value, kwargs["headers"])
         self.assertEqual("Test Article", kwargs["json"]["short_description"])
         self.assertEqual("This is a test article content", kwargs["json"]["text"])
         self.assertEqual("kb001", kwargs["json"]["kb_knowledge_base"])
@@ -189,8 +190,8 @@ class TestKnowledgeBaseTools(unittest.TestCase):
         self.assertEqual("text", kwargs["json"]["article_type"])
         self.assertEqual("test,article,knowledge", kwargs["json"]["keywords"])
 
-    @patch("servicenow_mcp.tools.knowledge_base.requests.patch")
-    def test_update_article(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_article(self, mock_patch):
         """Test updating a knowledge article."""
         # Mock response
         mock_response = MagicMock()
@@ -215,7 +216,7 @@ class TestKnowledgeBaseTools(unittest.TestCase):
             category="cat002",
             keywords="updated,article,knowledge"
         )
-        result = update_article(self.server_config, self.auth_manager, params)
+        result = await update_article(self.server_config, self.auth_manager, params)
 
         # Verify the result
         self.assertTrue(result.success)
@@ -226,14 +227,14 @@ class TestKnowledgeBaseTools(unittest.TestCase):
         mock_patch.assert_called_once()
         args, kwargs = mock_patch.call_args
         self.assertEqual(f"{self.server_config.api_url}/table/kb_knowledge/art001", args[0])
-        self.assertEqual(self.auth_manager.get_headers(), kwargs["headers"])
+        self.assertEqual(self.auth_manager.get_headers_async.return_value, kwargs["headers"])
         self.assertEqual("Updated Article", kwargs["json"]["short_description"])
         self.assertEqual("This is an updated article content", kwargs["json"]["text"])
         self.assertEqual("cat002", kwargs["json"]["kb_category"])
         self.assertEqual("updated,article,knowledge", kwargs["json"]["keywords"])
 
-    @patch("servicenow_mcp.tools.knowledge_base.requests.patch")
-    def test_publish_article(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_publish_article(self, mock_patch):
         """Test publishing a knowledge article."""
         # Mock response
         mock_response = MagicMock()
@@ -252,7 +253,7 @@ class TestKnowledgeBaseTools(unittest.TestCase):
             article_id="art001",
             workflow_state="published"
         )
-        result = publish_article(self.server_config, self.auth_manager, params)
+        result = await publish_article(self.server_config, self.auth_manager, params)
 
         # Verify the result
         self.assertTrue(result.success)
@@ -264,11 +265,11 @@ class TestKnowledgeBaseTools(unittest.TestCase):
         mock_patch.assert_called_once()
         args, kwargs = mock_patch.call_args
         self.assertEqual(f"{self.server_config.api_url}/table/kb_knowledge/art001", args[0])
-        self.assertEqual(self.auth_manager.get_headers(), kwargs["headers"])
+        self.assertEqual(self.auth_manager.get_headers_async.return_value, kwargs["headers"])
         self.assertEqual("published", kwargs["json"]["workflow_state"])
 
-    @patch("servicenow_mcp.tools.knowledge_base.requests.get")
-    def test_list_articles(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_articles(self, mock_get):
         """Test listing knowledge articles."""
         # Mock response
         mock_response = MagicMock()
@@ -306,7 +307,7 @@ class TestKnowledgeBaseTools(unittest.TestCase):
             workflow_state="published",
             query="network"
         )
-        result = list_articles(self.server_config, self.auth_manager, params)
+        result = await list_articles(self.server_config, self.auth_manager, params)
 
         # Verify the result
         self.assertTrue(result["success"])
@@ -321,7 +322,7 @@ class TestKnowledgeBaseTools(unittest.TestCase):
         mock_get.assert_called_once()
         args, kwargs = mock_get.call_args
         self.assertEqual(f"{self.server_config.api_url}/table/kb_knowledge", args[0])
-        self.assertEqual(self.auth_manager.get_headers(), kwargs["headers"])
+        self.assertEqual(self.auth_manager.get_headers_async.return_value, kwargs["headers"])
         self.assertEqual(10, kwargs["params"]["sysparm_limit"])
         self.assertEqual(0, kwargs["params"]["sysparm_offset"])
         self.assertEqual("all", kwargs["params"]["sysparm_display_value"])
@@ -332,8 +333,8 @@ class TestKnowledgeBaseTools(unittest.TestCase):
         self.assertIn("kb_knowledge_base.sys_id=kb001", query)
         self.assertIn("kb_category.sys_id=cat001", query)
 
-    @patch("servicenow_mcp.tools.knowledge_base.requests.get")
-    def test_get_article(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_article(self, mock_get):
         """Test getting a knowledge article."""
         # Mock response
         mock_response = MagicMock()
@@ -358,7 +359,7 @@ class TestKnowledgeBaseTools(unittest.TestCase):
 
         # Call the method
         params = GetArticleParams(article_id="art001")
-        result = get_article(self.server_config, self.auth_manager, params)
+        result = await get_article(self.server_config, self.auth_manager, params)
 
         # Verify the result
         self.assertTrue(result["success"])
@@ -377,25 +378,25 @@ class TestKnowledgeBaseTools(unittest.TestCase):
         mock_get.assert_called_once()
         args, kwargs = mock_get.call_args
         self.assertEqual(f"{self.server_config.api_url}/table/kb_knowledge/art001", args[0])
-        self.assertEqual(self.auth_manager.get_headers(), kwargs["headers"])
+        self.assertEqual(self.auth_manager.get_headers_async.return_value, kwargs["headers"])
         self.assertEqual("true", kwargs["params"]["sysparm_display_value"])
 
-    @patch("servicenow_mcp.tools.knowledge_base.requests.post")
-    def test_create_knowledge_base_error(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_knowledge_base_error(self, mock_post):
         """Test error handling when creating a knowledge base."""
         # Mock error response
-        mock_post.side_effect = requests.RequestException("API error")
+        mock_post.side_effect = httpx.HTTPError("API error")
 
         # Call the method
         params = CreateKnowledgeBaseParams(title="Test Knowledge Base")
-        result = create_knowledge_base(self.server_config, self.auth_manager, params)
+        result = await create_knowledge_base(self.server_config, self.auth_manager, params)
 
         # Verify the result
         self.assertFalse(result.success)
         self.assertIn("Failed to create knowledge base", result.message)
 
-    @patch("servicenow_mcp.tools.knowledge_base.requests.get")
-    def test_get_article_not_found(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_article_not_found(self, mock_get):
         """Test getting a non-existent article."""
         # Mock empty response
         mock_response = MagicMock()
@@ -405,14 +406,14 @@ class TestKnowledgeBaseTools(unittest.TestCase):
 
         # Call the method
         params = GetArticleParams(article_id="nonexistent")
-        result = get_article(self.server_config, self.auth_manager, params)
+        result = await get_article(self.server_config, self.auth_manager, params)
 
         # Verify the result
         self.assertFalse(result["success"])
         self.assertIn("not found", result["message"])
 
-    @patch("servicenow_mcp.tools.knowledge_base.requests.get")
-    def test_list_knowledge_bases(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_knowledge_bases(self, mock_get):
         """Test listing knowledge bases."""
         # Mock response
         mock_response = MagicMock()
@@ -450,7 +451,7 @@ class TestKnowledgeBaseTools(unittest.TestCase):
             active=True,
             query="IT"
         )
-        result = list_knowledge_bases(self.server_config, self.auth_manager, params)
+        result = await list_knowledge_bases(self.server_config, self.auth_manager, params)
 
         # Verify the result
         self.assertTrue(result["success"])
@@ -466,14 +467,14 @@ class TestKnowledgeBaseTools(unittest.TestCase):
         mock_get.assert_called_once()
         args, kwargs = mock_get.call_args
         self.assertEqual(f"{self.server_config.api_url}/table/kb_knowledge_base", args[0])
-        self.assertEqual(self.auth_manager.get_headers(), kwargs["headers"])
+        self.assertEqual(self.auth_manager.get_headers_async.return_value, kwargs["headers"])
         self.assertEqual(10, kwargs["params"]["sysparm_limit"])
         self.assertEqual(0, kwargs["params"]["sysparm_offset"])
         self.assertEqual("true", kwargs["params"]["sysparm_display_value"])
         self.assertEqual("active=true^titleLIKEIT^ORdescriptionLIKEIT", kwargs["params"]["sysparm_query"])
 
-    @patch("servicenow_mcp.tools.knowledge_base.requests.get")
-    def test_list_categories(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_categories(self, mock_get):
         """Test listing categories in a knowledge base."""
         # Mock response
         mock_response = MagicMock()
@@ -510,7 +511,7 @@ class TestKnowledgeBaseTools(unittest.TestCase):
             active=True,
             query="Network"
         )
-        result = list_categories(self.server_config, self.auth_manager, params)
+        result = await list_categories(self.server_config, self.auth_manager, params)
 
         # Verify the result
         self.assertTrue(result["success"])
@@ -526,7 +527,7 @@ class TestKnowledgeBaseTools(unittest.TestCase):
         mock_get.assert_called_once()
         args, kwargs = mock_get.call_args
         self.assertEqual(f"{self.server_config.api_url}/table/kb_category", args[0])
-        self.assertEqual(self.auth_manager.get_headers(), kwargs["headers"])
+        self.assertEqual(self.auth_manager.get_headers_async.return_value, kwargs["headers"])
         self.assertEqual(10, kwargs["params"]["sysparm_limit"])
         self.assertEqual(0, kwargs["params"]["sysparm_offset"])
         self.assertEqual("all", kwargs["params"]["sysparm_display_value"])
@@ -539,10 +540,10 @@ class TestKnowledgeBaseTools(unittest.TestCase):
         self.assertIn("labelLIKENetwork", query)
 
 
-class TestKnowledgeBaseParams(unittest.TestCase):
+class TestKnowledgeBaseParams(IsolatedAsyncioTestCase):
     """Tests for the knowledge base parameter classes."""
 
-    def test_create_knowledge_base_params(self):
+    async def test_create_knowledge_base_params(self):
         """Test CreateKnowledgeBaseParams validation."""
         # Minimal required parameters
         params = CreateKnowledgeBaseParams(title="Test Knowledge Base")
@@ -565,7 +566,7 @@ class TestKnowledgeBaseParams(unittest.TestCase):
         self.assertEqual("Custom Workflow", params.publish_workflow)
         self.assertEqual("Custom Retire Workflow", params.retire_workflow)
 
-    def test_create_category_params(self):
+    async def test_create_category_params(self):
         """Test CreateCategoryParams validation."""
         # Required parameters
         params = CreateCategoryParams(
@@ -590,7 +591,7 @@ class TestKnowledgeBaseParams(unittest.TestCase):
         self.assertEqual("parent001", params.parent_category)
         self.assertFalse(params.active)
 
-    def test_create_article_params(self):
+    async def test_create_article_params(self):
         """Test CreateArticleParams validation."""
         # Required parameters
         params = CreateArticleParams(
