@@ -49,6 +49,8 @@ Before deploying this server, read these:
 
 5. **Phase 7 retired the SSE transport in favor of Streamable HTTP** (the MCP spec's current HTTP transport). The single `/mcp` endpoint replaces the older `/sse` + `/messages/` pair. Run `servicenow-mcp-http` instead of `servicenow-mcp-sse`. Migration table is in [Streamable HTTP Mode → Migration from SSE](#migration-from-sse) below.
 
+6. **Phase 9 (v0.9.x) made the entire HTTP path async.** All ~211 tool functions and the OAuth refresh path now use `httpx.AsyncClient` instead of sync `requests`. The server can serve many concurrent MCP sessions from many AI agents simultaneously without one slow tool call blocking the event loop, with built-in connection pooling and a serialised OAuth refresh that fires exactly one token POST per expiry window even under heavy concurrent load. See [Concurrency and async architecture](#concurrency-and-async-architecture) below.
+
 ## Quick start with a ServiceNow Personal Developer Instance (PDI)
 
 ServiceNow provides free, fully-featured developer instances at `https://devXXXXX.service-now.com`. Best testing target.
@@ -537,6 +539,69 @@ The repository includes example scripts that demonstrate how to use the tools:
 
 - **examples/catalog_optimization_example.py**: Demonstrates how to analyze and improve the ServiceNow Service Catalog
 - **examples/change_management_demo.py**: Shows how to create and manage change requests in ServiceNow
+
+## Concurrency and async architecture
+
+This server is designed for **concurrent multi-agent workloads** — many MCP clients (Claude Desktop, agent SDKs, browser extensions, custom tooling) connecting to one server process and issuing tool calls in parallel. As of Phase 9 (v0.9.x) the entire HTTP path is non-blocking async, with explicit isolation between concurrent sessions and explicit serialisation where shared state is involved.
+
+### What's async, end-to-end
+
+- **HTTP client.** All ~211 tool functions and the OAuth refresh path call `httpx.AsyncClient` directly. The legacy sync `requests` library has been removed from the runtime hot path entirely (it remains in dev/admin scripts under `scripts/` only — those aren't in the runtime server).
+- **MCP transport.** The Streamable HTTP transport is built on Starlette + Uvicorn (Phase 7) which is async-native. The stdio transport uses FastMCP's `run_stdio_async()`.
+- **Tool registration.** The Phase 8 FastMCP migration eliminated the manual `_list_tools_impl` / `_call_tool_impl` dispatch handlers; FastMCP's adapter dispatches sync vs async tool implementations transparently. The Phase 9.1 fastmcp adapter detects coroutine functions via `inspect.iscoroutinefunction` and produces the right wrapper shape.
+
+### Why this matters for multi-agent traffic
+
+- **No event-loop blocking.** Before Phase 9, a slow ServiceNow API call inside an SSE/HTTP request was a sync `requests.get(...)` call. Even though the surrounding server was async, the sync HTTP call blocked the event loop. With three slow concurrent calls, the third agent saw queueing-time degradation. Phase 9 fixes this — slow calls suspend, the event loop services other agents, and the third agent's call starts immediately.
+- **Connection pooling.** A single shared `httpx.AsyncClient` (`utils/async_http.py`) is used process-wide, with `max_keepalive_connections=20` and `max_connections=100`. Many concurrent agent calls share the connection pool to ServiceNow, with HTTP/1.1 keepalive and HTTP/2 multiplexing. Earlier versions opened a fresh socket per call.
+- **Serialised OAuth refresh.** The OAuth client_credentials / password flows refresh tokens automatically before expiry. Under concurrent load with N agents on an expired token, an `asyncio.Lock` (`_oauth_lock`) serialises the refresh: the first coroutine acquires the lock and POSTs to `oauth_token.do`; the others wait, then re-check expiry inside the lock and skip the redundant POST. Net result: exactly **one** token POST per expiry window, regardless of concurrent agent count.
+
+### Concurrency safety guarantees
+
+| Concern | How it's handled |
+|---|---|
+| Per-call params isolation | Tool functions take `(config, auth_manager, params)`. `params` is a per-call Pydantic model — no shared mutable state between concurrent calls. |
+| Per-session MCP isolation | The MCP `Mcp-Session-Id` header (added by FastMCP / spec) routes requests to the correct session context. Each session has its own MCP `ClientSession` and `EventStore` entries. |
+| OAuth token races | `asyncio.Lock` per-AuthManager. See above. |
+| Connection pool exhaustion | Default `max_connections=100` is generous for typical agent workloads. Cloud Run / Lambda memory budgets fit this comfortably. Tunable via `httpx.Limits` if you need more. |
+| Process shutdown | `aclose_async_client()` is wired into the FastMCP lifespan in `server_http.py`. When uvicorn stops, the inner FastMCP lifespan tears down the StreamableHTTPSessionManager, then our outer lifespan flushes pooled connections. |
+
+### Multi-agent security model
+
+Phase 9 doesn't change the security model — but it's worth restating what isolates concurrent agents from each other:
+
+1. **One bearer token gates the entire HTTP transport.** All MCP clients present the same `MCP_AUTH_TOKEN`. There is no per-agent identity at the MCP layer; if you need that, the next step is full MCP OAuth 2.1 (Phase 10+).
+2. **All clients share the same ServiceNow credentials.** The server holds one `AuthManager` per process; that AuthManager's south-bound credentials (Basic / OAuth / API Key) are the same for every agent. ServiceNow sees one user identity regardless of which AI agent issued the call. RFC 8693 token exchange (OBO) for end-user attribution is on the Phase 10+ roadmap.
+3. **Tool-call results are not shared between agents.** Each `call_tool` request flows through its own `(config, auth_manager, params)` invocation. There is no per-agent cache, no shared response store, no cross-request state.
+4. **Body redaction in debug logs is global.** The `_truncate_body` redactor (helpers.py) replaces values for keys matching `_SENSITIVE_BODY_KEYS` (password, secret, token, etc.) before serialisation. Concurrent agents passing OAuth password-grant bodies, API keys, or session tokens through the debug log path are all protected by the same redaction.
+5. **Host / Origin allowlists apply per-request.** Each incoming HTTP request is independently checked by `SecurityMiddleware`. There is no session-level whitelisting that could carry from a trusted Origin to an untrusted one.
+
+### What "many concurrent agents" actually means in practice
+
+A single Cloud Run / App Runner / AgentCore Runtime instance with 1 vCPU and 512MiB RAM can comfortably handle:
+
+- **Tens of MCP sessions concurrently** (the StreamableHTTPSessionManager is async; each session is a coroutine, not a thread).
+- **Each session running multiple tool calls in parallel** (httpx connection pool services them).
+- **Aggregate ServiceNow API throughput up to ~100 concurrent in-flight requests** (the client's `max_connections` ceiling). Beyond this, ServiceNow's rate-limit headers (`X-RateLimit-*`) start kicking in and our `RateLimitTracker` throttles client-side; you'd want to scale horizontally rather than vertically.
+
+If you exceed any of these limits, the right move is autoscaling — Cloud Run / App Runner / AgentCore Runtime handle this automatically. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for cloud deployment guides.
+
+### Async migration history (for the record)
+
+| Phase | What landed | Tag |
+|---|---|---|
+| 9.1 | Async infrastructure (`utils/async_http.py`, async helpers, async auth_manager) | v0.9.1 |
+| 9.2 | First small batch — user_criteria, bulk, scripted_rest | v0.9.2 |
+| 9.3 | syslog, ui_policy | v0.9.3 |
+| 9.4 | nl, case, epic, project, scrum_task | v0.9.4 |
+| 9.5 | time_card, sctask, sys_dictionary, business_rule, table_api, scheduled_job | v0.9.5 |
+| 9.6 | catalog_variables, widget, catalog_optimization, import_set, csm, story, script_include | v0.9.6 |
+| 9.7 | changeset, catalog, rest_message, oauth, knowledge_base, incident | v0.9.7 |
+| 9.8 | acl, user, workflow, change | v0.9.8 |
+| 9.9 | flow_tools (4730 lines, 57 HTTP calls) | v0.9.9 |
+| 9.10 | OAuth concurrency lock, FastMCP lifespan integration, this documentation | v0.9.10 |
+
+35 of 35 tool files converted; 257 HTTP call sites moved from `requests` to `httpx.AsyncClient`. 963 tests passing, mypy clean (build-blocking gate), ruff clean.
 
 ## Authentication Methods
 

@@ -166,3 +166,42 @@ async def test_get_headers_async_does_not_log_access_token(caplog) -> None:
     for record in caplog.records:
         assert "AT-must-not-leak" not in record.getMessage()
         assert "access_token" not in record.getMessage().lower() or "Authorization" not in record.getMessage()
+
+
+# ---------------------------------------------------------------------------
+# Phase 9.10 — concurrent-refresh race-safety
+# ---------------------------------------------------------------------------
+
+async def test_concurrent_oauth_refresh_results_in_single_token_post() -> None:
+    """N concurrent get_headers_async() on an expired token → exactly 1 POST.
+
+    Regression check for the multi-agent scenario: if multiple AI agents
+    hit the MCP server simultaneously and the cached token has expired,
+    they all call get_headers_async() concurrently.  The asyncio.Lock
+    around the OAuth refresh ensures only the first coroutine actually
+    fetches; the others wait, then re-check expiry inside the lock and
+    skip the redundant POST.
+    """
+    import asyncio
+
+    cfg = AuthConfig(
+        type=AuthType.OAUTH,
+        oauth=OAuthConfig(client_id="cid", client_secret="csec"),
+    )
+    mgr = AuthManager(cfg, instance_url="https://snow.example.com")
+
+    async with respx.mock() as mock:
+        token_route = mock.post("https://snow.example.com/oauth_token.do").respond(
+            200,
+            json={"access_token": "AT-1", "token_type": "Bearer", "expires_in": 1800},
+        )
+
+        # Fire 10 concurrent calls on a fresh AuthManager (token expired).
+        results = await asyncio.gather(*[mgr.get_headers_async() for _ in range(10)])
+
+        # All 10 callers got the same Authorization header.
+        for headers in results:
+            assert headers["Authorization"] == "Bearer AT-1"
+
+        # But only ONE POST hit the OAuth endpoint.
+        assert token_route.call_count == 1

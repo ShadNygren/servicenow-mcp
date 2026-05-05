@@ -29,6 +29,8 @@ This project includes:
 - **Log-redaction CI gate** — `tests/conftest.py` fails the build if any captured log line matches `access_token`, `refresh_token`, or `Authorization: Bearer/Basic` patterns. Catches OAuth-body-logging regressions.
 - **Inbound auth** — bearer token + Host/Origin allowlist on the HTTP `/mcp` endpoint, loopback-bind by default (from upstream's `fix/sse-auth-hardening` branch, merged here as `c77861e`; the Streamable HTTP transport carries the same defenses unchanged in `transport_security.py`).
 - **Default-package security gate** — arbitrary-script-execution tools (`execute_script_include`, `create_script_include`, etc.) are registered but NOT included in any default tool package. Mitigates Issue [#43](https://github.com/echelon-ai-labs/servicenow-mcp/issues/43) finding #1.
+- **Body redaction in debug logs** — `_truncate_body` (`utils/helpers.py`) walks dict / list bodies recursively and replaces values for keys in `_SENSITIVE_BODY_KEYS` (password, secret, token, access_token, refresh_token, client_secret, api_key, etc.) with `<redacted>` before JSON serialisation. Defense-in-depth against accidentally logging an OAuth password-grant body or a future caller that puts credentials in the request body.
+- **Concurrent-agent isolation** (Phase 9.10) — under multi-agent traffic, an `asyncio.Lock` per AuthManager serialises OAuth refresh so exactly **one** token POST hits the OAuth endpoint per expiry window regardless of concurrent agent count. Eliminates a token-stampede attack vector against the OAuth token endpoint. Tool functions take per-call `(config, auth_manager, params)` with no shared mutable state; one agent cannot read another agent's tool-call results.
 
 ## Known Considerations
 
