@@ -28,8 +28,10 @@ Reference implementation pattern from ``ibeketov/servicenow-mcp``
 from __future__ import annotations
 
 import argparse
+import contextlib
 import logging
 import os
+from collections.abc import AsyncIterator
 from typing import Set
 
 import uvicorn
@@ -49,6 +51,7 @@ from servicenow_mcp.transport_security import (
     is_loopback_host,
     resolve_auth_token,
 )
+from servicenow_mcp.utils.async_http import aclose_async_client
 from servicenow_mcp.utils.config import (
     AuthConfig,
     AuthType,
@@ -80,6 +83,21 @@ def create_starlette_app(
         """Liveness probe — bypasses bearer auth (see SecurityMiddleware)."""
         return PlainTextResponse("OK", status_code=200)
 
+    @contextlib.asynccontextmanager
+    async def lifespan(app: Starlette) -> AsyncIterator[None]:
+        """Compose the inner FastMCP lifespan with our shared httpx.AsyncClient cleanup.
+
+        - Inner FastMCP lifespan starts and shuts down the StreamableHTTPSessionManager.
+        - Our shared :class:`httpx.AsyncClient` is closed via :func:`aclose_async_client`
+          on shutdown so connections in the pool are flushed cleanly when uvicorn stops.
+          The client itself is created lazily on first use, so startup is a no-op.
+        """
+        async with inner.router.lifespan_context(app):
+            try:
+                yield
+            finally:
+                await aclose_async_client()
+
     return Starlette(
         debug=debug,
         routes=[
@@ -94,9 +112,7 @@ def create_starlette_app(
                 allowed_origins=allowed_origins,
             ),
         ],
-        # Inherit the inner app's lifespan so FastMCP's session manager
-        # starts and shuts down with the server process.
-        lifespan=inner.router.lifespan_context,
+        lifespan=lifespan,
     )
 
 

@@ -156,9 +156,26 @@ Goal: replace `mcp.server.lowlevel.Server` with `FastMCP` for both stdio (`cli.p
 | `MCP_TOOL_PACKAGE` filtering | Reimplementable as decorator metadata; design shape is preserved. |
 | Compatibility with cherry-picked fork code | Cherry-picks land in Phases 2-6 against the current low-level shape; Phase 8 migrates all of them at once with a coordinated rewrite. |
 
-### Phase 9 — Async refactor (`requests` → `httpx.AsyncClient`)
+### Phase 9 — Async refactor (`requests` → `httpx.AsyncClient`) ✅ DONE
 
-FastMCP supports sync tools (runs them in a threadpool), so async refactoring is **not** coupled to Phase 8. After Phase 8 lands, migrate every tool's HTTP client from sync `requests` to `httpx.AsyncClient`, with one shared client per process and connection pooling. Touches every tool file in `tools/`. Meaningful perf win for HTTP transports under concurrent load. Removes the awkward sync-under-async footgun in echelon's current SSE server.
+Goal achieved: every tool's HTTP client moved from sync `requests` to `httpx.AsyncClient`, one shared client per process, connection pooling, no sync-under-async event-loop blocking.
+
+**Shipped across 10 sub-phases (v0.9.1 through v0.9.10):**
+
+1. ✅ **9.1** — Async infrastructure: `utils/async_http.py` (shared `httpx.AsyncClient` singleton, race-safe lazy creation, `atexit` + lifespan cleanup), async `_make_request_async` in helpers.py with full retry / Retry-After / RateLimitTracker / debug-mode body redaction parity, `AuthManager.get_headers_async` + async OAuth client_credentials/password grants, `fastmcp_adapter` dispatches sync vs async tool impls.
+2. ✅ **9.2** — Small batch (3 files): user_criteria, bulk, scripted_rest. Established the per-tool conversion pattern. Added `_get_headers_async` swap-tolerant helper.
+3. ✅ **9.3** — syslog, ui_policy.
+4. ✅ **9.4** — nl, case, epic, project, scrum_task.
+5. ✅ **9.5** — time_card, sctask, sys_dictionary, business_rule, table_api, scheduled_job.
+6. ✅ **9.6** — catalog_variables, widget, catalog_optimization, import_set, csm, story, script_include. Internal helper-delegate awaits propagated.
+7. ✅ **9.7** — changeset, catalog, rest_message, oauth, knowledge_base, incident.
+8. ✅ **9.8** — acl, user, workflow, change. Internal user_tools call chain (`create_user` → `assign_roles_to_user` → `check_user_has_role`/`get_role_id`; `create_group` → `add_group_members` → `get_user`) all `await`'d.
+9. ✅ **9.9** — flow_tools (4730 lines, 57 HTTP calls). Required transitive async closure for 16 delegating tools, the nested `_fetch` closure, the chained `.raise_for_status()` rewrite (10 sites wrapped with parens), and `_err_body` switched to `getattr(e, "response", None)` for `httpx.HTTPError` base-class safety.
+10. ✅ **9.10** — `asyncio.Lock` around OAuth refresh so N concurrent coroutines result in exactly one token POST per expiry window; FastMCP lifespan integration so `aclose_async_client()` runs on uvicorn shutdown; comprehensive README / DEPLOYMENT / SECURITY documentation of the async architecture, multi-agent concurrency model, and capacity guidance.
+
+**End state:** 35 of 35 tool files converted, 257 HTTP call sites moved from `requests` to `httpx.AsyncClient`. 963 tests passing (added concurrent-OAuth-refresh + lifespan-shutdown tests in 9.10). Mypy clean (build-blocking gate caught all the missing-await errors that the regex-based converter scripts missed during conversion). Ruff clean.
+
+**Deployment implications:** A single Cloud Run / App Runner / AgentCore Runtime instance can comfortably serve tens of MCP sessions concurrently from many AI agents with up to ~100 in-flight ServiceNow API calls (httpx connection pool default). See README §"Concurrency and async architecture" + DEPLOYMENT.md §"Concurrency model" for the full guidance.
 
 ### Phase 10+ — Future / deferred
 
@@ -184,7 +201,7 @@ Our fork serves as the de-facto reviewed-and-tested version while we advocate up
 
 These are not open questions — explicitly deferred:
 
-- **Do not refactor `requests` → `httpx.AsyncClient`.** Phase 9.
+- ~~Do not refactor `requests` → `httpx.AsyncClient`. Phase 9.~~ **Done (Phase 9 complete; v0.9.10 final).** All 35 tool files async; OAuth refresh serialised; lifespan integration wired.
 - ~~Do not migrate SSE → Streamable HTTP. Phase 7.~~ **Done (Phase 7 complete on `phase-7-streamable-http` branch).** SSE entirely removed; `/mcp` is the single HTTP endpoint.
 - ~~Do not migrate stdio from low-level to FastMCP. Phase 8.~~ **Done (Phase 8 complete on `phase-8-fastmcp` branch).** Both transports now FastMCP-based.
 - ~~Do not retire `tool_utils.py` registry. Phase 8.~~ **Partial — server-side wiring around the registry is gone; the registry remains as the canonical tool list. Per-tool decorator migration deferred to optional Phase 8.5.**

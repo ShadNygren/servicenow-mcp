@@ -2,6 +2,27 @@
 
 This guide covers production deployment options for the Streamable HTTP transport. **Most users don't need any of this** — see "When you DON'T need this guide" below.
 
+## Concurrency model (read this first if you're deploying for multiple agents)
+
+As of v0.9.10 the server is fully async end-to-end. A single process can serve **many MCP sessions concurrently from many AI agents** without blocking the event loop on slow ServiceNow API calls. Practical capacity guidance:
+
+| Resource | Limit | What hits it first |
+|---|---|---|
+| Concurrent in-flight ServiceNow API calls per process | ~100 | `httpx.Limits.max_connections` ceiling in `utils/async_http.py`. Tunable. |
+| Concurrent keepalive sockets per process | 20 | `max_keepalive_connections`. Beyond this, sockets are closed after the call. Tunable. |
+| OAuth token POSTs per expiry window per process | **1** | Serialised by an `asyncio.Lock` regardless of concurrent agent count. |
+| Memory per concurrent MCP session | ~few MiB | Mostly the StreamableHTTPSessionManager session state + InMemoryEventStore. |
+
+**Scaling shape:** Vertical first (one bigger instance), horizontal when you hit ~100 concurrent agents on one process. The official MCP `Mcp-Session-Id` header gives session affinity if you put a load balancer in front (sticky sessions per Mcp-Session-Id). On AWS Bedrock AgentCore Runtime this is automatic — see `docs/deploying-to-aws.md`.
+
+**What the async refactor changed for deployment:**
+
+- A slow ServiceNow call no longer blocks other agents' calls in the same process. Before Phase 9, three concurrent slow calls queued up; the third agent saw delay. Now each suspends its own coroutine and the event loop services others.
+- The shared httpx connection pool reduces socket-creation overhead under heavy load. Cloud Run / App Runner cold starts hold up better under burst traffic.
+- Process shutdown closes the connection pool cleanly via the FastMCP lifespan integration, so kubectl drain / Cloud Run revision swap doesn't drop in-flight ServiceNow connections mid-call.
+
+See README §"Concurrency and async architecture" for the full architectural notes.
+
 ## Choose your scenario
 
 | Scenario | What to do | Skip to |

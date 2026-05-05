@@ -127,3 +127,56 @@ def test_create_starlette_app_imports_cleanly():
         for rr in getattr(getattr(r, "app", None), "routes", [])
     }
     assert "/mcp" in inner_paths
+
+
+def test_lifespan_closes_shared_async_client_on_shutdown():
+    """Phase 9.10 — outer app's lifespan closes the shared httpx.AsyncClient.
+
+    When uvicorn stops, the inner FastMCP lifespan tears down the
+    StreamableHTTPSessionManager and our outer wrapper additionally
+    calls aclose_async_client() so connection-pooled sockets are
+    flushed cleanly instead of being dropped on process exit.
+    """
+    import anyio
+    from mcp.server.fastmcp import FastMCP
+
+    from servicenow_mcp.server_http import create_starlette_app
+    from servicenow_mcp.utils import async_http
+
+    async_http.reset_async_client()
+
+    mcp = FastMCP("test")
+    app = create_starlette_app(
+        mcp,
+        auth_token=TOKEN,
+        allowed_hosts=ALLOWED_HOSTS,
+        allowed_origins=ALLOWED_ORIGINS,
+    )
+
+    async def exercise_lifespan():
+        # Manually drive the Starlette lifespan protocol.
+        scope = {"type": "lifespan"}
+        startup_msgs = []
+        shutdown_msgs = []
+
+        async def receive():
+            if not startup_msgs:
+                startup_msgs.append(True)
+                return {"type": "lifespan.startup"}
+            shutdown_msgs.append(True)
+            return {"type": "lifespan.shutdown"}
+
+        sent = []
+
+        async def send(msg):
+            sent.append(msg)
+
+        # Create the shared client via direct call — simulates a tool having used it.
+        await async_http.get_async_client()
+        assert async_http._client is not None  # type: ignore[attr-defined]
+
+        await app(scope, receive, send)
+        # After lifespan completes, the shared client should have been closed.
+        assert async_http._client is None  # type: ignore[attr-defined]
+
+    anyio.run(exercise_lifespan)

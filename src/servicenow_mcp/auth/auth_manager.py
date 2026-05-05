@@ -4,8 +4,14 @@ Authentication manager for the ServiceNow MCP server.
 Phase 9.1 — async versions of the OAuth-fetch and header-build entrypoints
 added alongside the sync versions.  Sync methods stay until Phase 9.2+
 converts the tools that call them.
+
+Phase 9.10 — OAuth token-refresh serialised with an asyncio.Lock so that
+N concurrent coroutines hitting an expired token result in exactly one
+refresh request to the OAuth endpoint, not N.  The non-OAuth (Basic /
+API-Key) paths require no I/O and don't need locking.
 """
 
+import asyncio
 import base64
 import json
 import logging
@@ -48,6 +54,11 @@ class AuthManager:
             config: Authentication configuration.
             instance_url: ServiceNow instance URL.
         """
+        # Serialises concurrent OAuth refreshes so N coroutines hitting an
+        # expired token cause exactly one POST to the OAuth endpoint.
+        # Created lazily inside :meth:`_oauth_lock` so importing this module
+        # doesn't require an asyncio loop.
+        self._oauth_refresh_lock: Optional[asyncio.Lock] = None
         self.config = config
         self.instance_url = instance_url
         self.token: Optional[str] = None
@@ -130,12 +141,29 @@ class AuthManager:
         self._merge_extra_headers(headers)
         return headers
 
+    def _oauth_lock(self) -> asyncio.Lock:
+        """Lazily create and return the OAuth-refresh lock.
+
+        Lazy creation avoids requiring an event loop at import time / at
+        AuthManager construction time.  Called only from the async path.
+        """
+        if self._oauth_refresh_lock is None:
+            self._oauth_refresh_lock = asyncio.Lock()
+        return self._oauth_refresh_lock
+
     async def get_headers_async(self) -> Dict[str, str]:
         """Async version of :meth:`get_headers`.
 
         OAuth token fetch / refresh runs on the shared
         :class:`httpx.AsyncClient`; Basic / API-Key paths require no I/O and
         return the same dict shape as the sync version.
+
+        Concurrent callers race-safety: if N coroutines find the token
+        expired simultaneously, only the first acquires the lock and
+        actually fetches; the other N-1 await the lock and then re-check
+        :meth:`_oauth_token_is_expired` before deciding to refresh.  Net
+        result: exactly one POST to the OAuth token endpoint per expiry
+        window even under heavy concurrent traffic from multiple AI agents.
         """
         if self.config.type == AuthType.OAUTH:
             headers: Dict[str, str] = {
@@ -143,7 +171,11 @@ class AuthManager:
                 "Content-Type": "application/json",
             }
             if self._oauth_token_is_expired():
-                await self._get_oauth_token_async()
+                async with self._oauth_lock():
+                    # Re-check inside the lock — another coroutine may have
+                    # just refreshed while we were waiting.
+                    if self._oauth_token_is_expired():
+                        await self._get_oauth_token_async()
             headers["Authorization"] = f"{self.token_type} {self.token}"
         else:
             headers = self._build_basic_or_apikey_headers()
