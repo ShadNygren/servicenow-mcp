@@ -3,8 +3,9 @@ Tests for the catalog item variables tools.
 """
 
 import unittest
-from unittest.mock import MagicMock, patch
-import requests
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
+import httpx
 
 from servicenow_mcp.tools.catalog_variables import (
     CreateCatalogItemVariableParams,
@@ -21,7 +22,7 @@ from servicenow_mcp.tools.catalog_variables import (
 from servicenow_mcp.utils.config import ServerConfig, AuthConfig, AuthType, BasicAuthConfig
 
 
-class TestCatalogVariablesTools(unittest.TestCase):
+class TestCatalogVariablesTools(IsolatedAsyncioTestCase):
     """
     Test the catalog item variables tools.
     """
@@ -40,10 +41,10 @@ class TestCatalogVariablesTools(unittest.TestCase):
             ),
         )
         self.auth_manager = MagicMock()
-        self.auth_manager.get_headers.return_value = {"Content-Type": "application/json"}
+        self.auth_manager.get_headers_async = AsyncMock(return_value={"Content-Type": "application/json"})
 
-    @patch("requests.post")
-    def test_create_catalog_item_variable(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_catalog_item_variable(self, mock_post):
         """Test create_catalog_item_variable function."""
         # Configure mock
         mock_response = MagicMock()
@@ -69,7 +70,7 @@ class TestCatalogVariablesTools(unittest.TestCase):
         )
 
         # Call function
-        result = create_catalog_item_variable(self.config, self.auth_manager, params)
+        result = await create_catalog_item_variable(self.config, self.auth_manager, params)
 
         # Verify result
         self.assertTrue(result.success)
@@ -88,8 +89,8 @@ class TestCatalogVariablesTools(unittest.TestCase):
         self.assertEqual(call_args[1]["json"]["question_text"], "Test Variable")
         self.assertEqual(call_args[1]["json"]["mandatory"], "false")
 
-    @patch("requests.post")
-    def test_create_catalog_item_variable_with_optional_params(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_catalog_item_variable_with_optional_params(self, mock_post):
         """Test create_catalog_item_variable function with optional parameters."""
         # Configure mock
         mock_response = MagicMock()
@@ -127,7 +128,7 @@ class TestCatalogVariablesTools(unittest.TestCase):
         )
 
         # Call function
-        result = create_catalog_item_variable(self.config, self.auth_manager, params)
+        result = await create_catalog_item_variable(self.config, self.auth_manager, params)
 
         # Verify result
         self.assertTrue(result.success)
@@ -143,11 +144,11 @@ class TestCatalogVariablesTools(unittest.TestCase):
         self.assertEqual(call_args[1]["json"]["description"], "Reference to a user")
         self.assertEqual(call_args[1]["json"]["order"], 100)
 
-    @patch("requests.post")
-    def test_create_catalog_item_variable_error(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_catalog_item_variable_error(self, mock_post):
         """Test create_catalog_item_variable function with error."""
         # Configure mock to raise exception
-        mock_post.side_effect = requests.RequestException("Test error")
+        mock_post.side_effect = httpx.HTTPError("Test error")
 
         # Create test params
         params = CreateCatalogItemVariableParams(
@@ -158,14 +159,14 @@ class TestCatalogVariablesTools(unittest.TestCase):
         )
 
         # Call function
-        result = create_catalog_item_variable(self.config, self.auth_manager, params)
+        result = await create_catalog_item_variable(self.config, self.auth_manager, params)
 
         # Verify result
         self.assertFalse(result.success)
         self.assertTrue("failed" in result.message.lower())
 
-    @patch("requests.get")
-    def test_list_catalog_item_variables(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_catalog_item_variables(self, mock_get):
         """Test list_catalog_item_variables function."""
         # Configure mock
         mock_response = MagicMock()
@@ -199,7 +200,7 @@ class TestCatalogVariablesTools(unittest.TestCase):
         )
 
         # Call function
-        result = list_catalog_item_variables(self.config, self.auth_manager, params)
+        result = await list_catalog_item_variables(self.config, self.auth_manager, params)
 
         # Verify result
         self.assertTrue(result.success)
@@ -220,8 +221,8 @@ class TestCatalogVariablesTools(unittest.TestCase):
         self.assertEqual(call_args[1]["params"]["sysparm_display_value"], "true")
         self.assertEqual(call_args[1]["params"]["sysparm_exclude_reference_link"], "false")
 
-    @patch("requests.get")
-    def test_list_catalog_item_variables_with_pagination(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_catalog_item_variables_with_pagination(self, mock_get):
         """Test list_catalog_item_variables function with pagination parameters."""
         # Configure mock
         mock_response = MagicMock()
@@ -238,7 +239,7 @@ class TestCatalogVariablesTools(unittest.TestCase):
         )
 
         # Call function
-        result = list_catalog_item_variables(self.config, self.auth_manager, params)
+        result = await list_catalog_item_variables(self.config, self.auth_manager, params)
 
         # Verify result
         self.assertTrue(result.success)
@@ -253,11 +254,11 @@ class TestCatalogVariablesTools(unittest.TestCase):
             "sys_id,name,type,question_text,order,mandatory",
         )
 
-    @patch("requests.get")
-    def test_list_catalog_item_variables_error(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_catalog_item_variables_error(self, mock_get):
         """Test list_catalog_item_variables function with error."""
         # Configure mock to raise exception
-        mock_get.side_effect = requests.RequestException("Test error")
+        mock_get.side_effect = httpx.HTTPError("Test error")
 
         # Create test params
         params = ListCatalogItemVariablesParams(
@@ -265,14 +266,14 @@ class TestCatalogVariablesTools(unittest.TestCase):
         )
 
         # Call function
-        result = list_catalog_item_variables(self.config, self.auth_manager, params)
+        result = await list_catalog_item_variables(self.config, self.auth_manager, params)
 
         # Verify result
         self.assertFalse(result.success)
         self.assertTrue("failed" in result.message.lower())
 
-    @patch("requests.patch")
-    def test_update_catalog_item_variable(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_catalog_item_variable(self, mock_patch):
         """Test update_catalog_item_variable function."""
         # Configure mock
         mock_response = MagicMock()
@@ -296,7 +297,7 @@ class TestCatalogVariablesTools(unittest.TestCase):
         )
 
         # Call function
-        result = update_catalog_item_variable(self.config, self.auth_manager, params)
+        result = await update_catalog_item_variable(self.config, self.auth_manager, params)
 
         # Verify result
         self.assertTrue(result.success)
@@ -314,8 +315,8 @@ class TestCatalogVariablesTools(unittest.TestCase):
         self.assertEqual(call_args[1]["json"]["mandatory"], "true")
         self.assertEqual(call_args[1]["json"]["help_text"], "This is help text")
 
-    @patch("requests.patch")
-    def test_update_catalog_item_variable_no_params(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_catalog_item_variable_no_params(self, mock_patch):
         """Test update_catalog_item_variable function with no update parameters."""
         # Create test params with no updates (only ID)
         params = UpdateCatalogItemVariableParams(
@@ -323,7 +324,7 @@ class TestCatalogVariablesTools(unittest.TestCase):
         )
 
         # Call function
-        result = update_catalog_item_variable(self.config, self.auth_manager, params)
+        result = await update_catalog_item_variable(self.config, self.auth_manager, params)
 
         # Verify result - should fail since no update parameters provided
         self.assertFalse(result.success)
@@ -332,11 +333,11 @@ class TestCatalogVariablesTools(unittest.TestCase):
         # Verify mock was not called
         mock_patch.assert_not_called()
 
-    @patch("requests.patch")
-    def test_update_catalog_item_variable_error(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_catalog_item_variable_error(self, mock_patch):
         """Test update_catalog_item_variable function with error."""
         # Configure mock to raise exception
-        mock_patch.side_effect = requests.RequestException("Test error")
+        mock_patch.side_effect = httpx.HTTPError("Test error")
 
         # Create test params
         params = UpdateCatalogItemVariableParams(
@@ -345,14 +346,14 @@ class TestCatalogVariablesTools(unittest.TestCase):
         )
 
         # Call function
-        result = update_catalog_item_variable(self.config, self.auth_manager, params)
+        result = await update_catalog_item_variable(self.config, self.auth_manager, params)
 
         # Verify result
         self.assertFalse(result.success)
         self.assertTrue("failed" in result.message.lower())
 
 
-class TestDeleteCatalogItemVariable(unittest.TestCase):
+class TestDeleteCatalogItemVariable(IsolatedAsyncioTestCase):
     """Tests for the delete_catalog_item_variable function."""
 
     def setUp(self):
@@ -369,10 +370,10 @@ class TestDeleteCatalogItemVariable(unittest.TestCase):
             ),
         )
         self.auth_manager = MagicMock()
-        self.auth_manager.get_headers.return_value = {"Content-Type": "application/json"}
+        self.auth_manager.get_headers_async = AsyncMock(return_value={"Content-Type": "application/json"})
 
-    @patch("requests.delete")
-    def test_delete_catalog_item_variable_success(self, mock_delete):
+    @patch.object(httpx.AsyncClient, "delete", new_callable=AsyncMock)
+    async def test_delete_catalog_item_variable_success(self, mock_delete):
         """Test successful deletion of a catalog item variable."""
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
@@ -380,7 +381,7 @@ class TestDeleteCatalogItemVariable(unittest.TestCase):
 
         params = DeleteCatalogItemVariableParams(variable_id="var123")
 
-        result = delete_catalog_item_variable(self.config, self.auth_manager, params)
+        result = await delete_catalog_item_variable(self.config, self.auth_manager, params)
 
         self.assertTrue(result.success)
         self.assertEqual(result.variable_id, "var123")
@@ -393,34 +394,38 @@ class TestDeleteCatalogItemVariable(unittest.TestCase):
             f"{self.config.instance_url}/api/now/table/item_option_new/var123",
         )
 
-    @patch("requests.delete")
-    def test_delete_catalog_item_variable_error(self, mock_delete):
+    @patch.object(httpx.AsyncClient, "delete", new_callable=AsyncMock)
+    async def test_delete_catalog_item_variable_error(self, mock_delete):
         """Test delete_catalog_item_variable when an error occurs."""
-        mock_delete.side_effect = requests.RequestException("Connection error")
+        mock_delete.side_effect = httpx.HTTPError("Connection error")
 
         params = DeleteCatalogItemVariableParams(variable_id="var123")
 
-        result = delete_catalog_item_variable(self.config, self.auth_manager, params)
+        result = await delete_catalog_item_variable(self.config, self.auth_manager, params)
 
         self.assertFalse(result.success)
         self.assertIn("failed", result.message.lower())
 
-    @patch("requests.delete")
-    def test_delete_catalog_item_variable_http_error(self, mock_delete):
+    @patch.object(httpx.AsyncClient, "delete", new_callable=AsyncMock)
+    async def test_delete_catalog_item_variable_http_error(self, mock_delete):
         """Test delete_catalog_item_variable when HTTP 404 is returned."""
         mock_response = MagicMock()
-        mock_response.raise_for_status.side_effect = requests.HTTPError("404 Not Found")
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "404 Not Found",
+            request=httpx.Request("POST", "https://test.service-now.com/x"),
+            response=httpx.Response(int("404 Not Found".split()[0])),
+        )
         mock_delete.return_value = mock_response
 
         params = DeleteCatalogItemVariableParams(variable_id="nonexistent")
 
-        result = delete_catalog_item_variable(self.config, self.auth_manager, params)
+        result = await delete_catalog_item_variable(self.config, self.auth_manager, params)
 
         self.assertFalse(result.success)
         self.assertIn("failed", result.message.lower())
 
 
-class TestCreateCatalogVariableChoice(unittest.TestCase):
+class TestCreateCatalogVariableChoice(IsolatedAsyncioTestCase):
     """Tests for the create_catalog_variable_choice function."""
 
     def setUp(self):
@@ -437,10 +442,10 @@ class TestCreateCatalogVariableChoice(unittest.TestCase):
             ),
         )
         self.auth_manager = MagicMock()
-        self.auth_manager.get_headers.return_value = {"Content-Type": "application/json"}
+        self.auth_manager.get_headers_async = AsyncMock(return_value={"Content-Type": "application/json"})
 
-    @patch("requests.post")
-    def test_create_choice_success(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_choice_success(self, mock_post):
         """Test successful creation of a catalog variable choice."""
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
@@ -461,7 +466,7 @@ class TestCreateCatalogVariableChoice(unittest.TestCase):
             value="option_a",
         )
 
-        result = create_catalog_variable_choice(self.config, self.auth_manager, params)
+        result = await create_catalog_variable_choice(self.config, self.auth_manager, params)
 
         self.assertTrue(result.success)
         self.assertEqual(result.choice_id, "choice123")
@@ -478,8 +483,8 @@ class TestCreateCatalogVariableChoice(unittest.TestCase):
         self.assertEqual(call_args[1]["json"]["value"], "option_a")
         self.assertEqual(call_args[1]["json"]["inactive"], "false")
 
-    @patch("requests.post")
-    def test_create_choice_with_optional_params(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_choice_with_optional_params(self, mock_post):
         """Test creation of a catalog variable choice with all optional fields."""
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
@@ -507,7 +512,7 @@ class TestCreateCatalogVariableChoice(unittest.TestCase):
             inactive=False,
         )
 
-        result = create_catalog_variable_choice(self.config, self.auth_manager, params)
+        result = await create_catalog_variable_choice(self.config, self.auth_manager, params)
 
         self.assertTrue(result.success)
         self.assertEqual(result.choice_id, "choice789")
@@ -517,8 +522,8 @@ class TestCreateCatalogVariableChoice(unittest.TestCase):
         self.assertEqual(call_args[1]["json"]["price"], "25.00")
         self.assertEqual(call_args[1]["json"]["price_type"], "flat_fee")
 
-    @patch("requests.post")
-    def test_create_choice_inactive(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_choice_inactive(self, mock_post):
         """Test that an inactive choice is sent with inactive=true."""
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
@@ -540,14 +545,14 @@ class TestCreateCatalogVariableChoice(unittest.TestCase):
             inactive=True,
         )
 
-        result = create_catalog_variable_choice(self.config, self.auth_manager, params)
+        result = await create_catalog_variable_choice(self.config, self.auth_manager, params)
 
         self.assertTrue(result.success)
         call_args = mock_post.call_args
         self.assertEqual(call_args[1]["json"]["inactive"], "true")
 
-    @patch("requests.post")
-    def test_create_choice_omits_none_optional_fields(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_choice_omits_none_optional_fields(self, mock_post):
         """Optional fields not provided should not be included in the POST body."""
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
@@ -560,7 +565,7 @@ class TestCreateCatalogVariableChoice(unittest.TestCase):
             value="basic",
         )
 
-        create_catalog_variable_choice(self.config, self.auth_manager, params)
+        await create_catalog_variable_choice(self.config, self.auth_manager, params)
 
         call_args = mock_post.call_args
         body = call_args[1]["json"]
@@ -568,10 +573,10 @@ class TestCreateCatalogVariableChoice(unittest.TestCase):
         self.assertNotIn("price", body)
         self.assertNotIn("price_type", body)
 
-    @patch("requests.post")
-    def test_create_choice_error(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_choice_error(self, mock_post):
         """Test create_catalog_variable_choice when a request error occurs."""
-        mock_post.side_effect = requests.RequestException("Connection refused")
+        mock_post.side_effect = httpx.HTTPError("Connection refused")
 
         params = CreateCatalogVariableChoiceParams(
             variable_id="var456",
@@ -579,16 +584,20 @@ class TestCreateCatalogVariableChoice(unittest.TestCase):
             value="option_a",
         )
 
-        result = create_catalog_variable_choice(self.config, self.auth_manager, params)
+        result = await create_catalog_variable_choice(self.config, self.auth_manager, params)
 
         self.assertFalse(result.success)
         self.assertIn("failed", result.message.lower())
 
-    @patch("requests.post")
-    def test_create_choice_http_error(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_choice_http_error(self, mock_post):
         """Test create_catalog_variable_choice when an HTTP error is returned."""
         mock_response = MagicMock()
-        mock_response.raise_for_status.side_effect = requests.HTTPError("403 Forbidden")
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "403 Forbidden",
+            request=httpx.Request("POST", "https://test.service-now.com/x"),
+            response=httpx.Response(int("403 Forbidden".split()[0])),
+        )
         mock_post.return_value = mock_response
 
         params = CreateCatalogVariableChoiceParams(
@@ -597,7 +606,7 @@ class TestCreateCatalogVariableChoice(unittest.TestCase):
             value="option_a",
         )
 
-        result = create_catalog_variable_choice(self.config, self.auth_manager, params)
+        result = await create_catalog_variable_choice(self.config, self.auth_manager, params)
 
         self.assertFalse(result.success)
         self.assertIn("failed", result.message.lower())

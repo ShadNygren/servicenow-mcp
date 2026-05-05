@@ -1,7 +1,8 @@
 
 import unittest
-from unittest.mock import MagicMock, patch
-import requests
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
+import httpx
 from servicenow_mcp.tools.csm_tools import (
     list_accounts,
     list_locations,
@@ -31,7 +32,7 @@ def _make_config():
 
 def _make_auth():
     auth_manager = MagicMock(spec=AuthManager)
-    auth_manager.get_headers.return_value = {"Authorization": "Bearer FAKE_TOKEN"}
+    auth_manager.get_headers_async = AsyncMock(return_value={"Authorization": "Bearer FAKE_TOKEN"})
     return auth_manager
 
 
@@ -94,16 +95,16 @@ SAMPLE_CASE_HISTORY = {
 }
 
 
-class TestListAccounts(unittest.TestCase):
+class TestListAccounts(IsolatedAsyncioTestCase):
 
-    @patch('servicenow_mcp.tools.csm_tools.requests.get')
-    def test_list_accounts_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_accounts_success(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [SAMPLE_ACCOUNT]}
         mock_get.return_value = mock_response
 
-        result = list_accounts(_make_config(), _make_auth(), ListAccountsParams())
+        result = await list_accounts(_make_config(), _make_auth(), ListAccountsParams())
 
         self.assertTrue(result["success"])
         self.assertEqual(len(result["accounts"]), 1)
@@ -111,52 +112,52 @@ class TestListAccounts(unittest.TestCase):
         call_args = mock_get.call_args
         self.assertIn("/table/customer_account", call_args[0][0])
 
-    @patch('servicenow_mcp.tools.csm_tools.requests.get')
-    def test_list_accounts_with_name_filter(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_accounts_with_name_filter(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [SAMPLE_ACCOUNT]}
         mock_get.return_value = mock_response
 
-        result = list_accounts(_make_config(), _make_auth(), ListAccountsParams(name_filter="Aramark"))
+        result = await list_accounts(_make_config(), _make_auth(), ListAccountsParams(name_filter="Aramark"))
 
         self.assertTrue(result["success"])
         query = mock_get.call_args[1]["params"]["sysparm_query"]
         self.assertIn("nameLIKEAramark", query)
 
-    @patch('servicenow_mcp.tools.csm_tools.requests.get')
-    def test_list_accounts_empty(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_accounts_empty(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": []}
         mock_get.return_value = mock_response
 
-        result = list_accounts(_make_config(), _make_auth(), ListAccountsParams())
+        result = await list_accounts(_make_config(), _make_auth(), ListAccountsParams())
 
         self.assertTrue(result["success"])
         self.assertEqual(result["accounts"], [])
         self.assertEqual(result["message"], "Found 0 accounts")
 
-    @patch('servicenow_mcp.tools.csm_tools.requests.get')
-    def test_list_accounts_request_error(self, mock_get):
-        mock_get.side_effect = requests.RequestException("Connection timeout")
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_accounts_request_error(self, mock_get):
+        mock_get.side_effect = httpx.HTTPError("Connection timeout")
 
-        result = list_accounts(_make_config(), _make_auth(), ListAccountsParams())
+        result = await list_accounts(_make_config(), _make_auth(), ListAccountsParams())
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to list accounts", result["message"])
 
 
-class TestListLocations(unittest.TestCase):
+class TestListLocations(IsolatedAsyncioTestCase):
 
-    @patch('servicenow_mcp.tools.csm_tools.requests.get')
-    def test_list_locations_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_locations_success(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [SAMPLE_LOCATION]}
         mock_get.return_value = mock_response
 
-        result = list_locations(_make_config(), _make_auth(), ListLocationsParams())
+        result = await list_locations(_make_config(), _make_auth(), ListLocationsParams())
 
         self.assertTrue(result["success"])
         self.assertEqual(len(result["locations"]), 1)
@@ -164,43 +165,43 @@ class TestListLocations(unittest.TestCase):
         call_args = mock_get.call_args
         self.assertIn("/table/cmn_location", call_args[0][0])
 
-    @patch('servicenow_mcp.tools.csm_tools.requests.get')
-    def test_list_locations_with_account_filter(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_locations_with_account_filter(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [SAMPLE_LOCATION]}
         mock_get.return_value = mock_response
 
-        result = list_locations(_make_config(), _make_auth(), ListLocationsParams(account="Levy"))
+        result = await list_locations(_make_config(), _make_auth(), ListLocationsParams(account="Levy"))
 
         self.assertTrue(result["success"])
         query = mock_get.call_args[1]["params"]["sysparm_query"]
         self.assertIn("companyLIKELevy", query)
 
-    @patch('servicenow_mcp.tools.csm_tools.requests.get')
-    def test_list_locations_with_name_filter(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_locations_with_name_filter(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [SAMPLE_LOCATION]}
         mock_get.return_value = mock_response
 
-        result = list_locations(_make_config(), _make_auth(), ListLocationsParams(name_filter="Wrigley"))
+        result = await list_locations(_make_config(), _make_auth(), ListLocationsParams(name_filter="Wrigley"))
 
         self.assertTrue(result["success"])
         query = mock_get.call_args[1]["params"]["sysparm_query"]
         self.assertIn("nameLIKEWrigley", query)
 
 
-class TestListProducts(unittest.TestCase):
+class TestListProducts(IsolatedAsyncioTestCase):
 
-    @patch('servicenow_mcp.tools.csm_tools.requests.get')
-    def test_list_products_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_products_success(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [SAMPLE_PRODUCT]}
         mock_get.return_value = mock_response
 
-        result = list_products(_make_config(), _make_auth(), ListProductsParams())
+        result = await list_products(_make_config(), _make_auth(), ListProductsParams())
 
         self.assertTrue(result["success"])
         self.assertEqual(len(result["products"]), 1)
@@ -208,37 +209,37 @@ class TestListProducts(unittest.TestCase):
         call_args = mock_get.call_args
         self.assertIn("/table/sn_install_base_sold_product", call_args[0][0])
 
-    @patch('servicenow_mcp.tools.csm_tools.requests.get')
-    def test_list_products_with_account_filter(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_products_with_account_filter(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [SAMPLE_PRODUCT]}
         mock_get.return_value = mock_response
 
-        result = list_products(_make_config(), _make_auth(), ListProductsParams(account="Aramark"))
+        result = await list_products(_make_config(), _make_auth(), ListProductsParams(account="Aramark"))
 
         self.assertTrue(result["success"])
         query = mock_get.call_args[1]["params"]["sysparm_query"]
         self.assertIn("accountLIKEAramark", query)
 
-    @patch('servicenow_mcp.tools.csm_tools.requests.get')
-    def test_list_products_with_product_name_filter(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_products_with_product_name_filter(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [SAMPLE_PRODUCT]}
         mock_get.return_value = mock_response
 
-        result = list_products(_make_config(), _make_auth(), ListProductsParams(product_name="Kiosk"))
+        result = await list_products(_make_config(), _make_auth(), ListProductsParams(product_name="Kiosk"))
 
         self.assertTrue(result["success"])
         query = mock_get.call_args[1]["params"]["sysparm_query"]
         self.assertIn("nameLIKEKiosk", query)
 
 
-class TestGetCasesByAccount(unittest.TestCase):
+class TestGetCasesByAccount(IsolatedAsyncioTestCase):
 
-    @patch('servicenow_mcp.tools.csm_tools.requests.get')
-    def test_get_cases_by_account_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_cases_by_account_success(self, mock_get):
         # First call: account lookup; second call: case search
         mock_acct_response = MagicMock()
         mock_acct_response.status_code = 200
@@ -251,7 +252,7 @@ class TestGetCasesByAccount(unittest.TestCase):
         mock_get.side_effect = [mock_acct_response, mock_case_response]
 
         params = GetCasesByAccountParams(account_name="Aramark")
-        result = get_cases_by_account(_make_config(), _make_auth(), params)
+        result = await get_cases_by_account(_make_config(), _make_auth(), params)
 
         self.assertTrue(result["success"])
         self.assertEqual(len(result["cases"]), 1)
@@ -263,15 +264,15 @@ class TestGetCasesByAccount(unittest.TestCase):
         # Second call to task table
         self.assertIn("/table/task", mock_get.call_args_list[1][0][0])
 
-    @patch('servicenow_mcp.tools.csm_tools.requests.get')
-    def test_get_cases_by_account_not_found(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_cases_by_account_not_found(self, mock_get):
         mock_acct_response = MagicMock()
         mock_acct_response.status_code = 200
         mock_acct_response.json.return_value = {"result": []}
         mock_get.return_value = mock_acct_response
 
         params = GetCasesByAccountParams(account_name="NonExistentCorp")
-        result = get_cases_by_account(_make_config(), _make_auth(), params)
+        result = await get_cases_by_account(_make_config(), _make_auth(), params)
 
         self.assertFalse(result["success"])
         self.assertIn("Account not found", result["message"])
@@ -279,8 +280,8 @@ class TestGetCasesByAccount(unittest.TestCase):
         # Only one API call made (account lookup, no case search)
         self.assertEqual(mock_get.call_count, 1)
 
-    @patch('servicenow_mcp.tools.csm_tools.requests.get')
-    def test_get_cases_by_account_with_filters(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_cases_by_account_with_filters(self, mock_get):
         mock_acct_response = MagicMock()
         mock_acct_response.status_code = 200
         mock_acct_response.json.return_value = {"result": [{"sys_id": "acct001", "name": "Aramark Inc."}]}
@@ -297,7 +298,7 @@ class TestGetCasesByAccount(unittest.TestCase):
             priority="3 - Moderate",
             created_after="2025-01-01",
         )
-        result = get_cases_by_account(_make_config(), _make_auth(), params)
+        result = await get_cases_by_account(_make_config(), _make_auth(), params)
 
         self.assertTrue(result["success"])
         case_query = mock_get.call_args_list[1][1]["params"]["sysparm_query"]
@@ -306,17 +307,17 @@ class TestGetCasesByAccount(unittest.TestCase):
         self.assertIn("sys_created_on>=2025-01-01", case_query)
 
 
-class TestGetCasesByLocation(unittest.TestCase):
+class TestGetCasesByLocation(IsolatedAsyncioTestCase):
 
-    @patch('servicenow_mcp.tools.csm_tools.requests.get')
-    def test_get_cases_by_location_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_cases_by_location_success(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [SAMPLE_CASE]}
         mock_get.return_value = mock_response
 
         params = GetCasesByLocationParams(location_name="Wrigley Field")
-        result = get_cases_by_location(_make_config(), _make_auth(), params)
+        result = await get_cases_by_location(_make_config(), _make_auth(), params)
 
         self.assertTrue(result["success"])
         self.assertEqual(len(result["cases"]), 1)
@@ -326,17 +327,17 @@ class TestGetCasesByLocation(unittest.TestCase):
         self.assertIn("sys_class_name=sn_customerservice_case", query)
 
 
-class TestGetCasesByProduct(unittest.TestCase):
+class TestGetCasesByProduct(IsolatedAsyncioTestCase):
 
-    @patch('servicenow_mcp.tools.csm_tools.requests.get')
-    def test_get_cases_by_product_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_cases_by_product_success(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [SAMPLE_CASE]}
         mock_get.return_value = mock_response
 
         params = GetCasesByProductParams(product_name="Origin")
-        result = get_cases_by_product(_make_config(), _make_auth(), params)
+        result = await get_cases_by_product(_make_config(), _make_auth(), params)
 
         self.assertTrue(result["success"])
         self.assertEqual(len(result["cases"]), 1)
@@ -346,17 +347,17 @@ class TestGetCasesByProduct(unittest.TestCase):
         self.assertIn("descriptionLIKEOrigin", query)
 
 
-class TestGetCasesByIntegration(unittest.TestCase):
+class TestGetCasesByIntegration(IsolatedAsyncioTestCase):
 
-    @patch('servicenow_mcp.tools.csm_tools.requests.get')
-    def test_get_cases_by_integration_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_cases_by_integration_success(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [SAMPLE_CASE]}
         mock_get.return_value = mock_response
 
         params = GetCasesByIntegrationParams(integration_name="Shift4")
-        result = get_cases_by_integration(_make_config(), _make_auth(), params)
+        result = await get_cases_by_integration(_make_config(), _make_auth(), params)
 
         self.assertTrue(result["success"])
         self.assertEqual(len(result["cases"]), 1)
@@ -366,17 +367,17 @@ class TestGetCasesByIntegration(unittest.TestCase):
         self.assertIn("descriptionLIKEShift4", query)
 
 
-class TestGetCaseHistory(unittest.TestCase):
+class TestGetCaseHistory(IsolatedAsyncioTestCase):
 
-    @patch('servicenow_mcp.tools.csm_tools.requests.get')
-    def test_get_case_history_success(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_case_history_success(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [SAMPLE_CASE_HISTORY]}
         mock_get.return_value = mock_response
 
         params = GetCaseHistoryParams(case_number="CS0008423")
-        result = get_case_history(_make_config(), _make_auth(), params)
+        result = await get_case_history(_make_config(), _make_auth(), params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["case"]["number"], "CS0008423")
@@ -390,31 +391,31 @@ class TestGetCaseHistory(unittest.TestCase):
         self.assertIn("number=CS0008423", query)
         self.assertIn("sys_class_name=sn_customerservice_case", query)
 
-    @patch('servicenow_mcp.tools.csm_tools.requests.get')
-    def test_get_case_history_not_found(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_case_history_not_found(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": []}
         mock_get.return_value = mock_response
 
         params = GetCaseHistoryParams(case_number="CS9999999")
-        result = get_case_history(_make_config(), _make_auth(), params)
+        result = await get_case_history(_make_config(), _make_auth(), params)
 
         self.assertFalse(result["success"])
         self.assertIn("Case not found", result["message"])
 
-    @patch('servicenow_mcp.tools.csm_tools.requests.get')
-    def test_get_case_history_request_error(self, mock_get):
-        mock_get.side_effect = requests.RequestException("Server error")
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_case_history_request_error(self, mock_get):
+        mock_get.side_effect = httpx.HTTPError("Server error")
 
         params = GetCaseHistoryParams(case_number="CS0008423")
-        result = get_case_history(_make_config(), _make_auth(), params)
+        result = await get_case_history(_make_config(), _make_auth(), params)
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to get case history", result["message"])
 
-    @patch('servicenow_mcp.tools.csm_tools.requests.get')
-    def test_get_case_history_assigned_to_dict(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_case_history_assigned_to_dict(self, mock_get):
         case_with_dict_assigned = {
             **SAMPLE_CASE_HISTORY,
             "assigned_to": {"display_value": "John Doe", "value": "user123"},
@@ -425,7 +426,7 @@ class TestGetCaseHistory(unittest.TestCase):
         mock_get.return_value = mock_response
 
         params = GetCaseHistoryParams(case_number="CS0008423")
-        result = get_case_history(_make_config(), _make_auth(), params)
+        result = await get_case_history(_make_config(), _make_auth(), params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["case"]["assigned_to"], "John Doe")

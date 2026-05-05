@@ -10,10 +10,10 @@ import logging
 import random
 from typing import Dict, List, Optional
 
-import requests
 from pydantic import BaseModel
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ class UpdateCatalogItemParams(BaseModel):
     order: Optional[int] = None
 
 
-def get_optimization_recommendations(
+async def get_optimization_recommendations(
     config: ServerConfig, auth_manager: AuthManager, params: OptimizationRecommendationsParams
 ) -> Dict:
     """
@@ -62,7 +62,7 @@ def get_optimization_recommendations(
         # Get recommendations based on the requested types
         for rec_type in params.recommendation_types:
             if rec_type == "inactive_items":
-                items = _get_inactive_items(config, auth_manager, category_id)
+                items = await _get_inactive_items(config, auth_manager, category_id)
                 if items:
                     recommendations.append({
                         "type": "inactive_items",
@@ -75,7 +75,7 @@ def get_optimization_recommendations(
                     })
             
             elif rec_type == "low_usage":
-                items = _get_low_usage_items(config, auth_manager, category_id)
+                items = await _get_low_usage_items(config, auth_manager, category_id)
                 if items:
                     recommendations.append({
                         "type": "low_usage",
@@ -88,7 +88,7 @@ def get_optimization_recommendations(
                     })
             
             elif rec_type == "high_abandonment":
-                items = _get_high_abandonment_items(config, auth_manager, category_id)
+                items = await _get_high_abandonment_items(config, auth_manager, category_id)
                 if items:
                     recommendations.append({
                         "type": "high_abandonment",
@@ -101,7 +101,7 @@ def get_optimization_recommendations(
                     })
             
             elif rec_type == "slow_fulfillment":
-                items = _get_slow_fulfillment_items(config, auth_manager, category_id)
+                items = await _get_slow_fulfillment_items(config, auth_manager, category_id)
                 if items:
                     recommendations.append({
                         "type": "slow_fulfillment",
@@ -114,7 +114,7 @@ def get_optimization_recommendations(
                     })
             
             elif rec_type == "description_quality":
-                items = _get_poor_description_items(config, auth_manager, category_id)
+                items = await _get_poor_description_items(config, auth_manager, category_id)
                 if items:
                     recommendations.append({
                         "type": "description_quality",
@@ -140,7 +140,7 @@ def get_optimization_recommendations(
         }
 
 
-def update_catalog_item(
+async def update_catalog_item(
     config: ServerConfig, auth_manager: AuthManager, params: UpdateCatalogItemParams
 ) -> Dict:
     """
@@ -176,10 +176,11 @@ def update_catalog_item(
         
         # Make the API request
         url = f"{config.instance_url}/api/now/table/sc_cat_item/{params.item_id}"
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         headers["Content-Type"] = "application/json"
         
-        response = requests.patch(url, headers=headers, json=body)
+        client = await get_async_client()
+        response = await client.patch(url, headers=headers, json=body)
         response.raise_for_status()
         
         return {
@@ -197,7 +198,7 @@ def update_catalog_item(
         }
 
 
-def _get_inactive_items(
+async def _get_inactive_items(
     config: ServerConfig, auth_manager: AuthManager, category_id: Optional[str] = None
 ) -> List[Dict]:
     """
@@ -219,14 +220,15 @@ def _get_inactive_items(
         
         # Make the API request
         url = f"{config.instance_url}/api/now/table/sc_cat_item"
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         params = {
             "sysparm_query": query,
             "sysparm_fields": "sys_id,name,short_description,category",
             "sysparm_limit": "50",
         }
         
-        response = requests.get(url, headers=headers, params=params)
+        client = await get_async_client()
+        response = await client.get(url, headers=headers, params=params)
         response.raise_for_status()
         
         return response.json()["result"]  # type: ignore[no-any-return]
@@ -236,7 +238,7 @@ def _get_inactive_items(
         return []
 
 
-def _get_low_usage_items(
+async def _get_low_usage_items(
     config: ServerConfig, auth_manager: AuthManager, category_id: Optional[str] = None
 ) -> List[Dict]:
     """
@@ -258,14 +260,15 @@ def _get_low_usage_items(
         
         # Make the API request
         url = f"{config.instance_url}/api/now/table/sc_cat_item"
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         params = {
             "sysparm_query": query,
             "sysparm_fields": "sys_id,name,short_description,category",
             "sysparm_limit": "50",
         }
         
-        response = requests.get(url, headers=headers, params=params)
+        client = await get_async_client()
+        response = await client.get(url, headers=headers, params=params)
         response.raise_for_status()
         
         # In a real implementation, we would query the request table to get actual usage data
@@ -286,7 +289,7 @@ def _get_low_usage_items(
         return []
 
 
-def _get_high_abandonment_items(
+async def _get_high_abandonment_items(
     config: ServerConfig, auth_manager: AuthManager, category_id: Optional[str] = None
 ) -> List[Dict]:
     """
@@ -308,14 +311,15 @@ def _get_high_abandonment_items(
         
         # Make the API request
         url = f"{config.instance_url}/api/now/table/sc_cat_item"
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         params = {
             "sysparm_query": query,
             "sysparm_fields": "sys_id,name,short_description,category",
             "sysparm_limit": "50",
         }
         
-        response = requests.get(url, headers=headers, params=params)
+        client = await get_async_client()
+        response = await client.get(url, headers=headers, params=params)
         response.raise_for_status()
         
         # In a real implementation, we would query the request table to get actual abandonment data
@@ -342,7 +346,7 @@ def _get_high_abandonment_items(
         return []
 
 
-def _get_slow_fulfillment_items(
+async def _get_slow_fulfillment_items(
     config: ServerConfig, auth_manager: AuthManager, category_id: Optional[str] = None
 ) -> List[Dict]:
     """
@@ -364,14 +368,15 @@ def _get_slow_fulfillment_items(
         
         # Make the API request
         url = f"{config.instance_url}/api/now/table/sc_cat_item"
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         params = {
             "sysparm_query": query,
             "sysparm_fields": "sys_id,name,short_description,category",
             "sysparm_limit": "50",
         }
         
-        response = requests.get(url, headers=headers, params=params)
+        client = await get_async_client()
+        response = await client.get(url, headers=headers, params=params)
         response.raise_for_status()
         
         # In a real implementation, we would query the request table to get actual fulfillment data
@@ -398,7 +403,7 @@ def _get_slow_fulfillment_items(
         return []
 
 
-def _get_poor_description_items(
+async def _get_poor_description_items(
     config: ServerConfig, auth_manager: AuthManager, category_id: Optional[str] = None
 ) -> List[Dict]:
     """
@@ -420,14 +425,15 @@ def _get_poor_description_items(
         
         # Make the API request
         url = f"{config.instance_url}/api/now/table/sc_cat_item"
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         params = {
             "sysparm_query": query,
             "sysparm_fields": "sys_id,name,short_description,category",
             "sysparm_limit": "50",
         }
         
-        response = requests.get(url, headers=headers, params=params)
+        client = await get_async_client()
+        response = await client.get(url, headers=headers, params=params)
         response.raise_for_status()
         
         items = response.json()["result"]

@@ -3,9 +3,10 @@ Tests for the ServiceNow MCP catalog optimization tools.
 """
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import requests
+import httpx
 
 from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.tools.catalog_optimization import (
@@ -22,7 +23,7 @@ from servicenow_mcp.tools.catalog_optimization import (
 from servicenow_mcp.utils.config import AuthConfig, AuthType, BasicAuthConfig, ServerConfig
 
 
-class TestCatalogOptimizationTools(unittest.TestCase):
+class TestCatalogOptimizationTools(IsolatedAsyncioTestCase):
     """Test cases for the catalog optimization tools."""
 
     def setUp(self):
@@ -38,10 +39,10 @@ class TestCatalogOptimizationTools(unittest.TestCase):
 
         # Create a mock auth manager
         self.auth_manager = MagicMock(spec=AuthManager)
-        self.auth_manager.get_headers.return_value = {"Authorization": "Basic YWRtaW46cGFzc3dvcmQ="}
+        self.auth_manager.get_headers_async = AsyncMock(return_value={"Authorization": "Basic YWRtaW46cGFzc3dvcmQ="})
 
-    @patch("requests.get")
-    def test_get_inactive_items(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_inactive_items(self, mock_get):
         """Test getting inactive catalog items."""
         # Mock the response from ServiceNow
         mock_response = MagicMock()
@@ -64,7 +65,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         mock_get.return_value = mock_response
 
         # Call the function
-        result = _get_inactive_items(self.config, self.auth_manager)
+        result = await _get_inactive_items(self.config, self.auth_manager)
 
         # Verify the results
         self.assertEqual(len(result), 2)
@@ -76,8 +77,8 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         args, kwargs = mock_get.call_args
         self.assertEqual(kwargs["params"]["sysparm_query"], "active=false")
 
-    @patch("requests.get")
-    def test_get_inactive_items_with_category(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_inactive_items_with_category(self, mock_get):
         """Test getting inactive catalog items filtered by category."""
         # Mock the response from ServiceNow
         mock_response = MagicMock()
@@ -94,7 +95,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         mock_get.return_value = mock_response
 
         # Call the function with a category filter
-        result = _get_inactive_items(self.config, self.auth_manager, "hardware")
+        result = await _get_inactive_items(self.config, self.auth_manager, "hardware")
 
         # Verify the results
         self.assertEqual(len(result), 1)
@@ -105,22 +106,22 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         args, kwargs = mock_get.call_args
         self.assertEqual(kwargs["params"]["sysparm_query"], "active=false^category=hardware")
 
-    @patch("requests.get")
-    def test_get_inactive_items_error(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_inactive_items_error(self, mock_get):
         """Test error handling when getting inactive catalog items."""
         # Mock an error response
-        mock_get.side_effect = requests.exceptions.RequestException("API Error")
+        mock_get.side_effect = httpx.HTTPError("API Error")
 
         # Call the function
-        result = _get_inactive_items(self.config, self.auth_manager)
+        result = await _get_inactive_items(self.config, self.auth_manager)
 
         # Verify the results
         self.assertEqual(result, [])
 
-    @patch("requests.get")
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
     @patch("random.sample")
     @patch("random.randint")
-    def test_get_low_usage_items(self, mock_randint, mock_sample, mock_get):
+    async def test_get_low_usage_items(self, mock_randint, mock_sample, mock_get):
         """Test getting catalog items with low usage."""
         # Mock the response from ServiceNow
         mock_response = MagicMock()
@@ -168,7 +169,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         mock_randint.return_value = 2
 
         # Call the function
-        result = _get_low_usage_items(self.config, self.auth_manager)
+        result = await _get_low_usage_items(self.config, self.auth_manager)
 
         # Verify the results
         self.assertEqual(len(result), 2)
@@ -182,7 +183,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         args, kwargs = mock_get.call_args
         self.assertEqual(kwargs["params"]["sysparm_query"], "active=true")
 
-    def test_high_abandonment_items_format(self):
+    async def test_high_abandonment_items_format(self):
         """Test the expected format of high abandonment items."""
         # This test doesn't call the actual function, but verifies the expected format
         # of the data that would be returned by the function
@@ -220,10 +221,10 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         self.assertEqual(high_abandonment_items[1]["cart_adds"], 20)
         self.assertEqual(high_abandonment_items[1]["orders"], 8)
 
-    @patch("requests.get")
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
     @patch("random.sample")
     @patch("random.uniform")
-    def test_get_slow_fulfillment_items(self, mock_uniform, mock_sample, mock_get):
+    async def test_get_slow_fulfillment_items(self, mock_uniform, mock_sample, mock_get):
         """Test getting catalog items with slow fulfillment times."""
         # Mock the response from ServiceNow
         mock_response = MagicMock()
@@ -265,7 +266,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         mock_uniform.return_value = 7.5
 
         # Call the function
-        result = _get_slow_fulfillment_items(self.config, self.auth_manager)
+        result = await _get_slow_fulfillment_items(self.config, self.auth_manager)
 
         # Verify the results
         self.assertEqual(len(result), 2)
@@ -276,8 +277,8 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         self.assertEqual(result[1]["avg_fulfillment_time"], 7.5)
         self.assertEqual(result[1]["avg_fulfillment_time_vs_catalog"], 3.0)  # 7.5 / 2.5 = 3.0
 
-    @patch("requests.get")
-    def test_get_poor_description_items(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_poor_description_items(self, mock_get):
         """Test getting catalog items with poor description quality."""
         # Mock the response from ServiceNow
         mock_response = MagicMock()
@@ -306,7 +307,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         mock_get.return_value = mock_response
 
         # Call the function
-        result = _get_poor_description_items(self.config, self.auth_manager)
+        result = await _get_poor_description_items(self.config, self.auth_manager)
 
         # Verify the results
         self.assertEqual(len(result), 3)
@@ -331,7 +332,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
     @patch("servicenow_mcp.tools.catalog_optimization._get_high_abandonment_items")
     @patch("servicenow_mcp.tools.catalog_optimization._get_slow_fulfillment_items")
     @patch("servicenow_mcp.tools.catalog_optimization._get_poor_description_items")
-    def test_get_optimization_recommendations(
+    async def test_get_optimization_recommendations(
         self, 
         mock_poor_desc, 
         mock_slow_fulfill, 
@@ -406,7 +407,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         )
 
         # Call the function
-        result = get_optimization_recommendations(self.config, self.auth_manager, params)
+        result = await get_optimization_recommendations(self.config, self.auth_manager, params)
 
         # Verify the results
         self.assertTrue(result["success"])
@@ -431,7 +432,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
 
     @patch("servicenow_mcp.tools.catalog_optimization._get_inactive_items")
     @patch("servicenow_mcp.tools.catalog_optimization._get_low_usage_items")
-    def test_get_optimization_recommendations_filtered(self, mock_low_usage, mock_inactive):
+    async def test_get_optimization_recommendations_filtered(self, mock_low_usage, mock_inactive):
         """Test getting filtered optimization recommendations."""
         # Mock the helper functions to return test data
         mock_inactive.return_value = [
@@ -459,7 +460,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         )
 
         # Call the function
-        result = get_optimization_recommendations(self.config, self.auth_manager, params)
+        result = await get_optimization_recommendations(self.config, self.auth_manager, params)
 
         # Verify the results
         self.assertTrue(result["success"])
@@ -473,8 +474,8 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         self.assertNotIn("slow_fulfillment", recommendation_types)
         self.assertNotIn("description_quality", recommendation_types)
 
-    @patch("requests.patch")
-    def test_update_catalog_item(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_catalog_item(self, mock_patch):
         """Test updating a catalog item."""
         # Mock the response from ServiceNow
         mock_response = MagicMock()
@@ -499,7 +500,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         )
 
         # Call the function
-        result = update_catalog_item(self.config, self.auth_manager, params)
+        result = await update_catalog_item(self.config, self.auth_manager, params)
 
         # Verify the results
         self.assertTrue(result["success"])
@@ -511,8 +512,8 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         self.assertEqual(args[0], "https://example.service-now.com/api/now/table/sc_cat_item/item1")
         self.assertEqual(kwargs["json"], {"short_description": "Updated laptop description"})
 
-    @patch("requests.patch")
-    def test_update_catalog_item_multiple_fields(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_catalog_item_multiple_fields(self, mock_patch):
         """Test updating multiple fields of a catalog item."""
         # Mock the response from ServiceNow
         mock_response = MagicMock()
@@ -539,7 +540,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         )
 
         # Call the function
-        result = update_catalog_item(self.config, self.auth_manager, params)
+        result = await update_catalog_item(self.config, self.auth_manager, params)
 
         # Verify the results
         self.assertTrue(result["success"])
@@ -557,11 +558,11 @@ class TestCatalogOptimizationTools(unittest.TestCase):
             "price": "1099.99",
         })
 
-    @patch("requests.patch")
-    def test_update_catalog_item_error(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_catalog_item_error(self, mock_patch):
         """Test error handling when updating a catalog item."""
         # Mock an error response
-        mock_patch.side_effect = requests.exceptions.RequestException("API Error")
+        mock_patch.side_effect = httpx.HTTPError("API Error")
 
         # Create the parameters
         params = UpdateCatalogItemParams(
@@ -570,7 +571,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         )
 
         # Call the function
-        result = update_catalog_item(self.config, self.auth_manager, params)
+        result = await update_catalog_item(self.config, self.auth_manager, params)
 
         # Verify the results
         self.assertFalse(result["success"])
@@ -579,19 +580,19 @@ class TestCatalogOptimizationTools(unittest.TestCase):
 
 
     @patch("servicenow_mcp.tools.catalog_optimization._get_inactive_items")
-    def test_get_optimization_recommendations_error(self, mock_inactive):
+    async def test_get_optimization_recommendations_error(self, mock_inactive):
         """Test error handling in get_optimization_recommendations."""
         mock_inactive.side_effect = RuntimeError("unexpected failure")
 
         params = OptimizationRecommendationsParams(recommendation_types=["inactive_items"])
-        result = get_optimization_recommendations(self.config, self.auth_manager, params)
+        result = await get_optimization_recommendations(self.config, self.auth_manager, params)
 
         self.assertFalse(result["success"])
         self.assertIn("Error getting optimization recommendations", result["message"])
         self.assertEqual(result["recommendations"], [])
 
-    @patch("requests.patch")
-    def test_update_catalog_item_all_fields(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_catalog_item_all_fields(self, mock_patch):
         """Test updating a catalog item with all optional fields set."""
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -619,7 +620,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
             order=10,
         )
 
-        result = update_catalog_item(self.config, self.auth_manager, params)
+        result = await update_catalog_item(self.config, self.auth_manager, params)
 
         self.assertTrue(result["success"])
         args, kwargs = mock_patch.call_args
@@ -629,10 +630,10 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         self.assertEqual(body["active"], "true")
         self.assertEqual(body["order"], "10")
 
-    @patch("requests.get")
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
     @patch("random.sample")
     @patch("random.randint")
-    def test_get_low_usage_items_with_category(self, mock_randint, mock_sample, mock_get):
+    async def test_get_low_usage_items_with_category(self, mock_randint, mock_sample, mock_get):
         """Test getting low usage items filtered by category."""
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -646,23 +647,23 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         ]
         mock_randint.return_value = 1
 
-        result = _get_low_usage_items(self.config, self.auth_manager, "software")
+        result = await _get_low_usage_items(self.config, self.auth_manager, "software")
 
         args, kwargs = mock_get.call_args
         self.assertEqual(kwargs["params"]["sysparm_query"], "active=true^category=software")
         self.assertEqual(result[0]["order_count"], 1)
 
-    @patch("requests.get")
-    def test_get_low_usage_items_error(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_low_usage_items_error(self, mock_get):
         """Test error handling in _get_low_usage_items."""
-        mock_get.side_effect = requests.exceptions.RequestException("API Error")
-        result = _get_low_usage_items(self.config, self.auth_manager)
+        mock_get.side_effect = httpx.HTTPError("API Error")
+        result = await _get_low_usage_items(self.config, self.auth_manager)
         self.assertEqual(result, [])
 
-    @patch("requests.get")
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
     @patch("random.sample")
     @patch("random.randint")
-    def test_get_high_abandonment_items(self, mock_randint, mock_sample, mock_get):
+    async def test_get_high_abandonment_items(self, mock_randint, mock_sample, mock_get):
         """Test getting catalog items with high abandonment rates."""
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -675,71 +676,71 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         mock_sample.return_value = [item]
         mock_randint.side_effect = [60, 50]
 
-        result = _get_high_abandonment_items(self.config, self.auth_manager)
+        result = await _get_high_abandonment_items(self.config, self.auth_manager)
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["abandonment_rate"], 60)
         self.assertEqual(result[0]["cart_adds"], 50)
         self.assertEqual(result[0]["orders"], int(50 * (1 - 60 / 100)))
 
-    @patch("requests.get")
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
     @patch("random.sample")
     @patch("random.randint")
-    def test_get_high_abandonment_items_with_category(self, mock_randint, mock_sample, mock_get):
+    async def test_get_high_abandonment_items_with_category(self, mock_randint, mock_sample, mock_get):
         """Test getting high abandonment items filtered by category."""
         mock_response = MagicMock()
         mock_response.json.return_value = {"result": []}
         mock_get.return_value = mock_response
         mock_sample.return_value = []
 
-        _get_high_abandonment_items(self.config, self.auth_manager, "hardware")
+        await _get_high_abandonment_items(self.config, self.auth_manager, "hardware")
 
         args, kwargs = mock_get.call_args
         self.assertEqual(kwargs["params"]["sysparm_query"], "active=true^category=hardware")
 
-    @patch("requests.get")
-    def test_get_high_abandonment_items_error(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_high_abandonment_items_error(self, mock_get):
         """Test error handling in _get_high_abandonment_items."""
-        mock_get.side_effect = requests.exceptions.RequestException("API Error")
-        result = _get_high_abandonment_items(self.config, self.auth_manager)
+        mock_get.side_effect = httpx.HTTPError("API Error")
+        result = await _get_high_abandonment_items(self.config, self.auth_manager)
         self.assertEqual(result, [])
 
-    @patch("requests.get")
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
     @patch("random.sample")
     @patch("random.uniform")
-    def test_get_slow_fulfillment_items_with_category(self, mock_uniform, mock_sample, mock_get):
+    async def test_get_slow_fulfillment_items_with_category(self, mock_uniform, mock_sample, mock_get):
         """Test getting slow fulfillment items filtered by category."""
         mock_response = MagicMock()
         mock_response.json.return_value = {"result": []}
         mock_get.return_value = mock_response
         mock_sample.return_value = []
 
-        _get_slow_fulfillment_items(self.config, self.auth_manager, "hardware")
+        await _get_slow_fulfillment_items(self.config, self.auth_manager, "hardware")
 
         args, kwargs = mock_get.call_args
         self.assertEqual(kwargs["params"]["sysparm_query"], "active=true^category=hardware")
 
-    @patch("requests.get")
-    def test_get_slow_fulfillment_items_error(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_slow_fulfillment_items_error(self, mock_get):
         """Test error handling in _get_slow_fulfillment_items."""
-        mock_get.side_effect = requests.exceptions.RequestException("API Error")
-        result = _get_slow_fulfillment_items(self.config, self.auth_manager)
+        mock_get.side_effect = httpx.HTTPError("API Error")
+        result = await _get_slow_fulfillment_items(self.config, self.auth_manager)
         self.assertEqual(result, [])
 
-    @patch("requests.get")
-    def test_get_poor_description_items_with_category(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_poor_description_items_with_category(self, mock_get):
         """Test getting poor description items filtered by category."""
         mock_response = MagicMock()
         mock_response.json.return_value = {"result": []}
         mock_get.return_value = mock_response
 
-        _get_poor_description_items(self.config, self.auth_manager, "services")
+        await _get_poor_description_items(self.config, self.auth_manager, "services")
 
         args, kwargs = mock_get.call_args
         self.assertEqual(kwargs["params"]["sysparm_query"], "active=true^category=services")
 
-    @patch("requests.get")
-    def test_get_poor_description_items_vague_terms(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_poor_description_items_vague_terms(self, mock_get):
         """Test detection of vague terms in item descriptions."""
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -754,16 +755,16 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         }
         mock_get.return_value = mock_response
 
-        result = _get_poor_description_items(self.config, self.auth_manager)
+        result = await _get_poor_description_items(self.config, self.auth_manager)
 
         self.assertEqual(len(result), 1)
         self.assertIn("Contains vague terms", result[0]["quality_issues"])
 
-    @patch("requests.get")
-    def test_get_poor_description_items_error(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_poor_description_items_error(self, mock_get):
         """Test error handling in _get_poor_description_items."""
-        mock_get.side_effect = requests.exceptions.RequestException("API Error")
-        result = _get_poor_description_items(self.config, self.auth_manager)
+        mock_get.side_effect = httpx.HTTPError("API Error")
+        result = await _get_poor_description_items(self.config, self.auth_manager)
         self.assertEqual(result, [])
 
 
