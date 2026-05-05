@@ -8,12 +8,13 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.utils.config import ServerConfig
-from servicenow_mcp.utils.helpers import _get_headers, _get_instance_url, _unwrap_and_validate_params
+from servicenow_mcp.utils.async_http import get_async_client
+from servicenow_mcp.utils.helpers import _get_headers_async, _get_instance_url, _unwrap_and_validate_params
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ class ListProjectsParams(BaseModel):
     query: Optional[str] = Field(None, description="Additional query string")
 
 
-def create_project(
+async def create_project(
     config: ServerConfig,  # Changed from auth_manager
     auth_manager: AuthManager,  # Changed from server_config
     params: Dict[str, Any],
@@ -121,7 +122,7 @@ def create_project(
         }
     
     # Get the headers
-    headers = _get_headers(auth_manager, config)
+    headers = await _get_headers_async(auth_manager, config)
     if not headers:
         return {
             "success": False,
@@ -135,7 +136,9 @@ def create_project(
     url = f"{instance_url}/api/now/table/pm_project"
     
     try:
-        response = requests.post(url, json=data, headers=headers)
+        client = await get_async_client()
+
+        response = await client.post(url, json=data, headers=headers)
         response.raise_for_status()
         
         result = response.json()
@@ -145,14 +148,14 @@ def create_project(
             "message": "Project created successfully",
             "project": result["result"],
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error creating project: {e}")
         return {
             "success": False,
             "message": f"Error creating project: {str(e)}",
         }
 
-def update_project(
+async def update_project(
     config: ServerConfig,  # Changed from auth_manager
     auth_manager: AuthManager,  # Changed from server_config
     params: Dict[str, Any],
@@ -214,7 +217,7 @@ def update_project(
         }
     
     # Get the headers
-    headers = _get_headers(auth_manager, config)
+    headers = await _get_headers_async(auth_manager, config)
     if not headers:
         return {
             "success": False,
@@ -228,7 +231,9 @@ def update_project(
     url = f"{instance_url}/api/now/table/pm_project/{validated_params.project_id}"
     
     try:
-        response = requests.put(url, json=data, headers=headers)
+        client = await get_async_client()
+
+        response = await client.put(url, json=data, headers=headers)
         response.raise_for_status()
         
         result = response.json()
@@ -238,14 +243,14 @@ def update_project(
             "message": "Project updated successfully",
             "project": result["result"],
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error updating project: {e}")
         return {
             "success": False,
             "message": f"Error updating project: {str(e)}",
         }
 
-def list_projects(
+async def list_projects(
     config: ServerConfig,  # Changed from auth_manager
     auth_manager: AuthManager,  # Changed from server_config
     params: Dict[str, Any],
@@ -306,7 +311,7 @@ def list_projects(
         }
     
     # Get the headers
-    headers = _get_headers(auth_manager, config)
+    headers = await _get_headers_async(auth_manager, config)
     if not headers:
         return {
             "success": False,
@@ -324,7 +329,9 @@ def list_projects(
     }
     
     try:
-        response = requests.get(url, headers=headers, params=params)
+        client = await get_async_client()
+
+        response = await client.get(url, headers=headers, params=params)
         response.raise_for_status()
         
         result = response.json()
@@ -339,7 +346,7 @@ def list_projects(
             "count": count,
             "total": count,  # Use count as total if total is not provided
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error listing projects: {e}")
         return {
             "success": False,

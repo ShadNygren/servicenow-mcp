@@ -1,7 +1,8 @@
 """Tests for the NLP processor and natural-language tools."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from servicenow_mcp.tools.nl_tools import (
@@ -20,7 +21,7 @@ from servicenow_mcp.utils.nl import NLPProcessor
 
 
 # ---------------------------------------------------------------------------
-# NLPProcessor (rule-based parser)
+# NLPProcessor (rule-based parser) — pure functions, no I/O.
 # ---------------------------------------------------------------------------
 
 
@@ -41,8 +42,6 @@ def test_search_query_routes_to_change_request():
 
 def test_search_query_extracts_priority():
     parsed = NLPProcessor.parse_search_query("incidents with high priority about SAP")
-    # "with" matches the search-term capture, then priority is independently
-    # extracted by the priority regex. Both end up in the encoded query.
     assert "priority=1" in parsed["query"]
     assert "123TEXTQUERY321=" in parsed["query"]
     assert "SAP" in parsed["query"]
@@ -63,9 +62,6 @@ def test_update_command_extracts_record_number():
 
 
 def test_update_command_close_with_resolution():
-    # Note: the parser checks "resolve|resolved|fix|fixed" BEFORE "close|closed",
-    # so a command containing both keywords ("close ... fixed") routes to state=6
-    # (Resolved), not 7 (Closed). This is the upstream behavior we're preserving.
     record_number, updates = NLPProcessor.parse_update_command(
         "Resolve incident INC0010003 with resolution: applied patch"
     )
@@ -74,7 +70,6 @@ def test_update_command_close_with_resolution():
     assert updates["close_notes"] == "applied patch"
     assert updates["close_code"] == "Solved (Permanently)"
 
-    # Now verify a "close" without any "fix"/"resolve" word does set state=7.
     _, closed_updates = NLPProcessor.parse_update_command(
         "Close incident INC0010003 with close note: superseded by INC0020000"
     )
@@ -95,7 +90,7 @@ def test_update_command_missing_number_raises():
 
 
 # ---------------------------------------------------------------------------
-# natural_language_search tool
+# natural_language_search / natural_language_update tools (async, httpx).
 # ---------------------------------------------------------------------------
 
 
@@ -111,23 +106,32 @@ def _config():
 
 def _auth_manager():
     am = MagicMock()
-    am.get_headers.return_value = {"Authorization": "Basic xxx"}
+    am.get_headers_async = AsyncMock(return_value={"Authorization": "Basic xxx"})
     return am
 
 
-def test_natural_language_search_returns_records():
-    response = MagicMock()
-    response.status_code = 200
-    response.json.return_value = {
-        "result": [
-            {"number": "INC0010001", "short_description": "SAP outage"},
-            {"number": "INC0010002", "short_description": "SAP login"},
-        ]
-    }
-    with patch(
-        "servicenow_mcp.tools.nl_tools.requests.get", return_value=response
-    ) as get:
-        result = natural_language_search(
+def _mock_response(status_code=200, json_body=None, text=""):
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.headers = {}
+    resp.text = text
+    resp.raise_for_status = MagicMock()
+    resp.json = MagicMock(return_value=json_body or {})
+    return resp
+
+
+async def test_natural_language_search_returns_records():
+    response = _mock_response(
+        json_body={
+            "result": [
+                {"number": "INC0010001", "short_description": "SAP outage"},
+                {"number": "INC0010002", "short_description": "SAP login"},
+            ]
+        }
+    )
+    with patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock) as get:
+        get.return_value = response
+        result = await natural_language_search(
             _config(),
             _auth_manager(),
             NaturalLanguageSearchParams(query="incidents about SAP"),
@@ -140,14 +144,11 @@ def test_natural_language_search_returns_records():
     assert "123TEXTQUERY321=SAP" in get.call_args[1]["params"]["sysparm_query"]
 
 
-def test_natural_language_search_handles_error():
-    response = MagicMock()
-    response.status_code = 401
-    response.text = '{"error":"unauthorized"}'
-    with patch(
-        "servicenow_mcp.tools.nl_tools.requests.get", return_value=response
-    ):
-        result = natural_language_search(
+async def test_natural_language_search_handles_error():
+    response = _mock_response(status_code=401, text='{"error":"unauthorized"}')
+    with patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock) as get:
+        get.return_value = response
+        result = await natural_language_search(
             _config(),
             _auth_manager(),
             NaturalLanguageSearchParams(query="incidents"),
@@ -156,24 +157,17 @@ def test_natural_language_search_handles_error():
     assert "401" in result.message
 
 
-# ---------------------------------------------------------------------------
-# natural_language_update tool
-# ---------------------------------------------------------------------------
-
-
-def test_natural_language_update_full_flow():
+async def test_natural_language_update_full_flow():
     """Successful update: lookup sys_id → patch."""
-    lookup = MagicMock()
-    lookup.status_code = 200
-    lookup.json.return_value = {"result": [{"sys_id": "abc123", "number": "INC0010001"}]}
+    lookup = _mock_response(json_body={"result": [{"sys_id": "abc123", "number": "INC0010001"}]})
+    patch_resp = _mock_response()
 
-    patch_resp = MagicMock()
-    patch_resp.status_code = 200
-
-    with patch("servicenow_mcp.tools.nl_tools.requests.get", return_value=lookup), patch(
-        "servicenow_mcp.tools.nl_tools.requests.patch", return_value=patch_resp
+    with patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock) as get, patch.object(
+        httpx.AsyncClient, "patch", new_callable=AsyncMock
     ) as patch_call:
-        result = natural_language_update(
+        get.return_value = lookup
+        patch_call.return_value = patch_resp
+        result = await natural_language_update(
             _config(),
             _auth_manager(),
             NaturalLanguageUpdateParams(
@@ -187,14 +181,11 @@ def test_natural_language_update_full_flow():
     assert patch_call.call_args[1]["json"]["state"] == 6  # Resolved
 
 
-def test_natural_language_update_record_not_found():
-    lookup = MagicMock()
-    lookup.status_code = 200
-    lookup.json.return_value = {"result": []}
-    with patch(
-        "servicenow_mcp.tools.nl_tools.requests.get", return_value=lookup
-    ):
-        result = natural_language_update(
+async def test_natural_language_update_record_not_found():
+    lookup = _mock_response(json_body={"result": []})
+    with patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock) as get:
+        get.return_value = lookup
+        result = await natural_language_update(
             _config(),
             _auth_manager(),
             NaturalLanguageUpdateParams(command="Close INC9999999 with resolution: foo"),
@@ -203,12 +194,12 @@ def test_natural_language_update_record_not_found():
     assert "not found" in result.message
 
 
-def test_natural_language_update_no_actionable_updates():
+async def test_natural_language_update_no_actionable_updates():
     """If the command parses no changes, don't hit the API."""
-    with patch("servicenow_mcp.tools.nl_tools.requests.get") as get, patch(
-        "servicenow_mcp.tools.nl_tools.requests.patch"
+    with patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock) as get, patch.object(
+        httpx.AsyncClient, "patch", new_callable=AsyncMock
     ) as patch_call:
-        result = natural_language_update(
+        result = await natural_language_update(
             _config(),
             _auth_manager(),
             NaturalLanguageUpdateParams(command="just look at incident INC0010001 please"),
@@ -219,8 +210,8 @@ def test_natural_language_update_no_actionable_updates():
     assert patch_call.call_count == 0
 
 
-def test_natural_language_update_missing_number():
-    result = natural_language_update(
+async def test_natural_language_update_missing_number():
+    result = await natural_language_update(
         _config(),
         _auth_manager(),
         NaturalLanguageUpdateParams(command="close that ticket I sent earlier"),

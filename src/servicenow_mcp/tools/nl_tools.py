@@ -14,10 +14,11 @@ packages.
 import logging
 from typing import Any, Dict, List, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 from servicenow_mcp.utils.nl import NLPProcessor
 
@@ -83,7 +84,7 @@ _PREFIX_TO_TABLE = {
 }
 
 
-def natural_language_search(
+async def natural_language_search(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: NaturalLanguageSearchParams,
@@ -100,13 +101,14 @@ def natural_language_search(
         request_params["sysparm_query"] = encoded_query
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             url,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             params=request_params,
             timeout=30,
         )
-    except requests.RequestException as exc:
+    except httpx.HTTPError as exc:
         return NaturalLanguageSearchResponse(
             table=table,
             encoded_query=encoded_query,
@@ -137,7 +139,7 @@ def natural_language_search(
     )
 
 
-def natural_language_update(
+async def natural_language_update(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: NaturalLanguageUpdateParams,
@@ -175,18 +177,19 @@ def natural_language_update(
             message=f"Unsupported record-number prefix '{prefix}'.",
         )
 
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
     base_url = f"{config.instance_url.rstrip('/')}/api/now/table/{table}"
 
     # Look up sys_id by number first — we can't PATCH via the friendly number.
     try:
-        lookup = requests.get(
+        client = await get_async_client()
+        lookup = await client.get(
             base_url,
             headers=headers,
             params={"sysparm_query": f"number={record_number}", "sysparm_limit": "1"},
             timeout=30,
         )
-    except requests.RequestException as exc:
+    except httpx.HTTPError as exc:
         return NaturalLanguageUpdateResponse(
             record_number=record_number,
             sys_id=None,
@@ -225,13 +228,13 @@ def natural_language_update(
         )
 
     try:
-        patch = requests.patch(
+        patch = await client.patch(
             f"{base_url}/{sys_id}",
             headers=headers,
             json=updates,
             timeout=30,
         )
-    except requests.RequestException as exc:
+    except httpx.HTTPError as exc:
         return NaturalLanguageUpdateResponse(
             record_number=record_number,
             sys_id=sys_id,

@@ -10,10 +10,11 @@ sn_customerservice_case table returns 401.
 import logging
 from typing import Any, Dict, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -96,7 +97,7 @@ def extract_case(case_data: dict) -> dict:
     }
 
 
-def list_cases(
+async def list_cases(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListCasesParams,
@@ -157,10 +158,11 @@ def list_cases(
     }
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -174,7 +176,7 @@ def list_cases(
             "cases": cases,
         }
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to list cases: {e}")
         return {
             "success": False,
@@ -183,7 +185,7 @@ def list_cases(
         }
 
 
-def get_case_by_number(
+async def get_case_by_number(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetCaseByNumberParams,
@@ -211,10 +213,11 @@ def get_case_by_number(
     }
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -236,7 +239,7 @@ def get_case_by_number(
             "case": case,
         }
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to fetch case: {e}")
         return {
             "success": False,
@@ -244,7 +247,7 @@ def get_case_by_number(
         }
 
 
-def search_cases(
+async def search_cases(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: SearchCasesParams,
@@ -289,10 +292,11 @@ def search_cases(
     }
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -306,7 +310,7 @@ def search_cases(
             "cases": cases,
         }
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to search cases: {e}")
         return {
             "success": False,
