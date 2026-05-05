@@ -5,6 +5,10 @@ Streamable HTTP is the MCP spec's HTTP transport. A single endpoint at
 over chunked HTTP. (This replaced the older SSE transport's
 ``/sse`` + ``/messages/`` pair when SSE was retired in v0.7.)
 
+Phase 8 update: now backed by FastMCP's ``streamable_http_app()``. The
+inner Starlette app comes from the MCP SDK; we wrap it with our
+``SecurityMiddleware`` and add a ``/health`` route at the outer layer.
+
 The HTTP transport is gated by SecurityMiddleware
 (:mod:`servicenow_mcp.transport_security`):
 
@@ -24,24 +28,19 @@ Reference implementation pattern from ``ibeketov/servicenow-mcp``
 from __future__ import annotations
 
 import argparse
-import contextlib
 import logging
 import os
-from collections.abc import AsyncIterator
 from typing import Set
 
 import uvicorn
 from dotenv import load_dotenv
-from mcp.server import Server
-from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+from mcp.server.fastmcp import FastMCP
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 from starlette.routing import Mount, Route
-from starlette.types import Receive, Scope, Send
 
-from servicenow_mcp.event_store import InMemoryEventStore
 from servicenow_mcp.server import ServiceNowMCP
 from servicenow_mcp.transport_security import (
     SecurityMiddleware,
@@ -61,7 +60,7 @@ logger = logging.getLogger(__name__)
 
 
 def create_starlette_app(
-    mcp_server: Server,
+    mcp: FastMCP,
     *,
     auth_token: str,
     allowed_hosts: Set[str],
@@ -70,41 +69,22 @@ def create_starlette_app(
 ) -> Starlette:
     """Build a Starlette app exposing the MCP server via Streamable HTTP.
 
-    SecurityMiddleware (from :mod:`servicenow_mcp.transport_security`)
-    is mounted in front of every request: bearer token, Host allowlist,
-    Origin allowlist. ``/health`` is bypassed for the bearer check
-    (Host allowlist still applies) so platform liveness probes work.
+    Mounts FastMCP's ``streamable_http_app()`` (which already provides the
+    ``/mcp`` route + lifespan management) under the root, adds a ``/health``
+    liveness probe at the same level, and gates everything with our
+    SecurityMiddleware (bearer token + Host/Origin allowlist).
     """
-    event_store = InMemoryEventStore()
-
-    session_manager = StreamableHTTPSessionManager(
-        app=mcp_server,
-        event_store=event_store,
-        json_response=False,  # Default to SSE-style streaming responses (per MCP spec).
-    )
-
-    async def handle_streamable_http(scope: Scope, receive: Receive, send: Send) -> None:
-        await session_manager.handle_request(scope, receive, send)
+    inner = mcp.streamable_http_app()
 
     async def health_check(request: Request) -> PlainTextResponse:
         """Liveness probe — bypasses bearer auth (see SecurityMiddleware)."""
         return PlainTextResponse("OK", status_code=200)
 
-    @contextlib.asynccontextmanager
-    async def lifespan(app: Starlette) -> AsyncIterator[None]:
-        """Manage the StreamableHTTPSessionManager lifecycle."""
-        async with session_manager.run():
-            logger.info("Streamable HTTP session manager started")
-            try:
-                yield
-            finally:
-                logger.info("Streamable HTTP session manager shutting down")
-
     return Starlette(
         debug=debug,
         routes=[
             Route("/health", endpoint=health_check),
-            Mount("/mcp", app=handle_streamable_http),
+            Mount("/", app=inner),
         ],
         middleware=[
             Middleware(
@@ -114,7 +94,9 @@ def create_starlette_app(
                 allowed_origins=allowed_origins,
             ),
         ],
-        lifespan=lifespan,
+        # Inherit the inner app's lifespan so FastMCP's session manager
+        # starts and shuts down with the server process.
+        lifespan=inner.router.lifespan_context,
     )
 
 
@@ -133,7 +115,7 @@ class ServiceNowHttpMCP(ServiceNowMCP):
         """Run the server with Streamable HTTP via Starlette + Uvicorn.
 
         Distinct name from base ``ServiceNowMCP.start()`` (which returns the
-        underlying low-level Server) because this method *runs* the uvicorn
+        configured FastMCP instance) because this method *runs* the uvicorn
         process — different shape, different return type.
 
         Args:
@@ -144,7 +126,7 @@ class ServiceNowHttpMCP(ServiceNowMCP):
             allowed_origins: Allowlist for Origin header (CSRF defense).
         """
         starlette_app = create_starlette_app(
-            self.mcp_server,
+            self.mcp,
             auth_token=auth_token,
             allowed_hosts=allowed_hosts,
             allowed_origins=allowed_origins,
