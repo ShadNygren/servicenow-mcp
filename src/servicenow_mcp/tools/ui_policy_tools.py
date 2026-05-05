@@ -9,10 +9,11 @@ on configurable conditions.
 import logging
 from typing import Any, Dict, Literal, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -75,7 +76,7 @@ class UIPolicyResponse(BaseModel):
     )
 
 
-def create_ui_policy(
+async def create_ui_policy(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateUIPolicyParams,
@@ -114,10 +115,11 @@ def create_ui_policy(
         data["catalog_item"] = params.catalog_item_id
 
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -131,7 +133,7 @@ def create_ui_policy(
             details=result,
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create UI policy: {e}")
         return UIPolicyResponse(
             success=False,
@@ -198,7 +200,7 @@ class UIPolicyActionResponse(BaseModel):
     )
 
 
-def create_ui_policy_action(
+async def create_ui_policy_action(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateUIPolicyActionParams,
@@ -230,10 +232,11 @@ def create_ui_policy_action(
     }
 
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -249,7 +252,7 @@ def create_ui_policy_action(
             details=result,
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create UI policy action: {e}")
         return UIPolicyActionResponse(
             success=False,
