@@ -20,12 +20,13 @@ import json
 import logging
 import time
 import uuid
-from typing import Any, Literal
+from typing import Any, Dict, Literal
 
-import requests
+import httpx
 from pydantic import BaseModel, Field, field_validator
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -952,14 +953,15 @@ def _truncate_body(text: str) -> str:
     return text
 
 
-def _err_body(e: requests.RequestException) -> str:
+def _err_body(e: httpx.HTTPError) -> str:
     """Extract and truncate the response body from a RequestException, or ''."""
-    if e.response is not None:
-        return _truncate_body(e.response.text)
+    response = getattr(e, "response", None)
+    if response is not None:
+        return _truncate_body(response.text)
     return ""
 
 
-def _invoke_scripted_js(
+async def _invoke_scripted_js(
     config: ServerConfig,
     auth_manager: AuthManager,
     script: str,
@@ -980,14 +982,15 @@ def _invoke_scripted_js(
         )
     url = f"{config.instance_url.rstrip('/')}{config.script_execution_api_resource_path}"
     try:
-        script_response = requests.post(
+        client = await get_async_client()
+        script_response = await client.post(
             url,
             json={"script": script},
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=max(config.timeout, 120),
         )
         script_response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error(
             "%s | script POST failed | error=%s%s",
@@ -1192,19 +1195,20 @@ _RECORD_TRIGGER_INPUT_BY_NAME = {p["name"]: p for p in _RECORD_TRIGGER_INPUTS}
 _RECORD_TRIGGER_TYPES = {"record_create", "record_create_or_update", "record_update"}
 
 
-def _lookup_table_label(config: ServerConfig, auth_manager: AuthManager, table_name: str) -> str:
+async def _lookup_table_label(config: ServerConfig, auth_manager: AuthManager, table_name: str) -> str:
     """Return the display label for a table from sys_db_object (e.g. 'incident' → 'Incident').
     Falls back to title-casing the table name if the lookup fails or returns empty.
     """
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             f"{config.api_url}/table/sys_db_object",
             params={  # type: ignore[arg-type]
                 "sysparm_query": f"name={table_name}",
                 "sysparm_fields": "label",
                 "sysparm_limit": 1,
             },
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -1213,12 +1217,12 @@ def _lookup_table_label(config: ServerConfig, auth_manager: AuthManager, table_n
             label = records[0].get("label", "")
             if label:
                 return label  # type: ignore[no-any-return]
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.warning("_lookup_table_label | failed | table=%s | error=%s", table_name, e)
     return table_name.replace("_", " ").title()
 
 
-def list_trigger_types(
+async def list_trigger_types(
     config: ServerConfig,
     auth_manager: AuthManager,
     _params: ListTriggerTypesParams,
@@ -1235,18 +1239,19 @@ def list_trigger_types(
     list_trigger_types with a direct Table API query and sysparm_offset to paginate.
     """
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             f"{config.api_url}/table/sys_hub_trigger_type",
             params={  # type: ignore[arg-type]
                 "sysparm_fields": "sys_id,name,internal_name,base_trigger",
                 "sysparm_limit": 200,
                 "sysparm_orderby": "name",
             },
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error("list_trigger_types | request failed | error=%s%s", e, f" | body={_body}" if _body else "")
         return ListTriggerTypesResult(
@@ -1283,7 +1288,7 @@ def list_trigger_types(
     )
 
 
-def _resolve_trigger_definition_id(
+async def _resolve_trigger_definition_id(
     config: ServerConfig,
     auth_manager: AuthManager,
     type_str: str,
@@ -1308,18 +1313,19 @@ def _resolve_trigger_definition_id(
         display_name = type_str.strip().title()
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             f"{config.api_url}/table/sys_hub_trigger_type",
             params={  # type: ignore[arg-type]
                 "sysparm_query": f"name={display_name}",
                 "sysparm_fields": "sys_id,name,base_trigger",
                 "sysparm_limit": 1,
             },
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         return None, f"Failed to query sys_hub_trigger_type: {e}" + (f" | body: {_body}" if _body else "")
 
@@ -1353,7 +1359,7 @@ def _resolve_trigger_definition_id(
     return fallback_id, None
 
 
-def create_flow(
+async def create_flow(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateFlowParams,
@@ -1387,7 +1393,7 @@ def create_flow(
         When success=False but flow_sys_id is set, a partial shell was created.
     """
     processflow_base = f"{config.api_url}/processflow"
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
 
     # ------------------------------------------------------------------
     # Step 1: Create the flow shell
@@ -1412,7 +1418,8 @@ def create_flow(
     }
 
     try:
-        shell_response = requests.post(
+        client = await get_async_client()
+        shell_response = await client.post(
             f"{processflow_base}/flow",
             params={
                 "param_only_properties": "true",
@@ -1423,7 +1430,7 @@ def create_flow(
             timeout=config.timeout,
         )
         shell_response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error("create_flow | shell POST failed | error=%s%s", e, f" | body={_body}" if _body else "")
         return CreateFlowResponse(
@@ -1463,15 +1470,16 @@ def create_flow(
     version_query_params = {"sysparm_transaction_scope": "global"}
 
     try:
-        requests.post(
+        client = await get_async_client()
+        (await client.post(
             f"{processflow_base}/versioning/create_version",
             params=version_query_params,
             json=autosave_body,
             headers=headers,
             timeout=config.timeout,
-        ).raise_for_status()
+        )).raise_for_status()
         logger.info("create_flow | initial autosave created | flow_sys_id=%s", flow_sys_id)
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         # Non-fatal: the shell exists and the PUT can still proceed.
         # Surface the failure in a warning so it is visible if the subsequent PUT fails.
@@ -1489,7 +1497,7 @@ def create_flow(
     if params.trigger:
         trigger_definition_id = params.trigger.trigger_definition_id
         if not trigger_definition_id:
-            resolved_id, resolve_err = _resolve_trigger_definition_id(
+            resolved_id, resolve_err = await _resolve_trigger_definition_id(
                 config, auth_manager, params.trigger.type
             )
             if resolve_err:
@@ -1505,7 +1513,7 @@ def create_flow(
                 )
             trigger_definition_id = resolved_id
 
-    trigger_instances = _build_trigger_instances(
+    trigger_instances = await _build_trigger_instances(
         config, auth_manager, params.trigger, flow_sys_id, trigger_definition_id
     )
     action_instances = _build_action_instances(flow_sys_id, params.actions)
@@ -1518,7 +1526,8 @@ def create_flow(
     put_body["actionInstances"] = action_instances
 
     try:
-        put_response = requests.put(
+        client = await get_async_client()
+        put_response = await client.put(
             f"{processflow_base}/flow",
             params={"sysparm_transaction_scope": "global"},
             json=put_body,
@@ -1530,7 +1539,7 @@ def create_flow(
             "create_flow | PUT saved | flow_sys_id=%s | triggers=%d | actions=%d",
             flow_sys_id, len(trigger_instances), len(action_instances),
         )
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error(
             "create_flow | PUT failed | flow_sys_id=%s | error=%s%s",
@@ -1561,15 +1570,16 @@ def create_flow(
         "favorite": False,
     }
     try:
-        requests.post(
+        client = await get_async_client()
+        (await client.post(
             f"{processflow_base}/versioning/create_version",
             params=version_query_params,
             json=final_version_body,
             headers=headers,
             timeout=config.timeout,
-        ).raise_for_status()
+        )).raise_for_status()
         logger.info("create_flow | final Save version created | flow_sys_id=%s", flow_sys_id)
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.warning(
             "create_flow | final Save version failed (non-fatal) | flow_sys_id=%s | error=%s%s",
@@ -1584,7 +1594,7 @@ def create_flow(
     # Patching the serialised payload via the Table API is the only reliable fix.
     # Non-fatal: the flow functions correctly; only the trigger label in the UI is affected.
     if params.trigger and params.trigger.type in _RECORD_TRIGGER_TYPES:
-        patch_err = _patch_flow_version_trigger_type(config, auth_manager, flow_sys_id)
+        patch_err = await _patch_flow_version_trigger_type(config, auth_manager, flow_sys_id)
         if patch_err:
             logger.warning(
                 "create_flow | fTriggerType patch failed (non-fatal) | flow_sys_id=%s | error=%s",
@@ -1598,7 +1608,7 @@ def create_flow(
     # appear locked ('being edited by <user>') in the UI. Deleting it via the Table
     # API releases the lock. GraphQL safeEdit does not work for service accounts.
     # Non-fatal: log a warning but do not fail the overall creation response.
-    lock_err = _release_flow_edit_lock(config, auth_manager, flow_sys_id)
+    lock_err = await _release_flow_edit_lock(config, auth_manager, flow_sys_id)
     if lock_err:
         logger.warning(
             "create_flow | safeEdit lock release failed (non-fatal) | flow_sys_id=%s | error=%s",
@@ -1646,7 +1656,7 @@ def _build_artifact_query(artifact_type: str, params: ListArtifactsParams) -> st
     return "^".join(clauses)
 
 
-def _list_artifacts(
+async def _list_artifacts(
     config: ServerConfig,
     auth_manager: AuthManager,
     artifact_type: str,
@@ -1654,7 +1664,8 @@ def _list_artifacts(
 ) -> ListArtifactsResponse:
     """List flow/subflow/action artifacts from sys_hub_flow."""
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             f"{config.api_url}/table/sys_hub_flow",
             params={  # type: ignore[arg-type]
                 "sysparm_query": _build_artifact_query(artifact_type, params),
@@ -1665,11 +1676,11 @@ def _list_artifacts(
                 "sysparm_offset": params.offset,
                 "sysparm_orderby": "name",
             },
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         return ListArtifactsResponse(
             artifacts=[],
@@ -1697,7 +1708,7 @@ def _list_artifacts(
     )
 
 
-def _get_artifact(
+async def _get_artifact(
     config: ServerConfig,
     auth_manager: AuthManager,
     artifact_type: str,
@@ -1705,7 +1716,8 @@ def _get_artifact(
 ) -> GetArtifactResponse:
     """Get one flow/subflow/action artifact from sys_hub_flow."""
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             f"{config.api_url}/table/sys_hub_flow/{sys_id}",
             params={
                 "sysparm_fields": (
@@ -1713,11 +1725,11 @@ def _get_artifact(
                     "access,run_as,flow_priority,sys_created_on,sys_updated_on"
                 )
             },
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         return GetArtifactResponse(
             artifact=None,
@@ -1740,7 +1752,7 @@ def _get_artifact(
     )
 
 
-def _create_artifact(
+async def _create_artifact(
     config: ServerConfig,
     auth_manager: AuthManager,
     artifact_type: str,
@@ -1767,18 +1779,19 @@ def _create_artifact(
         "protection": "",
     }
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             f"{processflow_base}/flow",
             params={
                 "param_only_properties": "true",
                 "sysparm_transaction_scope": "global",
             },
             json=body,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         return MutationResponse(
             success=False,
@@ -1801,7 +1814,7 @@ def _create_artifact(
     )
 
 
-def _update_artifact(
+async def _update_artifact(
     config: ServerConfig,
     auth_manager: AuthManager,
     artifact_type: str,
@@ -1830,14 +1843,15 @@ def _update_artifact(
         )
 
     try:
-        response = requests.patch(
+        client = await get_async_client()
+        response = await client.patch(
             f"{config.api_url}/table/sys_hub_flow/{params.sys_id}",
             json=patch_fields,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         return MutationResponse(
             success=False,
@@ -1853,7 +1867,7 @@ def _update_artifact(
     )
 
 
-def _publish_artifact(
+async def _publish_artifact(
     config: ServerConfig,
     auth_manager: AuthManager,
     artifact_type: str,
@@ -1862,7 +1876,8 @@ def _publish_artifact(
     """Publish a flow/subflow/action via versioning API."""
     processflow_base = f"{config.api_url}/processflow"
     try:
-        version_response = requests.post(
+        client = await get_async_client()
+        version_response = await client.post(
             f"{processflow_base}/versioning/create_version",
             params={"sysparm_transaction_scope": "global"},
             json={
@@ -1871,11 +1886,11 @@ def _publish_artifact(
                 "annotation": params.annotation or "",
                 "favorite": False,
             },
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         version_response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         return MutationResponse(
             success=False,
@@ -1885,13 +1900,14 @@ def _publish_artifact(
 
     # Best effort state sync on the parent record.
     try:
-        requests.patch(
+        client = await get_async_client()
+        (await client.patch(
             f"{config.api_url}/table/sys_hub_flow/{params.sys_id}",
             json={"active": True, "published": True},
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
-        ).raise_for_status()
-    except requests.RequestException as e:
+        )).raise_for_status()
+    except httpx.HTTPError as e:
         logger.warning("_publish_artifact | record patch failed | artifact=%s | sys_id=%s | error=%s", artifact_type, params.sys_id, e)
 
     return MutationResponse(
@@ -1901,106 +1917,106 @@ def _publish_artifact(
     )
 
 
-def update_flow(
+async def update_flow(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: UpdateFlowParams,
 ) -> MutationResponse:
     """Update a flow artifact."""
-    return _update_artifact(config, auth_manager, "flow", params)
+    return await _update_artifact(config, auth_manager, "flow", params)
 
 
-def create_subflow(
+async def create_subflow(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateSubflowParams,
 ) -> MutationResponse:
     """Create a subflow artifact shell."""
-    return _create_artifact(config, auth_manager, "subflow", params)
+    return await _create_artifact(config, auth_manager, "subflow", params)
 
 
-def list_subflows(
+async def list_subflows(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListSubflowsParams,
 ) -> ListArtifactsResponse:
     """List subflow artifacts."""
-    return _list_artifacts(config, auth_manager, "subflow", params)
+    return await _list_artifacts(config, auth_manager, "subflow", params)
 
 
-def get_subflow(
+async def get_subflow(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetSubflowParams,
 ) -> GetArtifactResponse:
     """Get a subflow artifact by sys_id."""
-    return _get_artifact(config, auth_manager, "subflow", params.sys_id)
+    return await _get_artifact(config, auth_manager, "subflow", params.sys_id)
 
 
-def update_subflow(
+async def update_subflow(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: UpdateSubflowParams,
 ) -> MutationResponse:
     """Update a subflow artifact."""
-    return _update_artifact(config, auth_manager, "subflow", params)
+    return await _update_artifact(config, auth_manager, "subflow", params)
 
 
-def publish_subflow(
+async def publish_subflow(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: PublishSubflowParams,
 ) -> MutationResponse:
     """Publish a subflow artifact."""
-    return _publish_artifact(config, auth_manager, "subflow", params)
+    return await _publish_artifact(config, auth_manager, "subflow", params)
 
 
-def create_action(
+async def create_action(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateActionParams,
 ) -> MutationResponse:
     """Create a custom action artifact shell."""
-    return _create_artifact(config, auth_manager, "action", params)
+    return await _create_artifact(config, auth_manager, "action", params)
 
 
-def list_actions(
+async def list_actions(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListActionsParams,
 ) -> ListArtifactsResponse:
     """List custom action artifacts."""
-    return _list_artifacts(config, auth_manager, "action", params)
+    return await _list_artifacts(config, auth_manager, "action", params)
 
 
-def get_action(
+async def get_action(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetActionParams,
 ) -> GetArtifactResponse:
     """Get a custom action artifact by sys_id."""
-    return _get_artifact(config, auth_manager, "action", params.sys_id)
+    return await _get_artifact(config, auth_manager, "action", params.sys_id)
 
 
-def update_action(
+async def update_action(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: UpdateActionParams,
 ) -> MutationResponse:
     """Update a custom action artifact."""
-    return _update_artifact(config, auth_manager, "action", params)
+    return await _update_artifact(config, auth_manager, "action", params)
 
 
-def publish_action(
+async def publish_action(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: PublishActionParams,
 ) -> MutationResponse:
     """Publish a custom action artifact."""
-    return _publish_artifact(config, auth_manager, "action", params)
+    return await _publish_artifact(config, auth_manager, "action", params)
 
 
-def list_action_types(
+async def list_action_types(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListActionTypesParams,
@@ -2022,7 +2038,8 @@ def list_action_types(
         ListActionTypesResult with matching action types.
     """
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             f"{config.api_url}/table/sys_hub_action_type_definition",
             params={  # type: ignore[arg-type]
                 "sysparm_query": f"nameCONTAINS{params.query}^ORinternal_nameCONTAINS{params.query}",
@@ -2030,11 +2047,11 @@ def list_action_types(
                 "sysparm_display_value": "true",
                 "sysparm_limit": params.limit,
             },
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error(
             "list_action_types | request failed | query=%s | error=%s%s",
@@ -2070,7 +2087,7 @@ def list_action_types(
     )
 
 
-def list_action_type_inputs(
+async def list_action_type_inputs(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListActionTypeInputsParams,
@@ -2097,7 +2114,8 @@ def list_action_type_inputs(
         ListActionTypeInputsResult with the inputs list and a summary message.
     """
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             f"{config.api_url}/table/sys_hub_action_input",
             params={  # type: ignore[arg-type]
                 # NOTE: The query field is `model`, NOT `action_type` — verified against live instance.
@@ -2107,11 +2125,11 @@ def list_action_type_inputs(
                 "sysparm_orderby": "order",
                 "sysparm_limit": 200,
             },
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error(
             "list_action_type_inputs | request failed | action_type=%s | error=%s%s",
@@ -2149,7 +2167,7 @@ def list_action_type_inputs(
     )
 
 
-def list_flow_logic_types(
+async def list_flow_logic_types(
     config: ServerConfig,
     auth_manager: AuthManager,
     _params: ListFlowLogicTypesParams,
@@ -2161,14 +2179,15 @@ def list_flow_logic_types(
     are the identifiers needed to add flow logic steps to a flow payload.
     """
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             f"{config.api_url}/processflow/flow_logic/types",
             params={"sysparm_transaction_scope": "global"},
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error("list_flow_logic_types | request failed | error=%s%s", e, f" | body={_body}" if _body else "")
         return ListFlowLogicTypesResult(
@@ -2197,7 +2216,7 @@ def list_flow_logic_types(
     )
 
 
-def add_steps_to_flow(
+async def add_steps_to_flow(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: AddStepsToFlowParams,
@@ -2215,17 +2234,18 @@ def add_steps_to_flow(
     existing steps — use get_flow_actions first to see current orders.
     """
     processflow_base = f"{config.api_url}/processflow"
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
 
     # Step 1: GET current flow payload
     try:
-        get_response = requests.get(
+        client = await get_async_client()
+        get_response = await client.get(
             f"{processflow_base}/flow/{params.flow_sys_id}",
             headers=headers,
             timeout=config.timeout,
         )
         get_response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error("add_steps_to_flow | GET failed | flow_sys_id=%s | error=%s%s", params.flow_sys_id, e, f" | body={_body}" if _body else "")
         return AddStepsToFlowResponse(
@@ -2247,7 +2267,8 @@ def add_steps_to_flow(
 
     # Step 3: PUT modified payload back
     try:
-        put_response = requests.put(
+        client = await get_async_client()
+        put_response = await client.put(
             f"{processflow_base}/flow",
             params={"sysparm_transaction_scope": "global"},
             json=flow_data,
@@ -2255,7 +2276,7 @@ def add_steps_to_flow(
             timeout=config.timeout,
         )
         put_response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error("add_steps_to_flow | PUT failed | flow_sys_id=%s | error=%s%s", params.flow_sys_id, e, f" | body={_body}" if _body else "")
         return AddStepsToFlowResponse(
@@ -2266,7 +2287,8 @@ def add_steps_to_flow(
 
     # Step 4: Save version (non-fatal if it fails)
     try:
-        requests.post(
+        client = await get_async_client()
+        (await client.post(
             f"{processflow_base}/versioning/create_version",
             params={"sysparm_transaction_scope": "global"},
             json={
@@ -2277,9 +2299,9 @@ def add_steps_to_flow(
             },
             headers=headers,
             timeout=config.timeout,
-        ).raise_for_status()
+        )).raise_for_status()
         logger.info("add_steps_to_flow | version saved | flow_sys_id=%s", params.flow_sys_id)
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.warning("add_steps_to_flow | create_version failed (non-fatal) | flow_sys_id=%s | error=%s", params.flow_sys_id, e)
 
     logger.info("add_steps_to_flow | success | flow_sys_id=%s | steps_added=%d", params.flow_sys_id, len(params.actions))
@@ -2291,7 +2313,7 @@ def add_steps_to_flow(
     )
 
 
-def add_subflow_step_to_flow(
+async def add_subflow_step_to_flow(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: AddSubflowStepToFlowParams,
@@ -2304,7 +2326,7 @@ def add_subflow_step_to_flow(
     field ``subFlowSysId`` references the subflow record; inputs use
     ``sys_hub_flow_input.sys_id`` as ``id`` (see list_flow_io on the subflow).
     """
-    parent_check = _get_artifact(config, auth_manager, "flow", params.flow_sys_id)
+    parent_check = await _get_artifact(config, auth_manager, "flow", params.flow_sys_id)
     if not parent_check.artifact:
         return AddSubflowStepToFlowResponse(
             success=False,
@@ -2318,7 +2340,7 @@ def add_subflow_step_to_flow(
             message=f"flow_sys_id must reference type=flow; got type={ptype_s}.",
         )
 
-    sub_check = _get_artifact(config, auth_manager, "subflow", params.subflow_sys_id)
+    sub_check = await _get_artifact(config, auth_manager, "subflow", params.subflow_sys_id)
     if not sub_check.artifact:
         return AddSubflowStepToFlowResponse(
             success=False,
@@ -2333,16 +2355,17 @@ def add_subflow_step_to_flow(
         )
 
     processflow_base = f"{config.api_url}/processflow"
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
 
     try:
-        get_response = requests.get(
+        client = await get_async_client()
+        get_response = await client.get(
             f"{processflow_base}/flow/{params.flow_sys_id}",
             headers=headers,
             timeout=config.timeout,
         )
         get_response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error(
             "add_subflow_step_to_flow | GET failed | flow_sys_id=%s | error=%s%s",
@@ -2371,7 +2394,8 @@ def add_subflow_step_to_flow(
     flow_data["subFlowInstances"] = (flow_data.get("subFlowInstances") or []) + [new_inst]
 
     try:
-        put_response = requests.put(
+        client = await get_async_client()
+        put_response = await client.put(
             f"{processflow_base}/flow",
             params={"sysparm_transaction_scope": "global"},
             json=flow_data,
@@ -2379,7 +2403,7 @@ def add_subflow_step_to_flow(
             timeout=config.timeout,
         )
         put_response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error(
             "add_subflow_step_to_flow | PUT failed | flow_sys_id=%s | error=%s%s",
@@ -2392,7 +2416,8 @@ def add_subflow_step_to_flow(
         )
 
     try:
-        requests.post(
+        client = await get_async_client()
+        (await client.post(
             f"{processflow_base}/versioning/create_version",
             params={"sysparm_transaction_scope": "global"},
             json={
@@ -2403,8 +2428,8 @@ def add_subflow_step_to_flow(
             },
             headers=headers,
             timeout=config.timeout,
-        ).raise_for_status()
-    except requests.RequestException as e:
+        )).raise_for_status()
+    except httpx.HTTPError as e:
         logger.warning(
             "add_subflow_step_to_flow | create_version failed (non-fatal) | flow_sys_id=%s | error=%s",
             params.flow_sys_id, e,
@@ -2422,7 +2447,7 @@ def add_subflow_step_to_flow(
     )
 
 
-def update_flow_trigger(
+async def update_flow_trigger(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: UpdateFlowTriggerParams,
@@ -2435,7 +2460,7 @@ def update_flow_trigger(
     then PUT, Save version, optional record-trigger version payload patch, and
     safe-edit lock release.
     """
-    parent_check = _get_artifact(config, auth_manager, "flow", params.flow_sys_id)
+    parent_check = await _get_artifact(config, auth_manager, "flow", params.flow_sys_id)
     if not parent_check.artifact:
         return UpdateFlowTriggerResponse(
             success=False,
@@ -2450,17 +2475,18 @@ def update_flow_trigger(
         )
 
     processflow_base = f"{config.api_url}/processflow"
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
     version_query_params = {"sysparm_transaction_scope": "global"}
 
     try:
-        get_response = requests.get(
+        client = await get_async_client()
+        get_response = await client.get(
             f"{processflow_base}/flow/{params.flow_sys_id}",
             headers=headers,
             timeout=config.timeout,
         )
         get_response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         return UpdateFlowTriggerResponse(
             success=False,
@@ -2473,27 +2499,28 @@ def update_flow_trigger(
 
     trigger_definition_id: str | None = params.trigger.trigger_definition_id
     if not trigger_definition_id:
-        resolved_id, resolve_err = _resolve_trigger_definition_id(
+        resolved_id, resolve_err = await _resolve_trigger_definition_id(
             config, auth_manager, params.trigger.type
         )
         if resolve_err:
             return UpdateFlowTriggerResponse(success=False, message=resolve_err)
         trigger_definition_id = resolved_id
 
-    trigger_instances = _build_trigger_instances(
+    trigger_instances = await _build_trigger_instances(
         config, auth_manager, params.trigger, params.flow_sys_id, trigger_definition_id
     )
     flow_data["triggerInstances"] = trigger_instances
 
     try:
-        requests.put(
+        client = await get_async_client()
+        (await client.put(
             f"{processflow_base}/flow",
             params={"sysparm_transaction_scope": "global"},
             json=flow_data,
             headers=headers,
             timeout=config.timeout,
-        ).raise_for_status()
-    except requests.RequestException as e:
+        )).raise_for_status()
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error("update_flow_trigger | PUT failed | error=%s%s", e, f" | body={_body}" if _body else "")
         return UpdateFlowTriggerResponse(
@@ -2502,7 +2529,8 @@ def update_flow_trigger(
         )
 
     try:
-        requests.post(
+        client = await get_async_client()
+        (await client.post(
             f"{processflow_base}/versioning/create_version",
             params=version_query_params,
             json={
@@ -2513,16 +2541,16 @@ def update_flow_trigger(
             },
             headers=headers,
             timeout=config.timeout,
-        ).raise_for_status()
-    except requests.RequestException as e:
+        )).raise_for_status()
+    except httpx.HTTPError as e:
         logger.warning("update_flow_trigger | create_version failed (non-fatal) | error=%s", e)
 
     if params.trigger.type in _RECORD_TRIGGER_TYPES:
-        patch_err = _patch_flow_version_trigger_type(config, auth_manager, params.flow_sys_id)
+        patch_err = await _patch_flow_version_trigger_type(config, auth_manager, params.flow_sys_id)
         if patch_err:
             logger.warning("update_flow_trigger | fTriggerType patch failed (non-fatal) | %s", patch_err)
 
-    lock_err = _release_flow_edit_lock(config, auth_manager, params.flow_sys_id)
+    lock_err = await _release_flow_edit_lock(config, auth_manager, params.flow_sys_id)
     if lock_err:
         logger.warning("update_flow_trigger | lock release failed (non-fatal) | %s", lock_err)
 
@@ -2633,14 +2661,15 @@ def _clone_flow_instance_arrays(source_flow_data: dict, new_flow_id: str) -> dic
     }
 
 
-def _fetch_sys_hub_flow_row_for_clone(
+async def _fetch_sys_hub_flow_row_for_clone(
     config: ServerConfig, auth_manager: AuthManager, source_sys_id: str
 ) -> tuple[dict | None, str | None]:
     """Load sys_hub_flow row for clone metadata. Returns (record, error_message)."""
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             f"{config.api_url}/table/sys_hub_flow/{source_sys_id}",
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             params={
                 "sysparm_fields": "sys_id,name,description,type,scope,run_as,access,flow_priority",
             },
@@ -2648,7 +2677,7 @@ def _fetch_sys_hub_flow_row_for_clone(
         )
         response.raise_for_status()
         return response.json().get("result", {}) or {}, None
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         return None, str(e) + (f" | {_body}" if _body else "")
 
@@ -2707,7 +2736,7 @@ def _defaults_from_flow_row(rec: dict) -> dict[str, Any]:
     }
 
 
-def clone_flow(
+async def clone_flow(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CloneFlowParams,
@@ -2721,10 +2750,10 @@ def clone_flow(
     graphs with undocumented cross-step references may require manual fix-up in Flow Designer.
     """
     processflow_base = f"{config.api_url}/processflow"
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
     version_query_params = {"sysparm_transaction_scope": "global"}
 
-    row, row_err = _fetch_sys_hub_flow_row_for_clone(config, auth_manager, params.source_flow_sys_id)
+    row, row_err = await _fetch_sys_hub_flow_row_for_clone(config, auth_manager, params.source_flow_sys_id)
     if row is None:
         return CloneFlowResponse(
             success=False,
@@ -2752,13 +2781,14 @@ def clone_flow(
 
     # Step 1: GET source processflow payload
     try:
-        get_response = requests.get(
+        client = await get_async_client()
+        get_response = await client.get(
             f"{processflow_base}/flow/{params.source_flow_sys_id}",
             headers=headers,
             timeout=config.timeout,
         )
         get_response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error("clone_flow | GET source failed | error=%s%s", e, f" | body={_body}" if _body else "")
         return CloneFlowResponse(
@@ -2796,7 +2826,8 @@ def clone_flow(
     }
 
     try:
-        shell_response = requests.post(
+        client = await get_async_client()
+        shell_response = await client.post(
             f"{processflow_base}/flow",
             params={
                 "param_only_properties": "true",
@@ -2807,7 +2838,7 @@ def clone_flow(
             timeout=config.timeout,
         )
         shell_response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error("clone_flow | shell POST failed | error=%s%s", e, f" | body={_body}" if _body else "")
         return CloneFlowResponse(
@@ -2837,7 +2868,8 @@ def clone_flow(
 
     # Step 3: Initial autosave (non-fatal)
     try:
-        requests.post(
+        client = await get_async_client()
+        (await client.post(
             f"{processflow_base}/versioning/create_version",
             params=version_query_params,
             json={
@@ -2848,13 +2880,14 @@ def clone_flow(
             },
             headers=headers,
             timeout=config.timeout,
-        ).raise_for_status()
-    except requests.RequestException as e:
+        )).raise_for_status()
+    except httpx.HTTPError as e:
         logger.warning("clone_flow | initial autosave failed (non-fatal) | flow_sys_id=%s | error=%s", new_flow_id, e)
 
     # Step 4: PUT cloned content
     try:
-        put_response = requests.put(
+        client = await get_async_client()
+        put_response = await client.put(
             f"{processflow_base}/flow",
             params={"sysparm_transaction_scope": "global"},
             json=put_body,
@@ -2862,7 +2895,7 @@ def clone_flow(
             timeout=config.timeout,
         )
         put_response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error("clone_flow | PUT failed | new_flow_id=%s | error=%s%s", new_flow_id, e, f" | body={_body}" if _body else "")
         return CloneFlowResponse(
@@ -2879,7 +2912,8 @@ def clone_flow(
 
     # Step 5: Save version
     try:
-        requests.post(
+        client = await get_async_client()
+        (await client.post(
             f"{processflow_base}/versioning/create_version",
             params=version_query_params,
             json={
@@ -2890,8 +2924,8 @@ def clone_flow(
             },
             headers=headers,
             timeout=config.timeout,
-        ).raise_for_status()
-    except requests.RequestException as e:
+        )).raise_for_status()
+    except httpx.HTTPError as e:
         logger.warning("clone_flow | Save version failed (non-fatal) | flow_sys_id=%s | error=%s", new_flow_id, e)
 
     # Step 6: Patch record trigger payload if applicable
@@ -2900,11 +2934,11 @@ def clone_flow(
         for t in (cloned_arrays.get("triggerInstances") or [])
     )
     if needs_patch:
-        patch_err = _patch_flow_version_trigger_type(config, auth_manager, new_flow_id)
+        patch_err = await _patch_flow_version_trigger_type(config, auth_manager, new_flow_id)
         if patch_err:
             logger.warning("clone_flow | fTriggerType patch failed (non-fatal) | flow_sys_id=%s | %s", new_flow_id, patch_err)
 
-    lock_err = _release_flow_edit_lock(config, auth_manager, new_flow_id)
+    lock_err = await _release_flow_edit_lock(config, auth_manager, new_flow_id)
     if lock_err:
         logger.warning("clone_flow | safeEdit lock release failed (non-fatal) | flow_sys_id=%s | %s", new_flow_id, lock_err)
 
@@ -2928,7 +2962,7 @@ def clone_flow(
 # ---------------------------------------------------------------------------
 
 
-def _build_trigger_instances(
+async def _build_trigger_instances(
     config: ServerConfig,
     auth_manager: AuthManager,
     trigger: TriggerInstanceParam | None,
@@ -2973,7 +3007,7 @@ def _build_trigger_instances(
         # Look up the table display label so Flow Designer can render the correct
         # label and data pill (e.g. "Incident" instead of "incident" / "undefined record").
         table_value = input_values.get("table", "")
-        table_label = _lookup_table_label(config, auth_manager, table_value) if table_value else ""
+        table_label = await _lookup_table_label(config, auth_manager, table_value) if table_value else ""
 
         # Always emit all 7 standard inputs in the required order.
         # User-supplied values override the empty default; system inputs default to "".
@@ -3052,7 +3086,7 @@ def _minimal_trigger_input(name: str, value: str, param_def: dict | None = None)
     }
 
 
-def _patch_flow_version_trigger_type(
+async def _patch_flow_version_trigger_type(
     config: ServerConfig,
     auth_manager: AuthManager,
     flow_sys_id: str,
@@ -3077,14 +3111,15 @@ def _patch_flow_version_trigger_type(
     records: list = []
     for _attempt in range(1, _MAX_ATTEMPTS + 1):
         try:
-            ver_response = requests.get(
+            client = await get_async_client()
+            ver_response = await client.get(
                 f"{config.api_url}/table/sys_hub_flow_version",
                 params={  # type: ignore[arg-type]
                     "sysparm_query": f"flow={flow_sys_id}^ORDERBYDESCsys_created_on",
                     "sysparm_fields": "sys_id,payload",
                     "sysparm_limit": 1,
                 },
-                headers=auth_manager.get_headers(),
+                headers=await auth_manager.get_headers_async(),
                 timeout=config.timeout,
             )
             ver_response.raise_for_status()
@@ -3097,7 +3132,7 @@ def _patch_flow_version_trigger_type(
             )
             if _attempt < _MAX_ATTEMPTS:
                 time.sleep(1)
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             _body = _err_body(e)
             return f"GET sys_hub_flow_version failed: {e}" + (f" | body: {_body}" if _body else "")
 
@@ -3163,14 +3198,15 @@ def _patch_flow_version_trigger_type(
         return None
 
     try:
-        patch_response = requests.patch(
+        client = await get_async_client()
+        patch_response = await client.patch(
             f"{config.api_url}/table/sys_hub_flow_version/{version_sys_id}",
             json={"payload": json.dumps(payload)},
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         patch_response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         return (
             f"PATCH sys_hub_flow_version/{version_sys_id} failed: {e}"
@@ -3184,7 +3220,7 @@ def _patch_flow_version_trigger_type(
     return None
 
 
-def _release_flow_edit_lock(
+async def _release_flow_edit_lock(
     config: ServerConfig,
     auth_manager: AuthManager,
     flow_sys_id: str,
@@ -3202,18 +3238,19 @@ def _release_flow_edit_lock(
     """
     # Step 1: Find the lock record for this flow
     try:
-        get_response = requests.get(
+        client = await get_async_client()
+        get_response = await client.get(
             f"{config.api_url}/table/sys_hub_flow_safe_edit",
             params={  # type: ignore[arg-type]
                 "sysparm_query": f"flow={flow_sys_id}",
                 "sysparm_fields": "sys_id",
                 "sysparm_limit": 1,
             },
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         get_response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         return f"GET sys_hub_flow_safe_edit failed: {e}" + (f" | body: {_body}" if _body else "")
 
@@ -3227,13 +3264,14 @@ def _release_flow_edit_lock(
 
     # Step 2: DELETE the lock record
     try:
-        del_response = requests.delete(
+        client = await get_async_client()
+        del_response = await client.delete(
             f"{config.api_url}/table/sys_hub_flow_safe_edit/{lock_sys_id}",
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         del_response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         return (
             f"DELETE sys_hub_flow_safe_edit/{lock_sys_id} failed: {e}"
@@ -3339,7 +3377,7 @@ class PublishFlowParams(BaseModel):
     flow_sys_id: str = Field(..., description="sys_id of the flow to publish (sys_hub_flow)")
 
 
-def list_flows(
+async def list_flows(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListFlowsParams,
@@ -3347,7 +3385,7 @@ def list_flows(
     """List Flow Designer flows from sys_hub_flow with optional filters."""
     try:
         url = f"{config.instance_url}/api/now/table/sys_hub_flow"
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
 
         query_parts: list[str] = []
         if params.flow_type is not None:
@@ -3368,17 +3406,18 @@ def list_flows(
         if query_parts:
             query_params["sysparm_query"] = "^".join(query_parts)
 
-        response = requests.get(url, headers=headers, params=query_params, timeout=config.timeout)
+        client = await get_async_client()
+        response = await client.get(url, headers=headers, params=query_params, timeout=config.timeout)
         response.raise_for_status()
         flows = response.json().get("result", [])
         return {"success": True, "flows": flows, "count": len(flows)}
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error("list_flows | error=%s%s", e, f" | body={_body}" if _body else "")
         return {"success": False, "message": f"Error listing flows: {e}" + (f" | {_body}" if _body else "")}
 
 
-def get_flow(
+async def get_flow(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetFlowParams,
@@ -3386,8 +3425,9 @@ def get_flow(
     """Get detail view of a single flow from sys_hub_flow."""
     try:
         url = f"{config.instance_url}/api/now/table/sys_hub_flow/{params.flow_sys_id}"
-        headers = auth_manager.get_headers()
-        response = requests.get(
+        headers = await auth_manager.get_headers_async()
+        client = await get_async_client()
+        response = await client.get(
             url,
             headers=headers,
             params={
@@ -3403,13 +3443,13 @@ def get_flow(
         response.raise_for_status()
         record = response.json().get("result", {})
         return {"success": True, "flow": record}
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error("get_flow | flow_sys_id=%s | error=%s%s", params.flow_sys_id, e, f" | body={_body}" if _body else "")
         return {"success": False, "message": f"Error getting flow: {e}" + (f" | {_body}" if _body else "")}
 
 
-def get_flow_triggers(
+async def get_flow_triggers(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetFlowTriggersParams,
@@ -3421,14 +3461,15 @@ def get_flow_triggers(
     The limit and offset parameters apply independently to each table query; the merged
     result count can be up to twice the limit value.
     """
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
     trigger_fields = "sys_id,name,flow,trigger_type,trigger_definition,trigger_inputs,display_text"
 
     all_triggers: list[dict] = []
     for table in ("sys_hub_trigger_instance", "sys_hub_trigger_instance_v2"):
         url = f"{config.instance_url}/api/now/table/{table}"
         try:
-            response = requests.get(
+            client = await get_async_client()
+            response = await client.get(
                 url,
                 headers=headers,
                 params={  # type: ignore[arg-type]
@@ -3442,7 +3483,7 @@ def get_flow_triggers(
             )
             response.raise_for_status()
             all_triggers.extend(response.json().get("result", []))
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             _body = _err_body(e)
             logger.error(
                 "get_flow_triggers | table=%s | flow_sys_id=%s | error=%s%s",
@@ -3479,7 +3520,7 @@ _COMPONENT_DETAIL_TABLES: dict[str, str] = {
 }
 
 
-def get_flow_actions(
+async def get_flow_actions(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetFlowActionsParams,
@@ -3494,14 +3535,15 @@ def get_flow_actions(
     queries the appropriate child table for full field detail. Supported types are defined
     in _COMPONENT_DETAIL_TABLES; unsupported types return success=False.
     """
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
 
     # --- Detail mode ---
     if params.component_sys_id:
         # Step 1: fetch base component to get sys_class_name
         comp_url = f"{config.instance_url}/api/now/table/sys_hub_flow_component/{params.component_sys_id}"
         try:
-            comp_resp = requests.get(
+            client = await get_async_client()
+            comp_resp = await client.get(
                 comp_url,
                 headers=headers,
                 params={"sysparm_fields": "sys_id,sys_class_name,flow,order,display_text"},
@@ -3509,7 +3551,7 @@ def get_flow_actions(
             )
             comp_resp.raise_for_status()
             component = comp_resp.json().get("result", {})
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             _body = _err_body(e)
             logger.error(
                 "get_flow_actions | component fetch | sys_id=%s | error=%s%s",
@@ -3530,7 +3572,8 @@ def get_flow_actions(
         # Step 2: fetch from the child table using routed fields
         detail_url = f"{config.instance_url}/api/now/table/{sys_class_name}/{params.component_sys_id}"
         try:
-            detail_resp = requests.get(
+            client = await get_async_client()
+            detail_resp = await client.get(
                 detail_url,
                 headers=headers,
                 params={
@@ -3541,7 +3584,7 @@ def get_flow_actions(
             )
             detail_resp.raise_for_status()
             detail = detail_resp.json().get("result", {})
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             _body = _err_body(e)
             logger.error(
                 "get_flow_actions | detail fetch | sys_id=%s | table=%s | error=%s%s",
@@ -3562,7 +3605,8 @@ def get_flow_actions(
     # --- List mode ---
     url = f"{config.instance_url}/api/now/table/sys_hub_flow_component"
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             url,
             headers=headers,
             params={  # type: ignore[arg-type]
@@ -3582,7 +3626,7 @@ def get_flow_actions(
             "components": components,
             "count": len(components),
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error(
             "get_flow_actions | flow_sys_id=%s | error=%s%s",
@@ -3594,7 +3638,7 @@ def get_flow_actions(
         }
 
 
-def get_flow_version(
+async def get_flow_version(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetFlowVersionParams,
@@ -3606,13 +3650,14 @@ def get_flow_version(
     """
     try:
         url = f"{config.instance_url}/api/now/table/sys_hub_flow_version"
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
 
         query = f"flow={params.flow_sys_id}"
         if params.published_only:
             query += "^published=true"
 
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             url,
             headers=headers,
             params={  # type: ignore[arg-type]
@@ -3629,7 +3674,8 @@ def get_flow_version(
             # Packaged / OOB flows may have no sys_hub_flow_version rows; try read-only snapshot.
             try:
                 snap_url = f"{config.instance_url}/api/now/table/sys_hub_flow_snapshot"
-                snap_resp = requests.get(
+                client = await get_async_client()
+                snap_resp = await client.get(
                     snap_url,
                     headers=headers,
                     params={  # type: ignore[arg-type]
@@ -3648,7 +3694,7 @@ def get_flow_version(
                         "version": snap_rows[0],
                         "snapshot_fallback": True,
                     }
-            except requests.RequestException as snap_e:
+            except httpx.HTTPError as snap_e:
                 logger.warning(
                     "get_flow_version | no sys_hub_flow_version row; snapshot fallback failed | flow=%s | %s",
                     params.flow_sys_id,
@@ -3660,13 +3706,13 @@ def get_flow_version(
                 "message": f"No {label} version found for flow {params.flow_sys_id}",
             }
         return {"success": True, "flow_sys_id": params.flow_sys_id, "version": records[0]}
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error("get_flow_version | flow_sys_id=%s | error=%s%s", params.flow_sys_id, e, f" | body={_body}" if _body else "")
         return {"success": False, "message": f"Error getting flow version: {e}" + (f" | {_body}" if _body else "")}
 
 
-def publish_flow(
+async def publish_flow(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: PublishFlowParams,
@@ -3683,9 +3729,10 @@ def publish_flow(
     """
     try:
         url = f"{config.instance_url}/api/now/table/sys_hub_flow/{params.flow_sys_id}"
-        headers = auth_manager.get_headers()
+        headers = await auth_manager.get_headers_async()
         headers["Content-Type"] = "application/json"
-        response = requests.patch(
+        client = await get_async_client()
+        response = await client.patch(
             url,
             json={"active": "true", "status": "published"},
             headers=headers,
@@ -3698,7 +3745,7 @@ def publish_flow(
             "message": f"Flow {params.flow_sys_id} published (active=true, status=published)",
             "flow": record,
         }
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error("publish_flow | flow_sys_id=%s | error=%s%s", params.flow_sys_id, e, f" | body={_body}" if _body else "")
         return {
@@ -3796,7 +3843,7 @@ _ARTIFACT_TABLE_MAP: dict[str, str] = {
 }
 
 
-def _delete_artifact(
+async def _delete_artifact(
     config: ServerConfig,
     auth_manager: AuthManager,
     artifact_type: str,
@@ -3805,13 +3852,14 @@ def _delete_artifact(
     """Delete a flow artifact via the Table API DELETE endpoint."""
     table = _ARTIFACT_TABLE_MAP[artifact_type]
     try:
-        response = requests.delete(
+        client = await get_async_client()
+        response = await client.delete(
             f"{config.api_url}/table/{table}/{sys_id}",
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error(
             "_delete_artifact | failed | artifact_type=%s | sys_id=%s | error=%s%s",
@@ -3826,34 +3874,34 @@ def _delete_artifact(
     return DeleteArtifactResponse(success=True, message=f"Deleted {artifact_type} {sys_id}.", sys_id=sys_id)
 
 
-def delete_flow(
+async def delete_flow(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: DeleteFlowParams,
 ) -> DeleteArtifactResponse:
     """Delete a flow by sys_id. Irreversible — ensure no dependent subflows or actions reference this flow."""
-    return _delete_artifact(config, auth_manager, "flow", params.sys_id)
+    return await _delete_artifact(config, auth_manager, "flow", params.sys_id)
 
 
-def delete_subflow(
+async def delete_subflow(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: DeleteSubflowParams,
 ) -> DeleteArtifactResponse:
     """Delete a subflow by sys_id."""
-    return _delete_artifact(config, auth_manager, "subflow", params.sys_id)
+    return await _delete_artifact(config, auth_manager, "subflow", params.sys_id)
 
 
-def delete_action(
+async def delete_action(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: DeleteActionParams,
 ) -> DeleteArtifactResponse:
     """Delete a custom action type by sys_id."""
-    return _delete_artifact(config, auth_manager, "action", params.sys_id)
+    return await _delete_artifact(config, auth_manager, "action", params.sys_id)
 
 
-def get_flow_execution_history(
+async def get_flow_execution_history(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetFlowExecutionHistoryParams,
@@ -3869,7 +3917,8 @@ def get_flow_execution_history(
         query += f"^state={params.state}"
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             f"{config.api_url}/table/sys_hub_flow_context",
             params={  # type: ignore[arg-type]
                 "sysparm_query": query,
@@ -3877,11 +3926,11 @@ def get_flow_execution_history(
                 "sysparm_limit": params.limit,
                 "sysparm_display_value": "true",
             },
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error(
             "get_flow_execution_history | request failed | flow_sys_id=%s | error=%s%s",
@@ -3916,7 +3965,7 @@ def get_flow_execution_history(
     )
 
 
-def remove_steps_from_flow(
+async def remove_steps_from_flow(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: RemoveStepsFromFlowParams,
@@ -3943,17 +3992,18 @@ def remove_steps_from_flow(
         )
 
     processflow_base = f"{config.api_url}/processflow"
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
 
     # Step 1: GET current flow payload
     try:
-        get_response = requests.get(
+        client = await get_async_client()
+        get_response = await client.get(
             f"{processflow_base}/flow/{params.flow_sys_id}",
             headers=headers,
             timeout=config.timeout,
         )
         get_response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error(
             "remove_steps_from_flow | GET failed | flow_sys_id=%s | error=%s%s",
@@ -4011,7 +4061,8 @@ def remove_steps_from_flow(
     flow_data["subFlowInstances"] = subflow_instances
 
     try:
-        put_response = requests.put(
+        client = await get_async_client()
+        put_response = await client.put(
             f"{processflow_base}/flow",
             params={"sysparm_transaction_scope": "global"},
             json=flow_data,
@@ -4019,7 +4070,7 @@ def remove_steps_from_flow(
             timeout=config.timeout,
         )
         put_response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error(
             "remove_steps_from_flow | PUT failed | flow_sys_id=%s | error=%s%s",
@@ -4033,7 +4084,8 @@ def remove_steps_from_flow(
 
     # Step 4: Create version to persist the change
     try:
-        requests.post(
+        client = await get_async_client()
+        (await client.post(
             f"{processflow_base}/versioning/create_version",
             params={"sysparm_transaction_scope": "global"},
             json={
@@ -4044,8 +4096,8 @@ def remove_steps_from_flow(
             },
             headers=headers,
             timeout=config.timeout,
-        ).raise_for_status()
-    except requests.RequestException as e:
+        )).raise_for_status()
+    except httpx.HTTPError as e:
         logger.warning(
             "remove_steps_from_flow | create_version failed | flow_sys_id=%s | error=%s",
             params.flow_sys_id, e,
@@ -4063,7 +4115,7 @@ def remove_steps_from_flow(
     )
 
 
-def add_logic_to_flow(
+async def add_logic_to_flow(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: AddLogicToFlowParams,
@@ -4091,17 +4143,18 @@ def add_logic_to_flow(
         AddLogicToFlowResponse with success flag, message, and logic step id.
     """
     processflow_base = f"{config.api_url}/processflow"
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
 
     # Step 1: GET current flow payload
     try:
-        get_response = requests.get(
+        client = await get_async_client()
+        get_response = await client.get(
             f"{processflow_base}/flow/{params.flow_sys_id}",
             headers=headers,
             timeout=config.timeout,
         )
         get_response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error(
             "add_logic_to_flow | GET failed | flow_sys_id=%s | error=%s%s",
@@ -4176,7 +4229,8 @@ def add_logic_to_flow(
 
     # Step 4: PUT modified payload back
     try:
-        put_response = requests.put(
+        client = await get_async_client()
+        put_response = await client.put(
             f"{processflow_base}/flow",
             params={"sysparm_transaction_scope": "global"},
             json=put_body,
@@ -4184,7 +4238,7 @@ def add_logic_to_flow(
             timeout=config.timeout,
         )
         put_response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error(
             "add_logic_to_flow | PUT failed | flow_sys_id=%s | error=%s%s",
@@ -4198,7 +4252,8 @@ def add_logic_to_flow(
 
     # Step 5: Create version
     try:
-        requests.post(
+        client = await get_async_client()
+        (await client.post(
             f"{processflow_base}/versioning/create_version",
             params={"sysparm_transaction_scope": "global"},
             json={
@@ -4209,8 +4264,8 @@ def add_logic_to_flow(
             },
             headers=headers,
             timeout=config.timeout,
-        ).raise_for_status()
-    except requests.RequestException as e:
+        )).raise_for_status()
+    except httpx.HTTPError as e:
         logger.warning(
             "add_logic_to_flow | create_version failed | flow_sys_id=%s | error=%s",
             params.flow_sys_id, e,
@@ -4228,7 +4283,7 @@ def add_logic_to_flow(
     )
 
 
-def list_action_type_outputs(
+async def list_action_type_outputs(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListActionTypeOutputsParams,
@@ -4251,7 +4306,8 @@ def list_action_type_outputs(
         ListActionTypeOutputsResult with list of output variable definitions.
     """
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             f"{config.api_url}/table/sys_hub_action_output",
             params={  # type: ignore[arg-type]
                 "sysparm_query": f"model={params.action_type_sys_id}",
@@ -4260,11 +4316,11 @@ def list_action_type_outputs(
                 "sysparm_limit": 100,
                 "sysparm_orderby": "order",
             },
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error(
             "list_action_type_outputs | request failed | action_type_sys_id=%s | error=%s%s",
@@ -4306,7 +4362,7 @@ def list_action_type_outputs(
     )
 
 
-def list_flow_io(
+async def list_flow_io(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListFlowIOParams,
@@ -4326,8 +4382,8 @@ def list_flow_io(
     Returns:
         ListFlowIOResult with separate inputs and outputs lists.
     """
-    headers = auth_manager.get_headers()
-    common_query_params = {
+    headers = await auth_manager.get_headers_async()
+    common_query_params: Dict[str, Any] = {
         "sysparm_fields": "sys_id,element,label,column_label,internal_type,mandatory,default_value,order",
         "sysparm_display_value": "true",
         "sysparm_limit": 100,
@@ -4349,9 +4405,10 @@ def list_flow_io(
             order=int(_val(r.get("order")) or 0),
         )
 
-    def _fetch(table: str) -> list[FlowIOVariable] | str:
+    async def _fetch(table: str) -> list[FlowIOVariable] | str:
         try:
-            resp = requests.get(
+            client = await get_async_client()
+            resp = await client.get(
                 f"{config.api_url}/table/{table}",
                 params={  # type: ignore[arg-type]
                     **common_query_params,
@@ -4362,10 +4419,10 @@ def list_flow_io(
             )
             resp.raise_for_status()
             return [_parse_var(r) for r in resp.json().get("result", [])]
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             return str(e)
 
-    inputs = _fetch("sys_hub_flow_input")
+    inputs = await _fetch("sys_hub_flow_input")
     if isinstance(inputs, str):
         logger.error("list_flow_io | inputs fetch failed | flow_sys_id=%s | error=%s", params.flow_sys_id, inputs)
         return ListFlowIOResult(
@@ -4375,7 +4432,7 @@ def list_flow_io(
             message=f"Failed to fetch flow I/O: {inputs}",
         )
 
-    outputs = _fetch("sys_hub_flow_output")
+    outputs = await _fetch("sys_hub_flow_output")
     if isinstance(outputs, str):
         logger.error("list_flow_io | outputs fetch failed | flow_sys_id=%s | error=%s", params.flow_sys_id, outputs)
         return ListFlowIOResult(
@@ -4417,7 +4474,7 @@ def _extract_execution_id_from_test_response(data: Any) -> str | None:
     return None
 
 
-def _try_execute_flow_via_rest(
+async def _try_execute_flow_via_rest(
     config: ServerConfig,
     auth_manager: AuthManager,
     flow_sys_id: str,
@@ -4426,11 +4483,12 @@ def _try_execute_flow_via_rest(
     """POST /processflow/flow/{id}/test. Returns (ok, execution_id, error_message)."""
     url = f"{config.api_url}/processflow/flow/{flow_sys_id}/test"
     try:
-        resp = requests.post(
+        client = await get_async_client()
+        resp = await client.post(
             url,
             params={"sysparm_transaction_scope": "global"},
             json={"inputs": inputs_obj},
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         if resp.status_code != 200:
@@ -4440,12 +4498,12 @@ def _try_execute_flow_via_rest(
         if eid:
             return True, eid, None
         return False, None, "test endpoint returned 200 but no execution id in response"
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         return False, None, str(e) + (f" | {_body}" if _body else "")
 
 
-def execute_flow(
+async def execute_flow(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ExecuteFlowParams,
@@ -4464,7 +4522,7 @@ def execute_flow(
     """
     inputs_obj = dict(params.inputs) if params.inputs else {}
 
-    rest_ok, rest_eid, rest_err = _try_execute_flow_via_rest(
+    rest_ok, rest_eid, rest_err = await _try_execute_flow_via_rest(
         config, auth_manager, params.flow_sys_id.strip(), inputs_obj
     )
     if rest_ok and rest_eid:
@@ -4499,7 +4557,7 @@ def execute_flow(
             ),
         )
 
-    headers = auth_manager.get_headers()
+    headers = await auth_manager.get_headers_async()
 
     def _cell_str(raw: Any) -> str:
         if isinstance(raw, dict):
@@ -4507,7 +4565,8 @@ def execute_flow(
         return str(raw) if raw is not None else ""
 
     try:
-        meta_response = requests.get(
+        client = await get_async_client()
+        meta_response = await client.get(
             f"{config.api_url}/table/sys_hub_flow",
             params={  # type: ignore[arg-type]
                 "sysparm_query": f"sys_id={params.flow_sys_id}",
@@ -4538,7 +4597,7 @@ def execute_flow(
         scope = _cell_str(scope_raw) if scope_raw is not None else ""
         if not scope:
             scope = "global"
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         _body = _err_body(e)
         logger.error(
             "execute_flow | meta fetch failed | flow_sys_id=%s | error=%s%s",
@@ -4566,7 +4625,7 @@ try {{
 }}
 """
 
-    ok, msg, output_data = _invoke_scripted_js(
+    ok, msg, output_data = await _invoke_scripted_js(
         config, auth_manager, script, log_prefix="execute_flow"
     )
     if not ok or output_data is None:
@@ -4651,7 +4710,7 @@ def _build_get_flow_execution_detail_script(execution_sys_id: str) -> str:
     )
 
 
-def get_flow_execution_detail(
+async def get_flow_execution_detail(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetFlowExecutionDetailParams,
@@ -4675,7 +4734,7 @@ def get_flow_execution_detail(
         GetFlowExecutionDetailResult with context fields and ``steps``.
     """
     script = _build_get_flow_execution_detail_script(params.execution_sys_id.strip())
-    ok, msg, data = _invoke_scripted_js(
+    ok, msg, data = await _invoke_scripted_js(
         config, auth_manager, script, log_prefix="get_flow_execution_detail"
     )
     if not ok or data is None:
