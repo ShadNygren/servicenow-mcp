@@ -8,12 +8,13 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
-from servicenow_mcp.utils.helpers import _get_headers, _get_instance_url, _unwrap_and_validate_params
+from servicenow_mcp.utils.helpers import _get_headers_async, _get_instance_url, _unwrap_and_validate_params
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,7 @@ class RejectChangeParams(BaseModel):
     rejection_reason: str = Field(..., description="Reason for rejection")
 
 
-def create_change_request(
+async def create_change_request(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -163,7 +164,7 @@ def create_change_request(
         }
     
     # Get the headers
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {
             "success": False,
@@ -177,7 +178,8 @@ def create_change_request(
     url = f"{instance_url}/api/now/table/change_request"
     
     try:
-        response = requests.post(url, json=data, headers=headers)
+        client = await get_async_client()
+        response = await client.post(url, json=data, headers=headers)
         response.raise_for_status()
         
         result = response.json()
@@ -187,7 +189,7 @@ def create_change_request(
             "message": "Change request created successfully",
             "change_request": result["result"],
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error creating change request: {e}")
         return {
             "success": False,
@@ -195,7 +197,7 @@ def create_change_request(
         }
 
 
-def update_change_request(
+async def update_change_request(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -257,7 +259,7 @@ def update_change_request(
         }
     
     # Get the headers
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {
             "success": False,
@@ -271,7 +273,8 @@ def update_change_request(
     url = f"{instance_url}/api/now/table/change_request/{validated_params.change_id}"
     
     try:
-        response = requests.put(url, json=data, headers=headers)
+        client = await get_async_client()
+        response = await client.put(url, json=data, headers=headers)
         response.raise_for_status()
         
         result = response.json()
@@ -281,7 +284,7 @@ def update_change_request(
             "message": "Change request updated successfully",
             "change_request": result["result"],
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error updating change request: {e}")
         return {
             "success": False,
@@ -289,7 +292,7 @@ def update_change_request(
         }
 
 
-def list_change_requests(
+async def list_change_requests(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -354,7 +357,7 @@ def list_change_requests(
         }
     
     # Get the headers
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {
             "success": False,
@@ -372,7 +375,8 @@ def list_change_requests(
     }
 
     try:
-        response = requests.get(url, headers=headers, params=query_params)
+        client = await get_async_client()
+        response = await client.get(url, headers=headers, params=query_params)
         response.raise_for_status()
         
         result = response.json()
@@ -387,7 +391,7 @@ def list_change_requests(
             "count": count,
             "total": count,  # Use count as total if total is not provided
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error listing change requests: {e}")
         return {
             "success": False,
@@ -395,7 +399,7 @@ def list_change_requests(
         }
 
 
-def get_change_request_details(
+async def get_change_request_details(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -432,7 +436,7 @@ def get_change_request_details(
         }
     
     # Get the headers
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {
             "success": False,
@@ -447,7 +451,8 @@ def get_change_request_details(
     }
 
     try:
-        response = requests.get(url, headers=headers, params=query_params)
+        client = await get_async_client()
+        response = await client.get(url, headers=headers, params=query_params)
         response.raise_for_status()
         
         result = response.json()
@@ -459,7 +464,8 @@ def get_change_request_details(
             "sysparm_display_value": "true",
         }
         
-        tasks_response = requests.get(tasks_url, headers=headers, params=tasks_params)
+        client = await get_async_client()
+        tasks_response = await client.get(tasks_url, headers=headers, params=tasks_params)
         tasks_response.raise_for_status()
         
         tasks_result = tasks_response.json()
@@ -469,7 +475,7 @@ def get_change_request_details(
             "change_request": result["result"],
             "tasks": tasks_result["result"],
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error getting change request details: {e}")
         return {
             "success": False,
@@ -477,7 +483,7 @@ def get_change_request_details(
         }
 
 
-def add_change_task(
+async def add_change_task(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -530,7 +536,7 @@ def add_change_task(
         }
     
     # Get the headers
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {
             "success": False,
@@ -544,7 +550,8 @@ def add_change_task(
     url = f"{instance_url}/api/now/table/change_task"
     
     try:
-        response = requests.post(url, json=data, headers=headers)
+        client = await get_async_client()
+        response = await client.post(url, json=data, headers=headers)
         response.raise_for_status()
         
         result = response.json()
@@ -554,7 +561,7 @@ def add_change_task(
             "message": "Change task added successfully",
             "change_task": result["result"],
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error adding change task: {e}")
         return {
             "success": False,
@@ -562,7 +569,7 @@ def add_change_task(
         }
 
 
-def submit_change_for_approval(
+async def submit_change_for_approval(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -608,7 +615,7 @@ def submit_change_for_approval(
         }
     
     # Get the headers
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {
             "success": False,
@@ -622,7 +629,8 @@ def submit_change_for_approval(
     url = f"{instance_url}/api/now/table/change_request/{validated_params.change_id}"
     
     try:
-        response = requests.patch(url, json=data, headers=headers)
+        client = await get_async_client()
+        response = await client.patch(url, json=data, headers=headers)
         response.raise_for_status()
         
         # Now, create an approval request
@@ -633,7 +641,8 @@ def submit_change_for_approval(
             "state": "requested",
         }
         
-        approval_response = requests.post(approval_url, json=approval_data, headers=headers)
+        client = await get_async_client()
+        approval_response = await client.post(approval_url, json=approval_data, headers=headers)
         approval_response.raise_for_status()
         
         approval_result = approval_response.json()
@@ -643,7 +652,7 @@ def submit_change_for_approval(
             "message": "Change request submitted for approval successfully",
             "approval": approval_result["result"],
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error submitting change for approval: {e}")
         return {
             "success": False,
@@ -651,7 +660,7 @@ def submit_change_for_approval(
         }
 
 
-def approve_change(
+async def approve_change(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -688,7 +697,7 @@ def approve_change(
         }
     
     # Get the headers
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {
             "success": False,
@@ -704,7 +713,8 @@ def approve_change(
     }
     
     try:
-        approval_response = requests.get(approval_query_url, headers=headers, params=query_params)
+        client = await get_async_client()
+        approval_response = await client.get(approval_query_url, headers=headers, params=query_params)
         approval_response.raise_for_status()
         
         approval_result = approval_response.json()
@@ -728,7 +738,8 @@ def approve_change(
         if validated_params.approval_comments:
             approval_data["comments"] = validated_params.approval_comments
         
-        approval_update_response = requests.patch(approval_update_url, json=approval_data, headers=headers)
+        client = await get_async_client()
+        approval_update_response = await client.patch(approval_update_url, json=approval_data, headers=headers)
         approval_update_response.raise_for_status()
         
         # Finally, update the change request state to "implement"
@@ -738,14 +749,15 @@ def approve_change(
             "state": "implement",  # This may vary depending on ServiceNow configuration
         }
         
-        change_response = requests.patch(change_url, json=change_data, headers=headers)
+        client = await get_async_client()
+        change_response = await client.patch(change_url, json=change_data, headers=headers)
         change_response.raise_for_status()
         
         return {
             "success": True,
             "message": "Change request approved successfully",
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error approving change: {e}")
         return {
             "success": False,
@@ -753,7 +765,7 @@ def approve_change(
         }
 
 
-def reject_change(
+async def reject_change(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -790,7 +802,7 @@ def reject_change(
         }
     
     # Get the headers
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {
             "success": False,
@@ -806,7 +818,8 @@ def reject_change(
     }
     
     try:
-        approval_response = requests.get(approval_query_url, headers=headers, params=query_params)
+        client = await get_async_client()
+        approval_response = await client.get(approval_query_url, headers=headers, params=query_params)
         approval_response.raise_for_status()
         
         approval_result = approval_response.json()
@@ -828,7 +841,8 @@ def reject_change(
             "comments": validated_params.rejection_reason,
         }
         
-        approval_update_response = requests.patch(approval_update_url, json=approval_data, headers=headers)
+        client = await get_async_client()
+        approval_update_response = await client.patch(approval_update_url, json=approval_data, headers=headers)
         approval_update_response.raise_for_status()
         
         # Finally, update the change request state to "canceled"
@@ -839,14 +853,15 @@ def reject_change(
             "work_notes": f"Change request rejected: {validated_params.rejection_reason}",
         }
         
-        change_response = requests.patch(change_url, json=change_data, headers=headers)
+        client = await get_async_client()
+        change_response = await client.patch(change_url, json=change_data, headers=headers)
         change_response.raise_for_status()
         
         return {
             "success": True,
             "message": "Change request rejected successfully",
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error rejecting change: {e}")
         return {
             "success": False,

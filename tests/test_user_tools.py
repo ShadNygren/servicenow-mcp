@@ -3,7 +3,10 @@ Tests for user management tools.
 """
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import httpx
 
 from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.tools.user_tools import (
@@ -29,7 +32,7 @@ from servicenow_mcp.tools.user_tools import (
 from servicenow_mcp.utils.config import AuthConfig, AuthType, BasicAuthConfig, ServerConfig
 
 
-class TestUserTools(unittest.TestCase):
+class TestUserTools(IsolatedAsyncioTestCase):
     """Tests for user management tools."""
 
     def setUp(self):
@@ -44,11 +47,11 @@ class TestUserTools(unittest.TestCase):
         )
         self.auth_manager = AuthManager(self.config.auth)
         
-        # Mock auth_manager.get_headers() method
+        # Mock auth_manager.get_headers_async.return_value method
         self.auth_manager.get_headers = MagicMock(return_value={"Authorization": "Basic YWRtaW46cGFzc3dvcmQ="})
 
-    @patch("requests.post")
-    def test_create_user(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_user(self, mock_post):
         """Test create_user function."""
         # Configure mock
         mock_response = MagicMock()
@@ -72,7 +75,7 @@ class TestUserTools(unittest.TestCase):
         )
         
         # Call function
-        result = create_user(self.config, self.auth_manager, params)
+        result = await create_user(self.config, self.auth_manager, params)
         
         # Verify result
         self.assertTrue(result.success)
@@ -90,8 +93,8 @@ class TestUserTools(unittest.TestCase):
         self.assertEqual(call_args[1]["json"]["department"], "Radiology")
         self.assertEqual(call_args[1]["json"]["title"], "Doctor")
 
-    @patch("requests.patch")
-    def test_update_user(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_user(self, mock_patch):
         """Test update_user function."""
         # Configure mock
         mock_response = MagicMock()
@@ -112,7 +115,7 @@ class TestUserTools(unittest.TestCase):
         )
         
         # Call function
-        result = update_user(self.config, self.auth_manager, params)
+        result = await update_user(self.config, self.auth_manager, params)
         
         # Verify result
         self.assertTrue(result.success)
@@ -126,8 +129,8 @@ class TestUserTools(unittest.TestCase):
         self.assertEqual(call_args[1]["json"]["manager"], "user456")
         self.assertEqual(call_args[1]["json"]["title"], "Senior Doctor")
 
-    @patch("requests.get")
-    def test_get_user(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_user(self, mock_get):
         """Test get_user function."""
         # Configure mock
         mock_response = MagicMock()
@@ -151,7 +154,7 @@ class TestUserTools(unittest.TestCase):
         )
         
         # Call function
-        result = get_user(self.config, self.auth_manager, params)
+        result = await get_user(self.config, self.auth_manager, params)
         
         # Verify result
         self.assertTrue(result["success"])
@@ -164,8 +167,8 @@ class TestUserTools(unittest.TestCase):
         self.assertEqual(call_args[0][0], f"{self.config.api_url}/table/sys_user")
         self.assertEqual(call_args[1]["params"]["sysparm_query"], "user_name=alice.radiology")
 
-    @patch("requests.get")
-    def test_list_users(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_users(self, mock_get):
         """Test list_users function."""
         # Configure mock
         mock_response = MagicMock()
@@ -191,7 +194,7 @@ class TestUserTools(unittest.TestCase):
         )
         
         # Call function
-        result = list_users(self.config, self.auth_manager, params)
+        result = await list_users(self.config, self.auth_manager, params)
         
         # Verify result
         self.assertTrue(result["success"])
@@ -206,8 +209,8 @@ class TestUserTools(unittest.TestCase):
         self.assertEqual(call_args[1]["params"]["sysparm_limit"], "10")
         self.assertIn("department=Radiology", call_args[1]["params"]["sysparm_query"])
 
-    @patch("requests.get")
-    def test_list_groups(self, mock_get):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_groups(self, mock_get):
         """Test list_groups function."""
         # Configure mock
         mock_response = MagicMock()
@@ -241,7 +244,7 @@ class TestUserTools(unittest.TestCase):
         )
         
         # Call function
-        result = list_groups(self.config, self.auth_manager, params)
+        result = await list_groups(self.config, self.auth_manager, params)
         
         # Verify result
         self.assertTrue(result["success"])
@@ -262,8 +265,8 @@ class TestUserTools(unittest.TestCase):
         self.assertIn("nameLIKE", call_args[1]["params"]["sysparm_query"])
         self.assertIn("descriptionLIKE", call_args[1]["params"]["sysparm_query"])
 
-    @patch("requests.post")
-    def test_create_group(self, mock_post):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_create_group(self, mock_post):
         """Test create_group function."""
         # Configure mock
         mock_response = MagicMock()
@@ -284,7 +287,7 @@ class TestUserTools(unittest.TestCase):
         )
         
         # Call function
-        result = create_group(self.config, self.auth_manager, params)
+        result = await create_group(self.config, self.auth_manager, params)
         
         # Verify result
         self.assertTrue(result.success)
@@ -299,8 +302,8 @@ class TestUserTools(unittest.TestCase):
         self.assertEqual(call_args[1]["json"]["description"], "Group for biomedical engineering staff")
         self.assertEqual(call_args[1]["json"]["manager"], "user456")
 
-    @patch("requests.patch")
-    def test_update_group(self, mock_patch):
+    @patch.object(httpx.AsyncClient, "patch", new_callable=AsyncMock)
+    async def test_update_group(self, mock_patch):
         """Test update_group function."""
         # Configure mock
         mock_response = MagicMock()
@@ -321,7 +324,7 @@ class TestUserTools(unittest.TestCase):
         )
         
         # Call function
-        result = update_group(self.config, self.auth_manager, params)
+        result = await update_group(self.config, self.auth_manager, params)
         
         # Verify result
         self.assertTrue(result.success)
@@ -336,8 +339,8 @@ class TestUserTools(unittest.TestCase):
         self.assertEqual(call_args[1]["json"]["manager"], "user789")
 
     @patch("servicenow_mcp.tools.user_tools.get_user")
-    @patch("requests.post")
-    def test_add_group_members(self, mock_post, mock_get_user):
+    @patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock)
+    async def test_add_group_members(self, mock_post, mock_get_user):
         """Test add_group_members function."""
         # Configure mocks
         mock_post_response = MagicMock()
@@ -360,7 +363,7 @@ class TestUserTools(unittest.TestCase):
         )
         
         # Call function
-        result = add_group_members(self.config, self.auth_manager, params)
+        result = await add_group_members(self.config, self.auth_manager, params)
         
         # Verify result
         self.assertTrue(result.success)
@@ -374,9 +377,9 @@ class TestUserTools(unittest.TestCase):
         self.assertEqual(call_args[1]["json"]["user"], "user123")
 
     @patch("servicenow_mcp.tools.user_tools.get_user")
-    @patch("requests.get")
-    @patch("requests.delete")
-    def test_remove_group_members(self, mock_delete, mock_get, mock_get_user):
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    @patch.object(httpx.AsyncClient, "delete", new_callable=AsyncMock)
+    async def test_remove_group_members(self, mock_delete, mock_get, mock_get_user):
         """Test remove_group_members function."""
         # Configure mocks
         mock_delete_response = MagicMock()
@@ -418,7 +421,7 @@ class TestUserTools(unittest.TestCase):
         )
         
         # Call function
-        result = remove_group_members(self.config, self.auth_manager, params)
+        result = await remove_group_members(self.config, self.auth_manager, params)
         
         # Verify result
         self.assertTrue(result.success)

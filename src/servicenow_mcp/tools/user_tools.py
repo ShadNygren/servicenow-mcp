@@ -7,10 +7,11 @@ This module provides tools for managing users and groups in ServiceNow.
 import logging
 from typing import List, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -151,7 +152,7 @@ class GroupResponse(BaseModel):
     group_name: Optional[str] = Field(None, description="Name of the affected group")
 
 
-def create_user(
+async def create_user(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateUserParams,
@@ -195,10 +196,11 @@ def create_user(
 
     # Make request
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -207,7 +209,7 @@ def create_user(
 
         # Handle role assignments if provided
         if params.roles and result.get("sys_id"):
-            assign_roles_to_user(config, auth_manager, result.get("sys_id"), params.roles)
+            await assign_roles_to_user(config, auth_manager, result.get("sys_id"), params.roles)
 
         return UserResponse(
             success=True,
@@ -216,7 +218,7 @@ def create_user(
             user_name=result.get("user_name"),
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create user: {e}")
         return UserResponse(
             success=False,
@@ -224,7 +226,7 @@ def create_user(
         )
 
 
-def update_user(
+async def update_user(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: UpdateUserParams,
@@ -271,10 +273,11 @@ def update_user(
 
     # Make request
     try:
-        response = requests.patch(
+        client = await get_async_client()
+        response = await client.patch(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -283,7 +286,7 @@ def update_user(
 
         # Handle role assignments if provided
         if params.roles:
-            assign_roles_to_user(config, auth_manager, params.user_id, params.roles)
+            await assign_roles_to_user(config, auth_manager, params.user_id, params.roles)
 
         return UserResponse(
             success=True,
@@ -292,7 +295,7 @@ def update_user(
             user_name=result.get("user_name"),
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to update user: {e}")
         return UserResponse(
             success=False,
@@ -300,7 +303,7 @@ def update_user(
         )
 
 
-def get_user(
+async def get_user(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: GetUserParams,
@@ -334,10 +337,11 @@ def get_user(
 
     # Make request
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -348,12 +352,12 @@ def get_user(
 
         return {"success": True, "message": "User found", "user": result[0]}
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to get user: {e}")
         return {"success": False, "message": f"Failed to get user: {str(e)}"}
 
 
-def list_users(
+async def list_users(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListUsersParams,
@@ -392,10 +396,11 @@ def list_users(
 
     # Make request
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -409,12 +414,12 @@ def list_users(
             "count": len(result),
         }
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to list users: {e}")
         return {"success": False, "message": f"Failed to list users: {str(e)}"}
 
 
-def list_groups(
+async def list_groups(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: ListGroupsParams,
@@ -451,10 +456,11 @@ def list_groups(
 
     # Make request
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -468,12 +474,12 @@ def list_groups(
             "count": len(result),
         }
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to list groups: {e}")
         return {"success": False, "message": f"Failed to list groups: {str(e)}"}
 
 
-def assign_roles_to_user(
+async def assign_roles_to_user(
     config: ServerConfig,
     auth_manager: AuthManager,
     user_id: str,
@@ -497,13 +503,13 @@ def assign_roles_to_user(
     success = True
     for role in roles:
         # First check if the role exists
-        role_id = get_role_id(config, auth_manager, role)
+        role_id = await get_role_id(config, auth_manager, role)
         if not role_id:
             logger.warning(f"Role '{role}' not found, skipping assignment")
             continue
 
         # Check if the user already has this role
-        if check_user_has_role(config, auth_manager, user_id, role_id):
+        if await check_user_has_role(config, auth_manager, user_id, role_id):
             logger.info(f"User already has role '{role}', skipping assignment")
             continue
 
@@ -514,21 +520,22 @@ def assign_roles_to_user(
         }
 
         try:
-            response = requests.post(
+            client = await get_async_client()
+            response = await client.post(
                 api_url,
                 json=data,
-                headers=auth_manager.get_headers(),
+                headers=await auth_manager.get_headers_async(),
                 timeout=config.timeout,
             )
             response.raise_for_status()
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             logger.error(f"Failed to assign role '{role}' to user: {e}")
             success = False
 
     return success
 
 
-def get_role_id(
+async def get_role_id(
     config: ServerConfig,
     auth_manager: AuthManager,
     role_name: str,
@@ -551,10 +558,11 @@ def get_role_id(
     }
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -565,12 +573,12 @@ def get_role_id(
 
         return result[0].get("sys_id")  # type: ignore[no-any-return]
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to get role ID: {e}")
         return None
 
 
-def check_user_has_role(
+async def check_user_has_role(
     config: ServerConfig,
     auth_manager: AuthManager,
     user_id: str,
@@ -595,10 +603,11 @@ def check_user_has_role(
     }
 
     try:
-        response = requests.get(
+        client = await get_async_client()
+        response = await client.get(
             api_url,
             params=query_params,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -606,12 +615,12 @@ def check_user_has_role(
         result = response.json().get("result", [])
         return len(result) > 0
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to check if user has role: {e}")
         return False
 
 
-def create_group(
+async def create_group(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: CreateGroupParams,
@@ -648,10 +657,11 @@ def create_group(
 
     # Make request
     try:
-        response = requests.post(
+        client = await get_async_client()
+        response = await client.post(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -661,7 +671,7 @@ def create_group(
 
         # Add members if provided
         if params.members and group_id:
-            add_group_members(
+            await add_group_members(
                 config,
                 auth_manager,
                 AddGroupMembersParams(group_id=group_id, members=params.members),
@@ -674,7 +684,7 @@ def create_group(
             group_name=result.get("name"),
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to create group: {e}")
         return GroupResponse(
             success=False,
@@ -682,7 +692,7 @@ def create_group(
         )
 
 
-def update_group(
+async def update_group(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: UpdateGroupParams,
@@ -719,10 +729,11 @@ def update_group(
 
     # Make request
     try:
-        response = requests.patch(
+        client = await get_async_client()
+        response = await client.patch(
             api_url,
             json=data,
-            headers=auth_manager.get_headers(),
+            headers=await auth_manager.get_headers_async(),
             timeout=config.timeout,
         )
         response.raise_for_status()
@@ -736,7 +747,7 @@ def update_group(
             group_name=result.get("name"),
         )
 
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to update group: {e}")
         return GroupResponse(
             success=False,
@@ -744,7 +755,7 @@ def update_group(
         )
 
 
-def add_group_members(
+async def add_group_members(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: AddGroupMembersParams,
@@ -769,9 +780,9 @@ def add_group_members(
         # Get user ID if username is provided
         user_id = member
         if not member.startswith("sys_id:"):
-            user = get_user(config, auth_manager, GetUserParams(user_name=member))
+            user = await get_user(config, auth_manager, GetUserParams(user_name=member))
             if not user.get("success"):
-                user = get_user(config, auth_manager, GetUserParams(email=member))
+                user = await get_user(config, auth_manager, GetUserParams(email=member))
 
             if user.get("success"):
                 user_id = user.get("user", {}).get("sys_id")
@@ -787,14 +798,15 @@ def add_group_members(
         }
 
         try:
-            response = requests.post(
+            client = await get_async_client()
+            response = await client.post(
                 api_url,
                 json=data,
-                headers=auth_manager.get_headers(),
+                headers=await auth_manager.get_headers_async(),
                 timeout=config.timeout,
             )
             response.raise_for_status()
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             logger.error(f"Failed to add member '{member}' to group: {e}")
             success = False
             failed_members.append(member)
@@ -811,7 +823,7 @@ def add_group_members(
     )
 
 
-def remove_group_members(
+async def remove_group_members(
     config: ServerConfig,
     auth_manager: AuthManager,
     params: RemoveGroupMembersParams,
@@ -834,9 +846,9 @@ def remove_group_members(
         # Get user ID if username is provided
         user_id = member
         if not member.startswith("sys_id:"):
-            user = get_user(config, auth_manager, GetUserParams(user_name=member))
+            user = await get_user(config, auth_manager, GetUserParams(user_name=member))
             if not user.get("success"):
-                user = get_user(config, auth_manager, GetUserParams(email=member))
+                user = await get_user(config, auth_manager, GetUserParams(email=member))
 
             if user.get("success"):
                 user_id = user.get("user", {}).get("sys_id")
@@ -854,10 +866,11 @@ def remove_group_members(
 
         try:
             # First find the membership record
-            response = requests.get(
+            client = await get_async_client()
+            response = await client.get(
                 api_url,
                 params=query_params,
-                headers=auth_manager.get_headers(),
+                headers=await auth_manager.get_headers_async(),
                 timeout=config.timeout,
             )
             response.raise_for_status()
@@ -872,14 +885,15 @@ def remove_group_members(
             membership_id = result[0].get("sys_id")
             delete_url = f"{api_url}/{membership_id}"
 
-            response = requests.delete(
+            client = await get_async_client()
+            response = await client.delete(
                 delete_url,
-                headers=auth_manager.get_headers(),
+                headers=await auth_manager.get_headers_async(),
                 timeout=config.timeout,
             )
             response.raise_for_status()
 
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             logger.error(f"Failed to remove member '{member}' from group: {e}")
             success = False
             failed_members.append(member)
