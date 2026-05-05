@@ -3,22 +3,37 @@ Shared helper utilities for ServiceNow MCP tool modules.
 
 These functions were previously duplicated across 8 tool files. Import them
 from here instead of redefining them locally.
+
+Phase 9.1 — async variants of HTTP-touching helpers added alongside the
+sync versions.  Sync helpers stay until the corresponding tool files are
+converted in Phase 9.2+.
 """
 
+import asyncio
 import json
 import logging
 import re
 import time
 from typing import Any, Callable, Dict, List, Optional, Type, TypeVar, cast
 
+import httpx
 import requests
 from pydantic import BaseModel
+
+from servicenow_mcp.utils.async_http import get_async_client
 
 logger = logging.getLogger(__name__)
 
 
 _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 _RETRYABLE_EXCEPTIONS = (requests.exceptions.ConnectionError, requests.exceptions.Timeout)
+_RETRYABLE_HTTPX_EXCEPTIONS = (
+    httpx.ConnectError,
+    httpx.ReadTimeout,
+    httpx.WriteTimeout,
+    httpx.ConnectTimeout,
+    httpx.PoolTimeout,
+)
 
 _REDACTED = "<redacted>"
 _SENSITIVE_HEADERS = frozenset(
@@ -273,25 +288,119 @@ def _make_request(
     return response  # type: ignore[return-value]
 
 
+async def _make_request_async(
+    method: str,
+    url: str,
+    max_retries: int = 3,
+    backoff_factor: float = 1.0,
+    rate_limit_tracker: Optional[RateLimitTracker] = None,
+    **kwargs: Any,
+) -> httpx.Response:
+    """Async version of :func:`_make_request` using the shared httpx.AsyncClient.
+
+    Same retry semantics, same rate-limit tracker integration, same debug-mode
+    request/response logging — just non-blocking.  Tools converted to
+    ``async def`` in Phase 9.2+ should call this in place of the sync version.
+
+    The shared client is pulled from :func:`async_http.get_async_client` so all
+    tool calls share connection pooling.
+
+    Args:
+        method: HTTP method name (case-insensitive): "GET", "POST", etc.
+        url: Request URL.
+        max_retries: Maximum retry attempts (0 = no retries).
+        backoff_factor: Multiplier for exponential delay (seconds).
+        rate_limit_tracker: Tracker to update with rate-limit headers.
+            Defaults to the module-level singleton.
+        **kwargs: Passed verbatim to ``client.request`` (e.g. ``params``,
+            ``headers``, ``json``, ``content``, ``timeout``).
+
+    Returns:
+        The :class:`httpx.Response` from the final attempt.  Caller is
+        responsible for ``response.raise_for_status()``.
+    """
+    tracker: RateLimitTracker = (
+        rate_limit_tracker if rate_limit_tracker is not None else _rate_limit_tracker
+    )
+    client = await get_async_client()
+    response: Optional[httpx.Response] = None
+    _debug = logger.isEnabledFor(logging.DEBUG)
+
+    for attempt in range(max_retries + 1):
+        tracker.check_and_throttle()
+        if _debug:
+            logger.debug(
+                ">> %s %s | params=%s headers=%s body=%s",
+                method.upper(),
+                url,
+                _truncate_body(kwargs.get("params")),
+                _redact_headers(kwargs.get("headers")),
+                _truncate_body(kwargs.get("json") or kwargs.get("data") or kwargs.get("content")),
+            )
+        try:
+            _t0 = time.monotonic()
+            response = await client.request(method.upper(), url, **kwargs)
+            _elapsed = time.monotonic() - _t0
+            tracker.update(response)  # type: ignore[arg-type]  # httpx.Response also has .headers
+            if _debug:
+                try:
+                    resp_body = _truncate_body(response.json())
+                except Exception:
+                    resp_body = _truncate_body(response.text)
+                logger.debug(
+                    "<< %s in %.3fs | body=%s",
+                    response.status_code,
+                    _elapsed,
+                    resp_body,
+                )
+            if response.status_code not in _RETRYABLE_STATUS_CODES or attempt == max_retries:
+                return response
+            if response.status_code == 429:
+                delay = float(
+                    response.headers.get("Retry-After") or backoff_factor * (2 ** attempt)
+                )
+            else:
+                delay = backoff_factor * (2 ** attempt)
+            logger.warning(
+                "HTTP %s from %s; retrying in %.1fs (attempt %d/%d)",
+                response.status_code, url, delay, attempt + 1, max_retries,
+            )
+            await asyncio.sleep(delay)
+        except _RETRYABLE_HTTPX_EXCEPTIONS as exc:
+            if attempt == max_retries:
+                raise
+            delay = backoff_factor * (2 ** attempt)
+            logger.warning(
+                "Request error (%s); retrying in %.1fs (attempt %d/%d)",
+                exc, delay, attempt + 1, max_retries,
+            )
+            await asyncio.sleep(delay)
+
+    return response  # type: ignore[return-value]
+
+
 T = TypeVar("T", bound=BaseModel)
 
 
 def _format_http_error(e: Exception) -> str:
-    """Extract a readable message from a requests exception.
+    """Extract a readable message from a requests / httpx exception.
 
-    For HTTPError (raised by raise_for_status()), tries to parse the ServiceNow
-    JSON error body which typically contains ``error.message`` and
-    ``error.detail``. Falls back to ``str(e)`` for network errors or responses
-    that cannot be parsed as JSON.
+    For HTTPError (sync ``requests.HTTPError`` or async ``httpx.HTTPStatusError``),
+    tries to parse the ServiceNow JSON error body which typically contains
+    ``error.message`` and ``error.detail``.  Falls back to ``str(e)`` for network
+    errors or responses that cannot be parsed as JSON.
 
     Pulled forward from torkian commit 2f3f80c (Phase-5 error-message rollout
     deferred). Ports just the helper to unblock bulk_tools.py without taking
     the full per-tool error-message rewrite that depends on Phase-5 tools.
     """
-    if isinstance(e, requests.HTTPError) and e.response is not None:
-        status = e.response.status_code
+    # httpx.HTTPStatusError carries .response just like requests.HTTPError;
+    # treat both the same way.
+    response = getattr(e, "response", None)
+    if isinstance(e, (requests.HTTPError, httpx.HTTPStatusError)) and response is not None:
+        status = response.status_code
         try:
-            body = e.response.json()
+            body = response.json()
             err = body.get("error", {})
             if isinstance(err, dict):
                 msg = err.get("message", "")
@@ -302,7 +411,7 @@ def _format_http_error(e: Exception) -> str:
                     return f"HTTP {status}: {msg}"
         except Exception:
             pass
-        raw = e.response.text
+        raw = response.text
         return f"HTTP {status}: {raw[:300]}" if raw else f"HTTP {status}"
     return str(e)
 

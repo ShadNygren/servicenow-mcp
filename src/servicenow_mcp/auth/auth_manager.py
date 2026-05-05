@@ -1,5 +1,9 @@
 """
 Authentication manager for the ServiceNow MCP server.
+
+Phase 9.1 — async versions of the OAuth-fetch and header-build entrypoints
+added alongside the sync versions.  Sync methods stay until Phase 9.2+
+converts the tools that call them.
 """
 
 import base64
@@ -7,10 +11,12 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 
+import httpx
 import requests
 
+from servicenow_mcp.utils.async_http import get_async_client
 from servicenow_mcp.utils.config import AuthConfig, AuthType
 
 
@@ -53,7 +59,9 @@ class AuthManager:
         self.refresh_token_value: Optional[str] = None
     
     @staticmethod
-    def _extract_oauth_error_code(response: requests.Response) -> str:
+    def _extract_oauth_error_code(
+        response: Union[requests.Response, httpx.Response],
+    ) -> str:
         """Extract a non-sensitive OAuth error code from a response, or 'unknown_error'."""
         try:
             payload = response.json()
@@ -63,39 +71,35 @@ class AuthManager:
             pass
         return "non_json_response"
 
-    def get_headers(self) -> Dict[str, str]:
+    def _build_basic_or_apikey_headers(self) -> Dict[str, str]:
+        """Build headers for non-OAuth auth + extra headers.  No HTTP I/O.
+
+        Shared between :meth:`get_headers` (sync) and :meth:`get_headers_async`
+        (async) — both produce the same result for Basic / API-Key flows; only
+        the OAuth path differs in how it fetches the token.
         """
-        Get the authentication headers for API requests.
-        
-        Returns:
-            Dict[str, str]: Headers to include in API requests.
-        """
-        headers = {
+        headers: Dict[str, str] = {
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
-        
+
         if self.config.type == AuthType.BASIC:
             if not self.config.basic:
                 raise ValueError("Basic auth configuration is required")
-            
             auth_str = f"{self.config.basic.username}:{self.config.basic.password}"
             encoded = base64.b64encode(auth_str.encode()).decode()
             headers["Authorization"] = f"Basic {encoded}"
-        
-        elif self.config.type == AuthType.OAUTH:
-            if self._oauth_token_is_expired():
-                self._get_oauth_token()
 
-            headers["Authorization"] = f"{self.token_type} {self.token}"
-        
         elif self.config.type == AuthType.API_KEY:
             if not self.config.api_key:
                 raise ValueError("API key configuration is required")
-            
             headers[self.config.api_key.header_name] = self.config.api_key.api_key
 
-        # Merge any extra headers supplied via the environment.
+        return headers
+
+    @staticmethod
+    def _merge_extra_headers(headers: Dict[str, str]) -> None:
+        """Merge ``SERVICENOW_EXTRA_HTTP_HEADERS`` (or legacy ``EXTRA_HTTP_HEADERS``) in place."""
         raw = (
             os.environ.get("SERVICENOW_EXTRA_HTTP_HEADERS")
             or os.environ.get("EXTRA_HTTP_HEADERS")
@@ -104,6 +108,47 @@ class AuthManager:
         if raw:
             headers.update(json.loads(raw))
 
+    def get_headers(self) -> Dict[str, str]:
+        """Get the authentication headers for API requests (sync).
+
+        For OAuth, the token is fetched / refreshed via the sync ``requests``
+        path.  Tools converted to async in Phase 9.2+ should use
+        :meth:`get_headers_async` so the OAuth token fetch does not block the
+        event loop.
+        """
+        if self.config.type == AuthType.OAUTH:
+            headers: Dict[str, str] = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            }
+            if self._oauth_token_is_expired():
+                self._get_oauth_token()
+            headers["Authorization"] = f"{self.token_type} {self.token}"
+        else:
+            headers = self._build_basic_or_apikey_headers()
+
+        self._merge_extra_headers(headers)
+        return headers
+
+    async def get_headers_async(self) -> Dict[str, str]:
+        """Async version of :meth:`get_headers`.
+
+        OAuth token fetch / refresh runs on the shared
+        :class:`httpx.AsyncClient`; Basic / API-Key paths require no I/O and
+        return the same dict shape as the sync version.
+        """
+        if self.config.type == AuthType.OAUTH:
+            headers: Dict[str, str] = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            }
+            if self._oauth_token_is_expired():
+                await self._get_oauth_token_async()
+            headers["Authorization"] = f"{self.token_type} {self.token}"
+        else:
+            headers = self._build_basic_or_apikey_headers()
+
+        self._merge_extra_headers(headers)
         return headers
     
     def _get_oauth_token(self):
@@ -183,7 +228,86 @@ class AuthManager:
             f"{client_credentials_status} ({client_credentials_error}); "
             "no username/password configured for password-grant fallback."
         )
-    
+
+    def _build_oauth_request(self) -> tuple[str, Dict[str, str], Dict[str, str]]:
+        """Compute the (token_url, headers, base data) for an OAuth token request.
+
+        Shared between the sync and async paths.  No I/O.
+        """
+        if not self.config.oauth:
+            raise ValueError("OAuth configuration is required")
+        oauth_config = self.config.oauth
+
+        token_url = oauth_config.token_url
+        if not token_url:
+            if not self.instance_url:
+                raise ValueError("Instance URL is required for OAuth authentication")
+            token_url = f"{self.instance_url.rstrip('/')}/oauth_token.do"
+
+        auth_str = f"{oauth_config.client_id}:{oauth_config.client_secret}"
+        auth_header = base64.b64encode(auth_str.encode()).decode()
+        headers = {
+            "Authorization": f"Basic {auth_header}",
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+
+        data_client_credentials: Dict[str, str] = {"grant_type": "client_credentials"}
+        if oauth_config.resource_url:
+            data_client_credentials["resource"] = oauth_config.resource_url
+
+        return token_url, headers, data_client_credentials
+
+    async def _get_oauth_token_async(self) -> None:
+        """Async version of :meth:`_get_oauth_token`.
+
+        Uses the shared :class:`httpx.AsyncClient` so concurrent OAuth refreshes
+        across the server share the connection pool.
+        """
+        if not self.config.oauth:
+            raise ValueError("OAuth configuration is required")
+        oauth_config = self.config.oauth
+
+        token_url, headers, data_client_credentials = self._build_oauth_request()
+        client = await get_async_client()
+
+        logger.info("Attempting OAuth client_credentials grant (async)")
+        response = await client.post(token_url, headers=headers, data=data_client_credentials)
+        logger.info("OAuth client_credentials response status: %s", response.status_code)
+
+        if response.status_code == 200:
+            self._store_token_response(response.json())
+            return
+
+        client_credentials_error = self._extract_oauth_error_code(response)
+        client_credentials_status = response.status_code
+
+        if oauth_config.username and oauth_config.password:
+            data_password = {
+                "grant_type": "password",
+                "username": oauth_config.username,
+                "password": oauth_config.password,
+            }
+            logger.info("Attempting OAuth password grant (async)")
+            response = await client.post(token_url, headers=headers, data=data_password)
+            logger.info("OAuth password grant response status: %s", response.status_code)
+
+            if response.status_code == 200:
+                self._store_token_response(response.json())
+                return
+
+            password_error = self._extract_oauth_error_code(response)
+            raise ValueError(
+                f"Failed to get OAuth token: client_credentials returned "
+                f"{client_credentials_status} ({client_credentials_error}); "
+                f"password grant returned {response.status_code} ({password_error})."
+            )
+
+        raise ValueError(
+            f"Failed to get OAuth token: client_credentials returned "
+            f"{client_credentials_status} ({client_credentials_error}); "
+            "no username/password configured for password-grant fallback."
+        )
+
     def _oauth_token_is_expired(self) -> bool:
         """True if there is no cached OAuth token, or it is within the safety
         margin of expiry."""
