@@ -1,7 +1,9 @@
 
-import unittest
-from unittest.mock import MagicMock, patch
-import requests
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import httpx
+
 from servicenow_mcp.tools.case_tools import (
     list_cases,
     get_case_by_number,
@@ -21,8 +23,17 @@ def _make_config():
 
 def _make_auth():
     auth_manager = MagicMock(spec=AuthManager)
-    auth_manager.get_headers.return_value = {"Authorization": "Bearer FAKE_TOKEN"}
+    auth_manager.get_headers_async = AsyncMock(return_value={"Authorization": "Bearer FAKE_TOKEN"})
     return auth_manager
+
+
+def _make_response(json_body=None):
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.headers = {}
+    resp.raise_for_status = MagicMock()
+    resp.json = MagicMock(return_value=json_body or {})
+    return resp
 
 
 SAMPLE_CASE = {
@@ -46,31 +57,24 @@ SAMPLE_CASE_DICT_ASSIGNED = {
 }
 
 
-class TestListCases(unittest.TestCase):
+class TestListCases(IsolatedAsyncioTestCase):
 
-    @patch('servicenow_mcp.tools.case_tools.requests.get')
-    def test_list_cases_success(self, mock_get):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"result": [SAMPLE_CASE]}
-        mock_get.return_value = mock_response
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_cases_success(self, mock_get):
+        mock_get.return_value = _make_response(json_body={"result": [SAMPLE_CASE]})
 
-        result = list_cases(_make_config(), _make_auth(), ListCasesParams())
+        result = await list_cases(_make_config(), _make_auth(), ListCasesParams())
 
         self.assertTrue(result["success"])
         self.assertEqual(len(result["cases"]), 1)
         self.assertEqual(result["cases"][0]["number"], "CS0017600")
-        # Verify query goes to task table with sys_class_name filter
         call_args = mock_get.call_args
         self.assertIn("/table/task", call_args[0][0])
         self.assertIn("sys_class_name=sn_customerservice_case", call_args[1]["params"]["sysparm_query"])
 
-    @patch('servicenow_mcp.tools.case_tools.requests.get')
-    def test_list_cases_with_filters(self, mock_get):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"result": [SAMPLE_CASE]}
-        mock_get.return_value = mock_response
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_cases_with_filters(self, mock_get):
+        mock_get.return_value = _make_response(json_body={"result": [SAMPLE_CASE]})
 
         params = ListCasesParams(
             state="New",
@@ -79,7 +83,7 @@ class TestListCases(unittest.TestCase):
             contact_type="email",
             created_after="2025-01-01",
         )
-        result = list_cases(_make_config(), _make_auth(), params)
+        result = await list_cases(_make_config(), _make_auth(), params)
 
         self.assertTrue(result["success"])
         query = mock_get.call_args[1]["params"]["sysparm_query"]
@@ -89,126 +93,102 @@ class TestListCases(unittest.TestCase):
         self.assertIn("contact_type=email", query)
         self.assertIn("sys_created_on>=2025-01-01", query)
 
-    @patch('servicenow_mcp.tools.case_tools.requests.get')
-    def test_list_cases_empty_results(self, mock_get):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"result": []}
-        mock_get.return_value = mock_response
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_cases_empty_results(self, mock_get):
+        mock_get.return_value = _make_response(json_body={"result": []})
 
-        result = list_cases(_make_config(), _make_auth(), ListCasesParams())
+        result = await list_cases(_make_config(), _make_auth(), ListCasesParams())
 
         self.assertTrue(result["success"])
         self.assertEqual(result["cases"], [])
         self.assertEqual(result["message"], "Found 0 cases")
 
-    @patch('servicenow_mcp.tools.case_tools.requests.get')
-    def test_list_cases_request_error(self, mock_get):
-        mock_get.side_effect = requests.RequestException("Connection timeout")
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_cases_request_error(self, mock_get):
+        mock_get.side_effect = httpx.ConnectError("Connection timeout")
 
-        result = list_cases(_make_config(), _make_auth(), ListCasesParams())
+        result = await list_cases(_make_config(), _make_auth(), ListCasesParams())
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to list cases", result["message"])
         self.assertEqual(result["cases"], [])
 
-    @patch('servicenow_mcp.tools.case_tools.requests.get')
-    def test_list_cases_limit_cap(self, mock_get):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"result": []}
-        mock_get.return_value = mock_response
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_cases_limit_cap(self, mock_get):
+        mock_get.return_value = _make_response(json_body={"result": []})
 
-        # Request 500 but should be capped at 200
-        list_cases(_make_config(), _make_auth(), ListCasesParams(limit=500))
+        await list_cases(_make_config(), _make_auth(), ListCasesParams(limit=500))
 
         call_params = mock_get.call_args[1]["params"]
         self.assertEqual(call_params["sysparm_limit"], 200)
 
-    @patch('servicenow_mcp.tools.case_tools.requests.get')
-    def test_list_cases_assigned_to_dict_handling(self, mock_get):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"result": [SAMPLE_CASE_DICT_ASSIGNED]}
-        mock_get.return_value = mock_response
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_list_cases_assigned_to_dict_handling(self, mock_get):
+        mock_get.return_value = _make_response(json_body={"result": [SAMPLE_CASE_DICT_ASSIGNED]})
 
-        result = list_cases(_make_config(), _make_auth(), ListCasesParams())
+        result = await list_cases(_make_config(), _make_auth(), ListCasesParams())
 
         self.assertTrue(result["success"])
         self.assertEqual(result["cases"][0]["assigned_to"], "Jane Smith")
 
 
-class TestGetCaseByNumber(unittest.TestCase):
+class TestGetCaseByNumber(IsolatedAsyncioTestCase):
 
-    @patch('servicenow_mcp.tools.case_tools.requests.get')
-    def test_get_case_by_number_success(self, mock_get):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"result": [SAMPLE_CASE]}
-        mock_get.return_value = mock_response
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_case_by_number_success(self, mock_get):
+        mock_get.return_value = _make_response(json_body={"result": [SAMPLE_CASE]})
 
         params = GetCaseByNumberParams(case_number="CS0017600")
-        result = get_case_by_number(_make_config(), _make_auth(), params)
+        result = await get_case_by_number(_make_config(), _make_auth(), params)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["message"], "Case CS0017600 found")
         self.assertEqual(result["case"]["number"], "CS0017600")
         self.assertEqual(result["case"]["short_description"], "Levy | Wrigley Field | Shift4 Inquiry")
-        # Verify query includes both sys_class_name and number
         query = mock_get.call_args[1]["params"]["sysparm_query"]
         self.assertIn("sys_class_name=sn_customerservice_case", query)
         self.assertIn("number=CS0017600", query)
 
-    @patch('servicenow_mcp.tools.case_tools.requests.get')
-    def test_get_case_by_number_not_found(self, mock_get):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"result": []}
-        mock_get.return_value = mock_response
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_case_by_number_not_found(self, mock_get):
+        mock_get.return_value = _make_response(json_body={"result": []})
 
         params = GetCaseByNumberParams(case_number="CS9999999")
-        result = get_case_by_number(_make_config(), _make_auth(), params)
+        result = await get_case_by_number(_make_config(), _make_auth(), params)
 
         self.assertFalse(result["success"])
         self.assertEqual(result["message"], "Case not found: CS9999999")
 
-    @patch('servicenow_mcp.tools.case_tools.requests.get')
-    def test_get_case_by_number_request_error(self, mock_get):
-        mock_get.side_effect = requests.RequestException("Connection refused")
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_get_case_by_number_request_error(self, mock_get):
+        mock_get.side_effect = httpx.ConnectError("Connection refused")
 
         params = GetCaseByNumberParams(case_number="CS0017600")
-        result = get_case_by_number(_make_config(), _make_auth(), params)
+        result = await get_case_by_number(_make_config(), _make_auth(), params)
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to fetch case", result["message"])
 
 
-class TestSearchCases(unittest.TestCase):
+class TestSearchCases(IsolatedAsyncioTestCase):
 
-    @patch('servicenow_mcp.tools.case_tools.requests.get')
-    def test_search_cases_success(self, mock_get):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"result": [SAMPLE_CASE]}
-        mock_get.return_value = mock_response
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_search_cases_success(self, mock_get):
+        mock_get.return_value = _make_response(json_body={"result": [SAMPLE_CASE]})
 
         params = SearchCasesParams(search_text="Shift4")
-        result = search_cases(_make_config(), _make_auth(), params)
+        result = await search_cases(_make_config(), _make_auth(), params)
 
         self.assertTrue(result["success"])
         self.assertEqual(len(result["cases"]), 1)
         self.assertIn("Shift4", result["message"])
-        # Verify LIKE search in query
         query = mock_get.call_args[1]["params"]["sysparm_query"]
         self.assertIn("short_descriptionLIKEShift4", query)
         self.assertIn("descriptionLIKEShift4", query)
 
-    @patch('servicenow_mcp.tools.case_tools.requests.get')
-    def test_search_cases_with_filters(self, mock_get):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"result": []}
-        mock_get.return_value = mock_response
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_search_cases_with_filters(self, mock_get):
+        mock_get.return_value = _make_response(json_body={"result": []})
 
         params = SearchCasesParams(
             search_text="Shift4",
@@ -216,7 +196,7 @@ class TestSearchCases(unittest.TestCase):
             priority="3 - Moderate",
             created_after="2025-01-01",
         )
-        result = search_cases(_make_config(), _make_auth(), params)
+        result = await search_cases(_make_config(), _make_auth(), params)
 
         self.assertTrue(result["success"])
         query = mock_get.call_args[1]["params"]["sysparm_query"]
@@ -224,29 +204,22 @@ class TestSearchCases(unittest.TestCase):
         self.assertIn("priority=3 - Moderate", query)
         self.assertIn("sys_created_on>=2025-01-01", query)
 
-    @patch('servicenow_mcp.tools.case_tools.requests.get')
-    def test_search_cases_limit_cap(self, mock_get):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"result": []}
-        mock_get.return_value = mock_response
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_search_cases_limit_cap(self, mock_get):
+        mock_get.return_value = _make_response(json_body={"result": []})
 
-        search_cases(_make_config(), _make_auth(), SearchCasesParams(search_text="test", limit=999))
+        await search_cases(_make_config(), _make_auth(), SearchCasesParams(search_text="test", limit=999))
 
         call_params = mock_get.call_args[1]["params"]
         self.assertEqual(call_params["sysparm_limit"], 200)
 
-    @patch('servicenow_mcp.tools.case_tools.requests.get')
-    def test_search_cases_request_error(self, mock_get):
-        mock_get.side_effect = requests.RequestException("Server error")
+    @patch.object(httpx.AsyncClient, "get", new_callable=AsyncMock)
+    async def test_search_cases_request_error(self, mock_get):
+        mock_get.side_effect = httpx.ConnectError("Server error")
 
         params = SearchCasesParams(search_text="test")
-        result = search_cases(_make_config(), _make_auth(), params)
+        result = await search_cases(_make_config(), _make_auth(), params)
 
         self.assertFalse(result["success"])
         self.assertIn("Failed to search cases", result["message"])
         self.assertEqual(result["cases"], [])
-
-
-if __name__ == '__main__':
-    unittest.main()

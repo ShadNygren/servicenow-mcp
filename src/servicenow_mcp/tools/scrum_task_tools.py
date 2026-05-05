@@ -8,12 +8,13 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.utils.config import ServerConfig
-from servicenow_mcp.utils.helpers import _get_headers, _get_instance_url, _unwrap_and_validate_params
+from servicenow_mcp.utils.async_http import get_async_client
+from servicenow_mcp.utils.helpers import _get_headers_async, _get_instance_url, _unwrap_and_validate_params
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +66,7 @@ class ListScrumTasksParams(BaseModel):
     query: Optional[str] = Field(None, description="Additional query string")
 
 
-def create_scrum_task(
+async def create_scrum_task(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -135,7 +136,7 @@ def create_scrum_task(
         }
 
     # Get the headers
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {
             "success": False,
@@ -149,7 +150,9 @@ def create_scrum_task(
     url = f"{instance_url}/api/now/table/rm_scrum_task"
     
     try:
-        response = requests.post(url, json=data, headers=headers)
+        client = await get_async_client()
+
+        response = await client.post(url, json=data, headers=headers)
         response.raise_for_status()
         
         result = response.json()
@@ -159,14 +162,14 @@ def create_scrum_task(
             "message": "Scrum Task created successfully",
             "scrum_task": result["result"],
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error creating scrum task: {e}")
         return {
             "success": False,
             "message": f"Error creating scrum task: {str(e)}",
         }
 
-def update_scrum_task(
+async def update_scrum_task(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -234,7 +237,7 @@ def update_scrum_task(
         }
 
     # Get the headers
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {
             "success": False,
@@ -248,7 +251,9 @@ def update_scrum_task(
     url = f"{instance_url}/api/now/table/rm_scrum_task/{validated_params.scrum_task_id}"
     
     try:
-        response = requests.put(url, json=data, headers=headers)
+        client = await get_async_client()
+
+        response = await client.put(url, json=data, headers=headers)
         response.raise_for_status()
         
         result = response.json()
@@ -258,14 +263,14 @@ def update_scrum_task(
             "message": "Scrum Task updated successfully",
             "scrum_task": result["result"],
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error updating scrum task: {e}")
         return {
             "success": False,
             "message": f"Error updating scrum task: {str(e)}",
         }
 
-def list_scrum_tasks(
+async def list_scrum_tasks(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -326,7 +331,7 @@ def list_scrum_tasks(
         }
     
     # Get the headers
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {
             "success": False,
@@ -344,7 +349,9 @@ def list_scrum_tasks(
     }
     
     try:
-        response = requests.get(url, headers=headers, params=params)
+        client = await get_async_client()
+
+        response = await client.get(url, headers=headers, params=params)
         response.raise_for_status()
         
         result = response.json()
@@ -359,7 +366,7 @@ def list_scrum_tasks(
             "count": count,
             "total": count,  # Use count as total if total is not provided
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error listing stories: {e}")
         return {
             "success": False,
