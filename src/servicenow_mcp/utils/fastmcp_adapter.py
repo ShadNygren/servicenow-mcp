@@ -31,6 +31,7 @@ from typing import Annotated, Any, Callable, Type
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
+from pydantic.fields import FieldInfo
 from pydantic_core import PydanticUndefined
 
 from servicenow_mcp.auth.auth_manager import AuthManager
@@ -64,20 +65,45 @@ def register_tool(
     annotations: dict[str, Any] = {}
 
     for field_name, info in fields.items():
-        # Annotated[T, FieldInfo] preserves Field(description=, default=, ...)
-        # so FastMCP's schema generator sees the same metadata Pydantic does.
-        # Mypy can't follow the dynamic Annotated subscription (info.annotation
-        # is Any | None at type-check time), but at runtime it's always a
-        # concrete type from the Pydantic model definition.
-        annotated_type = Annotated[info.annotation, info]  # type: ignore[name-defined]
-        annotations[field_name] = annotated_type
-
         if info.is_required():
             default: Any = inspect.Parameter.empty
         elif info.default is not PydanticUndefined:
             default = info.default
+        elif info.default_factory is not None:
+            # Field uses default_factory (e.g. Field(default_factory=list)).
+            # FastMCP's func_metadata creates a Pydantic model from the wrapper
+            # signature, and Pydantic rejects fields that carry both `default`
+            # (from the inspect.Parameter) and `default_factory` (from the
+            # FieldInfo) — even when they're consistent. So we materialise the
+            # factory's value onto the Parameter and rebuild the FieldInfo
+            # below with the factory stripped out.
+            try:
+                default = info.default_factory()  # type: ignore[call-arg, misc]
+            except TypeError:
+                # Pydantic 2.10+ allows default_factory(validated_data); fall
+                # back to None and accept that the schema will mark this as
+                # optional with no concrete default.
+                default = None
         else:
             default = None
+
+        # Annotated[T, FieldInfo] preserves Field(description=, default=, ...)
+        # so FastMCP's schema generator sees the same metadata Pydantic does.
+        # When we materialised a default from a factory above, rebuild the
+        # FieldInfo without default_factory so create_model accepts it.
+        if info.default_factory is not None and not info.is_required():
+            field_info_for_schema = FieldInfo.merge_field_infos(
+                info,
+                default=default,
+            )
+            field_info_for_schema.default_factory = None
+        else:
+            field_info_for_schema = info
+        # Mypy can't follow the dynamic Annotated subscription (info.annotation
+        # is Any | None at type-check time), but at runtime it's always a
+        # concrete type from the Pydantic model definition.
+        annotated_type = Annotated[info.annotation, field_info_for_schema]  # type: ignore[name-defined]
+        annotations[field_name] = annotated_type
 
         sig_params.append(
             inspect.Parameter(
