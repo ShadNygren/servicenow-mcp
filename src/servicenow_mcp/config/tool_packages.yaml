@@ -72,7 +72,9 @@ catalog_builder:
   - create_ui_policy
   - create_ui_policy_action
   - create_user_criteria
-  - create_user_criteria_condition
+  # NOTE: create_user_criteria_condition was listed historically but never
+  # implemented. Use update_user_criteria with conditions= or
+  # advanced_condition= to attach conditions to a user criteria record.
   # Optimization
   - get_optimization_recommendations
 
@@ -422,7 +424,9 @@ full:
   - get_syslog_entry
   # Catalog Criteria
   - create_user_criteria
-  - create_user_criteria_condition
+  # NOTE: create_user_criteria_condition was listed historically but never
+  # implemented. Use update_user_criteria with conditions= or
+  # advanced_condition= to attach conditions to a user criteria record.
   # UI Policy
   - create_ui_policy
   - create_ui_policy_action

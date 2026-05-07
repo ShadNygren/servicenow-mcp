@@ -103,3 +103,51 @@ async def test_schema_uses_field_metadata_for_both_dispatch_paths() -> None:
     assert schema["properties"]["short_description"]["description"] == "Short desc of the thing"
     assert schema["properties"]["priority"]["default"] == "3"
     assert schema["required"] == ["short_description"]
+
+
+class _DefaultFactoryParams(BaseModel):
+    """Regression: a field using ``default_factory`` (not ``default``).
+
+    Before Phase 9.11, ``register_tool`` placed the materialised default value
+    on the inspect.Parameter while leaving ``default_factory=list`` on the
+    FieldInfo passed via ``Annotated``. FastMCP's create_model then saw both
+    ``default`` and ``default_factory`` on the same generated field and raised
+    ``TypeError: cannot specify both default and default_factory``.
+    """
+
+    name: str = Field(..., description="A required string")
+    items: list[str] = Field(default_factory=list, description="Items list")
+
+
+async def _default_factory_impl(
+    config: Any, auth_manager: Any, params: _DefaultFactoryParams
+) -> dict:
+    return {"name": params.name, "count": len(params.items)}
+
+
+async def test_default_factory_field_does_not_collide_with_default() -> None:
+    """register_tool must accept Pydantic models with default_factory fields.
+
+    This was an inert bug pre-9.11: tools whose params model had any
+    ``default_factory`` field silently failed to register. Wiring the
+    twelve flow tools surfaced four such tools (create_flow,
+    add_steps_to_flow, add_subflow_step_to_flow, add_logic_to_flow).
+    """
+    mcp = FastMCP("test", stateless_http=True)
+    register_tool(
+        mcp,
+        name="t_factory",
+        description="d",
+        impl=_default_factory_impl,
+        params_model=_DefaultFactoryParams,
+        config=MagicMock(),
+        auth_manager=MagicMock(),
+    )
+    tool = next(t for t in await mcp.list_tools() if t.name == "t_factory")
+    schema = tool.inputSchema
+    assert schema["required"] == ["name"]
+    # The materialised default (an empty list) should appear in the schema.
+    assert schema["properties"]["items"]["default"] == []
+
+    result = await mcp.call_tool("t_factory", {"name": "x"})
+    assert "x" in result[0].text

@@ -600,8 +600,9 @@ If you exceed any of these limits, the right move is autoscaling — Cloud Run /
 | 9.8 | acl, user, workflow, change | v0.9.8 |
 | 9.9 | flow_tools (4730 lines, 57 HTTP calls) | v0.9.9 |
 | 9.10 | OAuth concurrency lock, FastMCP lifespan integration, this documentation | v0.9.10 |
+| 9.11 | Wired 12 unregistered flow tools (`delete_flow`, `execute_flow`, `get_flow_execution_history`/`_detail`, `delete_subflow`, `delete_action`, `add_steps_to_flow`, `add_subflow_step_to_flow`, `remove_steps_from_flow`, `add_logic_to_flow`, `list_flow_logic_types`, `list_flow_io`); fixed an inert pre-existing FastMCP-adapter bug (`default` + `default_factory` collision) that had silently dropped `create_flow`; tool count 198 → 211 | v0.9.11 |
 
-35 of 35 tool files converted; 257 HTTP call sites moved from `requests` to `httpx.AsyncClient`. 963 tests passing, mypy clean (build-blocking gate), ruff clean.
+35 of 35 tool files converted; 257 HTTP call sites moved from `requests` to `httpx.AsyncClient`. 964 tests passing, mypy clean (build-blocking gate), ruff clean.
 
 ## Authentication Methods
 

@@ -504,13 +504,29 @@ from servicenow_mcp.tools.acl_tools import list_security_attributes as list_secu
 from servicenow_mcp.tools.acl_tools import update_acl as update_acl_tool
 from servicenow_mcp.tools.acl_tools import update_role as update_role_tool
 from servicenow_mcp.tools.flow_tools import (
+    AddLogicToFlowParams,
+    AddLogicToFlowResponse,
+    AddStepsToFlowParams,
+    AddStepsToFlowResponse,
+    AddSubflowStepToFlowParams,
+    AddSubflowStepToFlowResponse,
     CreateActionParams,
     CreateFlowParams,
     CreateFlowResponse,
     CreateSubflowParams,
+    DeleteActionParams,
+    DeleteArtifactResponse,
+    DeleteFlowParams,
+    DeleteSubflowParams,
+    ExecuteFlowParams,
+    ExecuteFlowResponse,
     GetActionParams,
     GetArtifactResponse,
     GetFlowActionsParams,
+    GetFlowExecutionDetailParams,
+    GetFlowExecutionDetailResult,
+    GetFlowExecutionHistoryParams,
+    GetFlowExecutionHistoryResult,
     GetFlowParams,
     GetFlowTriggersParams,
     GetFlowVersionParams,
@@ -523,6 +539,10 @@ from servicenow_mcp.tools.flow_tools import (
     ListActionTypesParams,
     ListActionTypesResult,
     ListArtifactsResponse,
+    ListFlowIOParams,
+    ListFlowIOResult,
+    ListFlowLogicTypesParams,
+    ListFlowLogicTypesResult,
     ListFlowsParams,
     ListSubflowsParams,
     ListTriggerTypesParams,
@@ -533,6 +553,8 @@ from servicenow_mcp.tools.flow_tools import (
     PublishSubflowParams,
     CloneFlowParams,
     CloneFlowResponse,
+    RemoveStepsFromFlowParams,
+    RemoveStepsFromFlowResponse,
     UpdateFlowTriggerParams,
     UpdateFlowTriggerResponse,
     UpdateActionParams,
@@ -540,14 +562,23 @@ from servicenow_mcp.tools.flow_tools import (
     UpdateSubflowParams,
 )
 from servicenow_mcp.tools.flow_tools import (
+    add_logic_to_flow as add_logic_to_flow_tool,
+    add_steps_to_flow as add_steps_to_flow_tool,
+    add_subflow_step_to_flow as add_subflow_step_to_flow_tool,
     create_action as create_action_tool,
     create_flow as create_flow_tool,
     clone_flow as clone_flow_tool,
+    delete_action as delete_action_tool,
+    delete_flow as delete_flow_tool,
+    delete_subflow as delete_subflow_tool,
+    execute_flow as execute_flow_tool,
     update_flow_trigger as update_flow_trigger_tool,
     create_subflow as create_subflow_tool,
     get_action as get_action_tool,
     get_flow as get_flow_tool,
     get_flow_actions as get_flow_actions_tool,
+    get_flow_execution_detail as get_flow_execution_detail_tool,
+    get_flow_execution_history as get_flow_execution_history_tool,
     get_flow_triggers as get_flow_triggers_tool,
     get_flow_version as get_flow_version_tool,
     get_subflow as get_subflow_tool,
@@ -555,12 +586,15 @@ from servicenow_mcp.tools.flow_tools import (
     list_action_type_outputs as list_action_type_outputs_tool,
     list_action_types as list_action_types_tool,
     list_actions as list_actions_tool,
+    list_flow_io as list_flow_io_tool,
+    list_flow_logic_types as list_flow_logic_types_tool,
     list_flows as list_flows_tool,
     list_subflows as list_subflows_tool,
     list_trigger_types as list_trigger_types_tool,
     publish_action as publish_action_tool,
     publish_flow as publish_flow_tool,
     publish_subflow as publish_subflow_tool,
+    remove_steps_from_flow as remove_steps_from_flow_tool,
     update_action as update_action_tool,
     update_flow as update_flow_tool,
     update_subflow as update_subflow_tool,
@@ -1941,6 +1975,136 @@ def get_tool_definitions(
                 "List output variable definitions (data pills) for an action type from sys_hub_action_output. "
                 "Use definition_sys_id from list_action_types (same as list_action_type_inputs). "
                 "Needed to wire action outputs into later step inputs."
+            ),
+            "json",
+        ),
+        "delete_flow": (
+            delete_flow_tool,
+            DeleteFlowParams,
+            DeleteArtifactResponse,
+            (
+                "Delete a Flow Designer flow by sys_id. Irreversible — ensure no dependent "
+                "subflows or actions reference this flow before deletion."
+            ),
+            "json",
+        ),
+        "delete_subflow": (
+            delete_subflow_tool,
+            DeleteSubflowParams,
+            DeleteArtifactResponse,
+            "Delete a Flow Designer subflow by sys_id. Irreversible.",
+            "json",
+        ),
+        "delete_action": (
+            delete_action_tool,
+            DeleteActionParams,
+            DeleteArtifactResponse,
+            "Delete a Flow Designer custom action type by sys_id. Irreversible.",
+            "json",
+        ),
+        "execute_flow": (
+            execute_flow_tool,
+            ExecuteFlowParams,
+            ExecuteFlowResponse,
+            (
+                "Manually execute a flow for testing. Tries POST /processflow/flow/{sys_id}/test "
+                "first; falls back to sn_fd.FlowAPI.startFlowAsync via the configured "
+                "scripted background-script endpoint when the REST path does not yield "
+                "an execution id. Returns an execution context id correlatable with "
+                "get_flow_execution_history."
+            ),
+            "json",
+        ),
+        "get_flow_execution_history": (
+            get_flow_execution_history_tool,
+            GetFlowExecutionHistoryParams,
+            GetFlowExecutionHistoryResult,
+            (
+                "Return recent executions of a flow from sys_hub_flow_context with state, "
+                "start/end times, and any error message. Useful for debugging flows that "
+                "are failing or running unexpectedly."
+            ),
+            "json",
+        ),
+        "get_flow_execution_detail": (
+            get_flow_execution_detail_tool,
+            GetFlowExecutionDetailParams,
+            GetFlowExecutionDetailResult,
+            (
+                "Return detail for a single flow execution including step-level rows from "
+                "sys_hub_flow_stage_context when available. Uses the scripted background-script "
+                "endpoint because sys_hub_flow_context may be blocked for REST Table API on "
+                "some service accounts."
+            ),
+            "json",
+        ),
+        "add_steps_to_flow": (
+            add_steps_to_flow_tool,
+            AddStepsToFlowParams,
+            AddStepsToFlowResponse,
+            (
+                "Append action steps to an existing flow using the GET→mutate→PUT→create_version "
+                "pattern. Order values must not clash with existing steps — use get_flow_actions "
+                "first to see current orders."
+            ),
+            "json",
+        ),
+        "add_subflow_step_to_flow": (
+            add_subflow_step_to_flow_tool,
+            AddSubflowStepToFlowParams,
+            AddSubflowStepToFlowResponse,
+            (
+                "Add a subflow invocation step to a parent flow. Inputs use "
+                "sys_hub_flow_input.sys_id as id (see list_flow_io on the subflow). "
+                "Validates that flow_sys_id is type=flow and subflow_sys_id is "
+                "type=subflow before mutating."
+            ),
+            "json",
+        ),
+        "remove_steps_from_flow": (
+            remove_steps_from_flow_tool,
+            RemoveStepsFromFlowParams,
+            RemoveStepsFromFlowResponse,
+            (
+                "Remove one or more action, logic, or subflow steps from a flow. Marks steps "
+                "with deleted=True across actionInstances/flowLogicInstances/subFlowInstances "
+                "then PUTs and creates a version. Use get_flow_actions or processflow GET to "
+                "discover current step ids."
+            ),
+            "json",
+        ),
+        "add_logic_to_flow": (
+            add_logic_to_flow_tool,
+            AddLogicToFlowParams,
+            AddLogicToFlowResponse,
+            (
+                "Add a logic step (If, Else, For Each, Do Until, Set Flow Variables) to a flow's "
+                "flowLogicInstances array. Use list_flow_logic_types to discover available logic "
+                "types. For If/Else/End patterns: add If first, then Else and End with "
+                "parent_ui_id=<If_uuid>."
+            ),
+            "json",
+        ),
+        "list_flow_logic_types": (
+            list_flow_logic_types_tool,
+            ListFlowLogicTypesParams,
+            ListFlowLogicTypesResult,
+            (
+                "List all available Flow Designer logic step types (If, Switch, For Each, etc.) "
+                "via GET /processflow/flow_logic/types. The sys_id values are the identifiers "
+                "needed by add_logic_to_flow."
+            ),
+            "json",
+        ),
+        "list_flow_io": (
+            list_flow_io_tool,
+            ListFlowIOParams,
+            ListFlowIOResult,
+            (
+                "List input and output variable definitions for a flow or subflow from "
+                "sys_hub_flow_input and sys_hub_flow_output. Inputs are what the caller must "
+                "provide (relevant for subflows); outputs are data the flow makes available "
+                "downstream."
             ),
             "json",
         ),
