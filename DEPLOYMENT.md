@@ -231,6 +231,19 @@ remote MCP server:
 
 ---
 
+## Validate against your ServiceNow instance
+
+After deploying, verify the server actually behaves correctly against your specific ServiceNow instance — different releases (Yokohama, Zurich, Australia) and different plugin sets cause real differences in Table API ACLs, schema, and state-machine behavior.
+
+The project ships an audit-ready integration test program in [`tests/integration/`](tests/integration/) — 56 tests across 5 tiers (foundation, smoke, CRUD, lifecycle, edge cases). Run against your instance:
+
+```bash
+# from a checkout of the repo, with .env pointing at your instance
+SN_INTEGRATION_TESTS=1 pytest tests/integration/ -v
+```
+
+A successful run writes `tests/integration/results/RESULTS_<UTC-iso>.md` stamped with your ServiceNow family + build tag, the per-tier results, and cleanup verification (every record the tests created is deleted at session end). For the manual MCP-client verification flow, see [`tests/integration/MCP_CLIENT_CHECKLIST.md`](tests/integration/MCP_CLIENT_CHECKLIST.md). For the test architecture and findings catalog, see [`tests/integration/README.md`](tests/integration/README.md).
+
 ## Maintenance
 
 ### View logs

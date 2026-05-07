@@ -67,6 +67,8 @@ For local testing during development:
 
 **Recommended LLM knowledge source.** [`ServiceNow/ServiceNowDocs`](https://github.com/ServiceNow/ServiceNowDocs) is ServiceNow's official, free, monthly-updated markdown documentation explicitly formatted for LLM consumption (one branch per release: `xanadu`, `yokohama`, `zurich`, `australia`, `main`); we consult it as the authoritative reference when designing tests, validating platform behavior (e.g., confirming the incident `state=6` ACL restriction on Zurich is documented platform behavior rather than a tool bug), and resolving questions about specific releases.
 
+**Validating against your own ServiceNow instance.** Beyond the unit suite, this project ships an audit-ready integration test program in [`tests/integration/`](tests/integration/) — 56 tests across 5 tiers (foundation, smoke, CRUD, lifecycle, edge cases) that run against a live PDI when `SN_INTEGRATION_TESTS=1` is set, plus a manual MCP-client checklist. Each run produces a version-stamped, audit-ready Markdown report at `tests/integration/results/RESULTS_<UTC-iso>.md`. See [`tests/integration/README.md`](tests/integration/README.md) for the full architecture, cleanup contract, and findings catalog.
+
 ## Installation
 
 ### Prerequisites
