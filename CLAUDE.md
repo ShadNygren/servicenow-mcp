@@ -2,6 +2,52 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## STOP — fork PR routing rule (read before any `gh pr create`)
+
+**This repo is a fork. `gh pr create` defaults to the upstream parent. Bare invocations leak the entire fork history to the upstream's public PR list.**
+
+On 2026-05-06, a bare `gh pr create` for Phase 9.11 disclosed 116 commits, ~40,023 line additions, ~3,302 deletions, the PR body, the branch name, and committer identity to `echelon-ai-labs/servicenow-mcp`'s public PR list as #66. Closing the PR does NOT remove its stored snapshot — only GitHub Support can. **Do not let this happen again.**
+
+**Mandatory pattern for every PR creation in this repo:**
+
+```bash
+# Step 1: confirm fork status (sanity check, even if you "know")
+gh repo view --json isFork,parent
+
+# Step 2: create with all three routing flags explicit
+gh pr create \
+  --repo ShadNygren/servicenow-mcp \
+  --base main \
+  --head ShadNygren:<branch-name> \
+  --title "..." \
+  --body "$(cat <<'EOF'
+...
+EOF
+)"
+```
+
+**Rules:**
+
+- Pass `--repo ShadNygren/servicenow-mcp` on every `gh pr create`. No exceptions.
+- Pass `--base main` and `--head ShadNygren:<branch>` — explicit beats inferred.
+- `gh repo set-default ShadNygren/servicenow-mcp` is set in this checkout but treat it as defense-in-depth, not the primary safeguard. The command-line flags are the durable contract — they survive fresh clones, different machines, lost gh config, and accidental `set-default` overwrites.
+- The `upstream` git remote exists for `git fetch upstream` only. Never `git push upstream`. Never PR there automatically.
+- Upstream-PR opportunities are tracked further down this file under "Upstream-PR opportunities" — those are filed only on explicit user direction, after each fix has shipped to ShadNygren's `main`, and using a clean isolated branch (not the working branch that may carry unrelated fork-only commits).
+
+**If you discover an accidental upstream PR:**
+1. Close it immediately with `gh pr close --repo <upstream> <num> --comment "Filed in error against upstream; reopening on fork. Apologies."`
+2. Re-open against ShadNygren with the explicit flags above.
+3. Tell the user clearly what was disclosed: commit count, line counts, PR body, branch name, identity. Do not minimise. Closing does not delete; only GitHub Support can.
+4. Recommend the user file a removal request via `support.github.com/contact`.
+
+## Context rehydration hook (counter-measure for compaction context loss)
+
+The mistake above was caused by Anthropic's context-compaction algorithm discarding load-bearing operational invariants. To make this self-healing on this project, `.claude/settings.json` registers a `SessionStart` hook (matchers: `startup|resume|compact`) that runs `.claude/hooks/post-compact-rehydrate.sh`. The script's stdout is automatically injected into Claude's context whenever a session starts, resumes, or restarts after compaction. The script reads CLAUDE.md verbatim, every memory file at `~/.claude/projects/-home-dell-github-ShadNygren-servicenow-mcp/memory/*.md` verbatim, then `.github/SECURITY.md`, `DEPLOYMENT.md`, `README.md`, and the four `ANALYSIS_OF_*.md` planning docs verbatim.
+
+This is roughly 60k tokens — about 6% of the 1M context window — and is the floor of what a Claude session on this project should know before taking any action. **If the rehydration hook fired, the STOP section above is in your context. If it didn't fire (e.g., this is a fresh non-Claude-Code editor), read CLAUDE.md fully before any tool calls.**
+
+The hook also prints a header reminder ("BEGIN POST-COMPACTION REHYDRATION") and a footer ("END POST-COMPACTION REHYDRATION — re-confirm safety invariants before any tool call"). If you see those tags in your context, the hook fired. If a future Anthropic algorithm change starts honoring `<!-- @persist -->` markers or similar, the hook can be retired in favor of native preservation.
+
 ## Repository state
 
 This repo is a GitHub fork of `echelon-ai-labs/servicenow-mcp` with full upstream history preserved. The `origin` remote is `git@github.com:ShadNygren/servicenow-mcp.git`; the `upstream` remote points to `https://github.com/echelon-ai-labs/servicenow-mcp.git`. The `fix/sse-auth-hardening` branch is also tracked from origin.

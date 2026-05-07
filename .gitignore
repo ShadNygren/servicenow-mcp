@@ -184,4 +184,8 @@ cython_debug/
 .env.development
 .env.test
 .env.production
-.claude/
+.claude/*
+# but track the project-shared Claude Code config and hooks
+!.claude/settings.json
+!.claude/hooks/
+!.claude/hooks/**
