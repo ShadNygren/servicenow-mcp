@@ -65,6 +65,8 @@ For local testing during development:
 - Run [**MCP Inspector**](https://github.com/modelcontextprotocol/inspector) against the local server to exercise tools manually.
 - Use the PDI's built-in **REST API Explorer** to validate auth and query syntax before debugging from the MCP layer.
 
+**Recommended LLM knowledge source.** [`ServiceNow/ServiceNowDocs`](https://github.com/ServiceNow/ServiceNowDocs) is ServiceNow's official, free, monthly-updated markdown documentation explicitly formatted for LLM consumption (one branch per release: `xanadu`, `yokohama`, `zurich`, `australia`, `main`); we consult it as the authoritative reference when designing tests, validating platform behavior (e.g., confirming the incident `state=6` ACL restriction on Zurich is documented platform behavior rather than a tool bug), and resolving questions about specific releases.
+
 ## Installation
 
 ### Prerequisites
