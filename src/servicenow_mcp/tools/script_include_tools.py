@@ -132,6 +132,15 @@ async def list_script_includes(
         data = response.json()
         script_includes = []
         
+        def _as_display(val):
+            """sys_created_by/sys_updated_by come back as a plain string
+            (user_name) on most ServiceNow releases; older logic
+            assumed a dict with display_value, which crashes on
+            Zurich with ``'str' object has no attribute 'get'``."""
+            if isinstance(val, dict):
+                return val.get("display_value") or val.get("value")
+            return val
+
         for item in data.get("result", []):
             script_include = {
                 "sys_id": item.get("sys_id"),
@@ -143,8 +152,8 @@ async def list_script_includes(
                 "access": item.get("access"),
                 "created_on": item.get("sys_created_on"),
                 "updated_on": item.get("sys_updated_on"),
-                "created_by": item.get("sys_created_by", {}).get("display_value"),
-                "updated_by": item.get("sys_updated_by", {}).get("display_value"),
+                "created_by": _as_display(item.get("sys_created_by")),
+                "updated_by": _as_display(item.get("sys_updated_by")),
             }
             script_includes.append(script_include)
             
