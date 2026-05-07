@@ -1,8 +1,12 @@
 """Tests for cmdb_tools.py."""
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
+
+from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.tools.cmdb_tools import (
     CreateCIParams,
     GetCIParams,
@@ -15,8 +19,6 @@ from servicenow_mcp.tools.cmdb_tools import (
     update_ci,
 )
 from servicenow_mcp.utils.config import AuthConfig, AuthType, BasicAuthConfig, ServerConfig
-from servicenow_mcp.auth.auth_manager import AuthManager
-
 
 FAKE_CI = {
     "sys_id": "ci001",
@@ -54,7 +56,7 @@ def _make_auth_manager():
     return auth_manager
 
 
-class TestFormatCI(unittest.TestCase):
+class TestFormatCI(IsolatedAsyncioTestCase):
     def test_all_fields_mapped(self):
         result = _format_ci(FAKE_CI)
         self.assertEqual(result["sys_id"], "ci001")
@@ -84,249 +86,348 @@ class TestFormatCI(unittest.TestCase):
             self.assertIsNone(result[key])
 
 
-class TestListCIs(unittest.TestCase):
+class TestListCIs(IsolatedAsyncioTestCase):
     def setUp(self):
         self.config = _make_config()
         self.auth_manager = _make_auth_manager()
 
-    @patch("requests.get")
-    def test_list_returns_cis(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_returns_cis(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [FAKE_CI]}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = list_cis(self.auth_manager, self.config, {"limit": 10, "offset": 0})
+        result = await list_cis(self.auth_manager, self.config, {"limit": 10, "offset": 0})
 
         self.assertTrue(result["success"])
         self.assertEqual(result["count"], 1)
         self.assertEqual(result["cis"][0]["sys_id"], "ci001")
 
-    @patch("requests.get")
-    def test_list_empty_result(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_empty_result(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": []}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = list_cis(self.auth_manager, self.config, {})
+        result = await list_cis(self.auth_manager, self.config, {})
         self.assertTrue(result["success"])
         self.assertEqual(result["count"], 0)
         self.assertEqual(result["cis"], [])
 
-    @patch("requests.get")
-    def test_list_with_name_filter(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_with_name_filter(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [FAKE_CI]}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = list_cis(self.auth_manager, self.config, {"name": "web-server"})
+        result = await list_cis(self.auth_manager, self.config, {"name": "web-server"})
 
         self.assertTrue(result["success"])
-        call_kwargs = mock_get.call_args
+        call_kwargs = mock_make_request.call_args
         query = call_kwargs[1]["params"].get("sysparm_query", "")
         self.assertIn("nameLIKEweb-server", query)
 
-    @patch("requests.get")
-    def test_list_with_operational_status_filter(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_with_operational_status_filter(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": []}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = list_cis(self.auth_manager, self.config, {"operational_status": "1"})
+        result = await list_cis(self.auth_manager, self.config, {"operational_status": "1"})
 
         self.assertTrue(result["success"])
-        call_kwargs = mock_get.call_args
+        call_kwargs = mock_make_request.call_args
         query = call_kwargs[1]["params"].get("sysparm_query", "")
         self.assertIn("operational_status=1", query)
 
-    @patch("requests.get")
-    def test_list_with_environment_filter(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_with_environment_filter(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": []}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = list_cis(self.auth_manager, self.config, {"environment": "production"})
+        result = await list_cis(self.auth_manager, self.config, {"environment": "production"})
 
         self.assertTrue(result["success"])
-        call_kwargs = mock_get.call_args
+        call_kwargs = mock_make_request.call_args
         query = call_kwargs[1]["params"].get("sysparm_query", "")
         self.assertIn("environment=production", query)
 
-    @patch("requests.get")
-    def test_list_with_raw_query(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_with_raw_query(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": []}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = list_cis(self.auth_manager, self.config, {"query": "companyLIKEAcme"})
+        result = await list_cis(self.auth_manager, self.config, {"query": "companyLIKEAcme"})
 
         self.assertTrue(result["success"])
-        call_kwargs = mock_get.call_args
+        call_kwargs = mock_make_request.call_args
         query = call_kwargs[1]["params"].get("sysparm_query", "")
         self.assertIn("companyLIKEAcme", query)
 
-    @patch("requests.get")
-    def test_list_uses_ci_class_table(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_uses_ci_class_table(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": []}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        list_cis(self.auth_manager, self.config, {"ci_class": "cmdb_ci_server"})
+        await list_cis(self.auth_manager, self.config, {"ci_class": "cmdb_ci_server"})
 
-        call_url = mock_get.call_args[0][0]
+        call_url = mock_make_request.call_args[0][1]
         self.assertIn("cmdb_ci_server", call_url)
 
-    @patch("requests.get")
-    def test_list_defaults_to_cmdb_ci_table(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_defaults_to_cmdb_ci_table(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": []}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        list_cis(self.auth_manager, self.config, {})
+        await list_cis(self.auth_manager, self.config, {})
 
-        call_url = mock_get.call_args[0][0]
+        call_url = mock_make_request.call_args[0][1]
         self.assertIn("/cmdb_ci", call_url)
 
-    @patch("requests.get")
-    def test_list_request_exception(self, mock_get):
-        import requests as req
-        mock_get.side_effect = req.exceptions.ConnectionError("timeout")
+    @patch(
 
-        result = list_cis(self.auth_manager, self.config, {})
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_request_exception(self, mock_make_request):
+        mock_make_request.side_effect = httpx.ConnectError("timeout")
+
+        result = await list_cis(self.auth_manager, self.config, {})
         self.assertFalse(result["success"])
         self.assertIn("Error listing CIs", result["message"])
 
-    def test_list_missing_instance_url(self):
+    async def test_list_missing_instance_url(self):
         auth_manager = MagicMock()
         del auth_manager.instance_url
         server_config = MagicMock()
         del server_config.instance_url
 
-        result = list_cis(auth_manager, server_config, {})
+        result = await list_cis(auth_manager, server_config, {})
         self.assertFalse(result["success"])
         self.assertIn("instance_url", result["message"])
 
-    def test_list_missing_headers(self):
+    async def test_list_missing_headers(self):
         auth_manager = MagicMock()
         auth_manager.instance_url = "https://dev99999.service-now.com"
         del auth_manager.get_headers
+        del auth_manager.get_headers_async
         server_config = MagicMock()
         del server_config.instance_url
         del server_config.get_headers
-
-        result = list_cis(auth_manager, server_config, {})
+        del server_config.get_headers_async
+        result = await list_cis(auth_manager, server_config, {})
         self.assertFalse(result["success"])
         self.assertIn("get_headers", result["message"])
 
-    @patch("requests.get")
-    def test_list_pagination_meta(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_pagination_meta(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [FAKE_CI] * 20}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = list_cis(self.auth_manager, self.config, {"limit": 20, "offset": 0})
+        result = await list_cis(self.auth_manager, self.config, {"limit": 20, "offset": 0})
         self.assertIn("has_more", result)
         self.assertIn("next_offset", result)
 
 
-class TestGetCI(unittest.TestCase):
+class TestGetCI(IsolatedAsyncioTestCase):
     def setUp(self):
         self.config = _make_config()
         self.auth_manager = _make_auth_manager()
 
-    @patch("requests.get")
-    def test_get_ci_success(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_get_ci_success(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": FAKE_CI}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = get_ci(self.auth_manager, self.config, {"sys_id": "ci001"})
+        result = await get_ci(self.auth_manager, self.config, {"sys_id": "ci001"})
 
         self.assertTrue(result["success"])
         self.assertEqual(result["ci"]["sys_id"], "ci001")
         self.assertEqual(result["ci"]["name"], "web-server-01")
 
-    @patch("requests.get")
-    def test_get_ci_not_found_404(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_get_ci_not_found_404(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 404
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = get_ci(self.auth_manager, self.config, {"sys_id": "missing"})
+        result = await get_ci(self.auth_manager, self.config, {"sys_id": "missing"})
 
         self.assertFalse(result["success"])
         self.assertIn("missing", result["message"])
 
-    @patch("requests.get")
-    def test_get_ci_empty_result(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_get_ci_empty_result(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": {}}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = get_ci(self.auth_manager, self.config, {"sys_id": "ci_empty"})
+        result = await get_ci(self.auth_manager, self.config, {"sys_id": "ci_empty"})
 
         self.assertFalse(result["success"])
         self.assertIn("not found", result["message"])
 
-    @patch("requests.get")
-    def test_get_ci_uses_ci_class_table(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_get_ci_uses_ci_class_table(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": FAKE_CI}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        get_ci(self.auth_manager, self.config, {"sys_id": "ci001", "ci_class": "cmdb_ci_server"})
+        await get_ci(
+            self.auth_manager,
+            self.config,
+            {"sys_id": "ci001", "ci_class": "cmdb_ci_server"},
+        )
 
-        call_url = mock_get.call_args[0][0]
+        call_url = mock_make_request.call_args[0][1]
         self.assertIn("cmdb_ci_server", call_url)
 
-    @patch("requests.get")
-    def test_get_ci_request_exception(self, mock_get):
-        import requests as req
-        mock_get.side_effect = req.exceptions.ConnectionError("timeout")
+    @patch(
 
-        result = get_ci(self.auth_manager, self.config, {"sys_id": "ci001"})
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_get_ci_request_exception(self, mock_make_request):
+        mock_make_request.side_effect = httpx.ConnectError("timeout")
+
+        result = await get_ci(self.auth_manager, self.config, {"sys_id": "ci001"})
         self.assertFalse(result["success"])
         self.assertIn("Error retrieving CI", result["message"])
 
-    def test_get_ci_missing_sys_id(self):
-        result = get_ci(self.auth_manager, self.config, {})
+    async def test_get_ci_missing_sys_id(self):
+        result = await get_ci(self.auth_manager, self.config, {})
         self.assertFalse(result["success"])
 
-    def test_get_ci_missing_instance_url(self):
+    async def test_get_ci_missing_instance_url(self):
         auth_manager = MagicMock()
         del auth_manager.instance_url
         server_config = MagicMock()
         del server_config.instance_url
 
-        result = get_ci(auth_manager, server_config, {"sys_id": "ci001"})
+        result = await get_ci(auth_manager, server_config, {"sys_id": "ci001"})
         self.assertFalse(result["success"])
         self.assertIn("instance_url", result["message"])
 
 
-class TestCreateCI(unittest.TestCase):
+class TestCreateCI(IsolatedAsyncioTestCase):
     def setUp(self):
         self.config = _make_config()
         self.auth_manager = _make_auth_manager()
 
-    @patch("requests.post")
-    def test_create_ci_success(self, mock_post):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_create_ci_success(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 201
         mock_response.json.return_value = {"result": FAKE_CI}
-        mock_post.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = create_ci(
+        result = await create_ci(
             self.auth_manager,
             self.config,
             {"name": "web-server-01", "ci_class": "cmdb_ci_server"},
@@ -336,14 +437,20 @@ class TestCreateCI(unittest.TestCase):
         self.assertEqual(result["sys_id"], "ci001")
         self.assertEqual(result["ci"]["name"], "web-server-01")
 
-    @patch("requests.post")
-    def test_create_ci_with_optional_fields(self, mock_post):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_create_ci_with_optional_fields(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 201
         mock_response.json.return_value = {"result": FAKE_CI}
-        mock_post.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = create_ci(
+        result = await create_ci(
             self.auth_manager,
             self.config,
             {
@@ -358,104 +465,134 @@ class TestCreateCI(unittest.TestCase):
         )
 
         self.assertTrue(result["success"])
-        body_sent = mock_post.call_args[1]["json"]
+        body_sent = mock_make_request.call_args[1]["json"]
         self.assertEqual(body_sent["name"], "web-server-01")
         self.assertEqual(body_sent["environment"], "production")
         self.assertEqual(body_sent["ip_address"], "10.0.0.1")
 
-    @patch("requests.post")
-    def test_create_ci_uses_ci_class_table(self, mock_post):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_create_ci_uses_ci_class_table(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 201
         mock_response.json.return_value = {"result": FAKE_CI}
-        mock_post.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        create_ci(
+        await create_ci(
             self.auth_manager,
             self.config,
             {"name": "server-x", "ci_class": "cmdb_ci_server"},
         )
 
-        call_url = mock_post.call_args[0][0]
+        call_url = mock_make_request.call_args[0][1]
         self.assertIn("cmdb_ci_server", call_url)
 
-    @patch("requests.post")
-    def test_create_ci_defaults_to_cmdb_ci(self, mock_post):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_create_ci_defaults_to_cmdb_ci(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 201
         mock_response.json.return_value = {"result": FAKE_CI}
-        mock_post.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        create_ci(self.auth_manager, self.config, {"name": "generic-ci"})
+        await create_ci(self.auth_manager, self.config, {"name": "generic-ci"})
 
-        call_url = mock_post.call_args[0][0]
+        call_url = mock_make_request.call_args[0][1]
         self.assertTrue(call_url.endswith("/cmdb_ci"))
 
-    @patch("requests.post")
-    def test_create_ci_ci_class_not_in_body(self, mock_post):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_create_ci_ci_class_not_in_body(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 201
         mock_response.json.return_value = {"result": FAKE_CI}
-        mock_post.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        create_ci(
+        await create_ci(
             self.auth_manager,
             self.config,
             {"name": "server-x", "ci_class": "cmdb_ci_server"},
         )
 
-        body_sent = mock_post.call_args[1]["json"]
+        body_sent = mock_make_request.call_args[1]["json"]
         self.assertNotIn("ci_class", body_sent)
 
-    @patch("requests.post")
-    def test_create_ci_request_exception(self, mock_post):
-        import requests as req
-        mock_post.side_effect = req.exceptions.ConnectionError("timeout")
+    @patch(
 
-        result = create_ci(self.auth_manager, self.config, {"name": "server"})
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_create_ci_request_exception(self, mock_make_request):
+        mock_make_request.side_effect = httpx.ConnectError("timeout")
+
+        result = await create_ci(self.auth_manager, self.config, {"name": "server"})
         self.assertFalse(result["success"])
         self.assertIn("Error creating CI", result["message"])
 
-    def test_create_ci_missing_name(self):
-        result = create_ci(self.auth_manager, self.config, {})
+    async def test_create_ci_missing_name(self):
+        result = await create_ci(self.auth_manager, self.config, {})
         self.assertFalse(result["success"])
 
-    def test_create_ci_missing_instance_url(self):
+    async def test_create_ci_missing_instance_url(self):
         auth_manager = MagicMock()
         del auth_manager.instance_url
         server_config = MagicMock()
         del server_config.instance_url
 
-        result = create_ci(auth_manager, server_config, {"name": "ci"})
+        result = await create_ci(auth_manager, server_config, {"name": "ci"})
         self.assertFalse(result["success"])
         self.assertIn("instance_url", result["message"])
 
-    def test_create_ci_missing_headers(self):
+    async def test_create_ci_missing_headers(self):
         auth_manager = MagicMock()
         auth_manager.instance_url = "https://dev99999.service-now.com"
         del auth_manager.get_headers
+        del auth_manager.get_headers_async
         server_config = MagicMock()
         del server_config.instance_url
         del server_config.get_headers
-
-        result = create_ci(auth_manager, server_config, {"name": "ci"})
+        del server_config.get_headers_async
+        result = await create_ci(auth_manager, server_config, {"name": "ci"})
         self.assertFalse(result["success"])
         self.assertIn("get_headers", result["message"])
 
 
-class TestUpdateCI(unittest.TestCase):
+class TestUpdateCI(IsolatedAsyncioTestCase):
     def setUp(self):
         self.config = _make_config()
         self.auth_manager = _make_auth_manager()
 
-    @patch("requests.patch")
-    def test_update_ci_success(self, mock_patch):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_update_ci_success(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": FAKE_CI}
-        mock_patch.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = update_ci(
+        result = await update_ci(
             self.auth_manager,
             self.config,
             {"sys_id": "ci001", "operational_status": "6"},
@@ -464,32 +601,44 @@ class TestUpdateCI(unittest.TestCase):
         self.assertTrue(result["success"])
         self.assertEqual(result["ci"]["sys_id"], "ci001")
 
-    @patch("requests.patch")
-    def test_update_ci_sends_correct_body(self, mock_patch):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_update_ci_sends_correct_body(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": FAKE_CI}
-        mock_patch.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        update_ci(
+        await update_ci(
             self.auth_manager,
             self.config,
             {"sys_id": "ci001", "environment": "staging", "ip_address": "10.0.0.2"},
         )
 
-        body_sent = mock_patch.call_args[1]["json"]
+        body_sent = mock_make_request.call_args[1]["json"]
         self.assertEqual(body_sent["environment"], "staging")
         self.assertEqual(body_sent["ip_address"], "10.0.0.2")
         self.assertNotIn("sys_id", body_sent)
         self.assertNotIn("ci_class", body_sent)
 
-    @patch("requests.patch")
-    def test_update_ci_not_found_404(self, mock_patch):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_update_ci_not_found_404(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 404
-        mock_patch.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = update_ci(
+        result = await update_ci(
             self.auth_manager,
             self.config,
             {"sys_id": "missing", "name": "new-name"},
@@ -498,54 +647,65 @@ class TestUpdateCI(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertIn("missing", result["message"])
 
-    @patch("requests.patch")
-    def test_update_ci_uses_ci_class_table(self, mock_patch):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_update_ci_uses_ci_class_table(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": FAKE_CI}
-        mock_patch.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        update_ci(
+        await update_ci(
             self.auth_manager,
             self.config,
             {"sys_id": "ci001", "ci_class": "cmdb_ci_server", "name": "renamed"},
         )
 
-        call_url = mock_patch.call_args[0][0]
+        call_url = mock_make_request.call_args[0][1]
         self.assertIn("cmdb_ci_server", call_url)
 
-    def test_update_ci_no_fields_to_update(self):
-        result = update_ci(self.auth_manager, self.config, {"sys_id": "ci001"})
+    async def test_update_ci_no_fields_to_update(self):
+        result = await update_ci(self.auth_manager, self.config, {"sys_id": "ci001"})
         self.assertFalse(result["success"])
         self.assertIn("No fields", result["message"])
 
-    @patch("requests.patch")
-    def test_update_ci_request_exception(self, mock_patch):
-        import requests as req
-        mock_patch.side_effect = req.exceptions.ConnectionError("timeout")
+    @patch(
 
-        result = update_ci(
+        "servicenow_mcp.tools.cmdb_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_update_ci_request_exception(self, mock_make_request):
+        mock_make_request.side_effect = httpx.ConnectError("timeout")
+
+        result = await update_ci(
             self.auth_manager, self.config, {"sys_id": "ci001", "name": "x"}
         )
         self.assertFalse(result["success"])
         self.assertIn("Error updating CI", result["message"])
 
-    def test_update_ci_missing_sys_id(self):
-        result = update_ci(self.auth_manager, self.config, {"name": "x"})
+    async def test_update_ci_missing_sys_id(self):
+        result = await update_ci(self.auth_manager, self.config, {"name": "x"})
         self.assertFalse(result["success"])
 
-    def test_update_ci_missing_instance_url(self):
+    async def test_update_ci_missing_instance_url(self):
         auth_manager = MagicMock()
         del auth_manager.instance_url
         server_config = MagicMock()
         del server_config.instance_url
 
-        result = update_ci(auth_manager, server_config, {"sys_id": "ci001", "name": "x"})
+        result = await update_ci(auth_manager, server_config, {"sys_id": "ci001", "name": "x"})
         self.assertFalse(result["success"])
         self.assertIn("instance_url", result["message"])
 
 
-class TestCMDBParams(unittest.TestCase):
+class TestCMDBParams(IsolatedAsyncioTestCase):
     def test_list_params_defaults(self):
         p = ListCIsParams()
         self.assertEqual(p.limit, 20)

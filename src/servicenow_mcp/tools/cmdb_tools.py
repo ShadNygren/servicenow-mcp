@@ -8,7 +8,7 @@ CMDB (Configuration Management Database).
 import logging
 from typing import Any, Dict, List, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
@@ -16,10 +16,10 @@ from servicenow_mcp.utils.config import ServerConfig
 from servicenow_mcp.utils.helpers import (
     _build_sysparm_params,
     _format_http_error,
-    _get_headers,
+    _get_headers_async,
     _get_instance_url,
     _join_query_parts,
-    _make_request,
+    _make_request_async,
     _paginated_list_response,
     _unwrap_and_validate_params,
 )
@@ -198,7 +198,7 @@ def _build_body(validated, exclude: List[str]) -> Dict:
     return body
 
 
-def list_cis(
+async def list_cis(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -221,7 +221,7 @@ def list_cis(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
@@ -247,16 +247,16 @@ def list_cis(
 
     url = f"{instance_url}/api/now/table/{table}"
     try:
-        response = _make_request("GET", url, headers=headers, params=query_params)
+        response = await _make_request_async("GET", url, headers=headers, params=query_params)
         response.raise_for_status()
         cis = [_format_ci(r) for r in response.json().get("result", [])]
         return _paginated_list_response(cis, validated.limit, validated.offset, "cis")
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error listing CIs: {e}")
         return {"success": False, "message": f"Error listing CIs: {_format_http_error(e)}"}
 
 
-def get_ci(
+async def get_ci(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -279,7 +279,7 @@ def get_ci(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
@@ -291,7 +291,7 @@ def get_ci(
         "sysparm_fields": ",".join(CMDB_CI_FIELDS),
     }
     try:
-        response = _make_request("GET", url, headers=headers, params=query_params)
+        response = await _make_request_async("GET", url, headers=headers, params=query_params)
         if response.status_code == 404:
             return {"success": False, "message": f"CI not found: {validated.sys_id}"}
         response.raise_for_status()
@@ -299,12 +299,12 @@ def get_ci(
         if not record:
             return {"success": False, "message": f"CI not found: {validated.sys_id}"}
         return {"success": True, "ci": _format_ci(record)}
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error retrieving CI: {e}")
         return {"success": False, "message": f"Error retrieving CI: {_format_http_error(e)}"}
 
 
-def create_ci(
+async def create_ci(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -327,7 +327,7 @@ def create_ci(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
@@ -336,7 +336,7 @@ def create_ci(
 
     url = f"{instance_url}/api/now/table/{table}"
     try:
-        response = _make_request("POST", url, headers=headers, json=body)
+        response = await _make_request_async("POST", url, headers=headers, json=body)
         response.raise_for_status()
         record = response.json().get("result", {})
         return {
@@ -344,12 +344,12 @@ def create_ci(
             "sys_id": record.get("sys_id"),
             "ci": _format_ci(record),
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error creating CI: {e}")
         return {"success": False, "message": f"Error creating CI: {_format_http_error(e)}"}
 
 
-def update_ci(
+async def update_ci(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -372,7 +372,7 @@ def update_ci(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
@@ -383,12 +383,12 @@ def update_ci(
     table = validated.ci_class or CMDB_CI_TABLE
     url = f"{instance_url}/api/now/table/{table}/{validated.sys_id}"
     try:
-        response = _make_request("PATCH", url, headers=headers, json=body)
+        response = await _make_request_async("PATCH", url, headers=headers, json=body)
         if response.status_code == 404:
             return {"success": False, "message": f"CI not found: {validated.sys_id}"}
         response.raise_for_status()
         record = response.json().get("result", {})
         return {"success": True, "ci": _format_ci(record)}
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error updating CI: {e}")
         return {"success": False, "message": f"Error updating CI: {_format_http_error(e)}"}

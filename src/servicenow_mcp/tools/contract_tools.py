@@ -8,7 +8,7 @@ alm_contract table (Contract Management application).
 import logging
 from typing import Any, Dict, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
@@ -16,10 +16,10 @@ from servicenow_mcp.utils.config import ServerConfig
 from servicenow_mcp.utils.helpers import (
     _build_sysparm_params,
     _format_http_error,
-    _get_headers,
+    _get_headers_async,
     _get_instance_url,
     _join_query_parts,
-    _make_request,
+    _make_request_async,
     _paginated_list_response,
     _unwrap_and_validate_params,
 )
@@ -157,7 +157,7 @@ def _format_contract(record: Dict) -> Dict:
     }
 
 
-def list_asset_contracts(
+async def list_asset_contracts(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -180,7 +180,7 @@ def list_asset_contracts(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
@@ -210,11 +210,11 @@ def list_asset_contracts(
 
     url = f"{instance_url}/api/now/table/{CONTRACT_TABLE}"
     try:
-        response = _make_request("GET", url, headers=headers, params=query_params)
+        response = await _make_request_async("GET", url, headers=headers, params=query_params)
         response.raise_for_status()
         contracts = [_format_contract(r) for r in response.json().get("result", [])]
         return _paginated_list_response(contracts, validated.limit, validated.offset, "contracts")
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error listing asset contracts: {e}")
         return {
             "success": False,
@@ -222,7 +222,7 @@ def list_asset_contracts(
         }
 
 
-def get_asset_contract(
+async def get_asset_contract(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -248,7 +248,7 @@ def get_asset_contract(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
@@ -261,7 +261,9 @@ def get_asset_contract(
     try:
         if validated.sys_id:
             url = f"{instance_url}/api/now/table/{CONTRACT_TABLE}/{validated.sys_id}"
-            response = _make_request("GET", url, headers=headers, params=base_query_params)
+            response = await _make_request_async(
+                "GET", url, headers=headers, params=base_query_params,
+            )
             if response.status_code == 404:
                 return {"success": False, "message": f"Contract not found: {validated.sys_id}"}
             response.raise_for_status()
@@ -273,7 +275,7 @@ def get_asset_contract(
             qp = dict(base_query_params)
             qp["sysparm_query"] = f"number={validated.number}"
             qp["sysparm_limit"] = "1"
-            response = _make_request("GET", url, headers=headers, params=qp)
+            response = await _make_request_async("GET", url, headers=headers, params=qp)
             response.raise_for_status()
             results = response.json().get("result", [])
             if not results:
@@ -281,7 +283,7 @@ def get_asset_contract(
             record = results[0]
 
         return {"success": True, "contract": _format_contract(record)}
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error retrieving asset contract: {e}")
         return {
             "success": False,
@@ -296,7 +298,7 @@ _CONTRACT_WRITE_FIELDS = [
 ]
 
 
-def create_asset_contract(
+async def create_asset_contract(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -321,7 +323,7 @@ def create_asset_contract(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
@@ -333,7 +335,7 @@ def create_asset_contract(
 
     url = f"{instance_url}/api/now/table/{CONTRACT_TABLE}"
     try:
-        response = _make_request("POST", url, headers=headers, json=body)
+        response = await _make_request_async("POST", url, headers=headers, json=body)
         response.raise_for_status()
         record = response.json().get("result", {})
         return {
@@ -341,7 +343,7 @@ def create_asset_contract(
             "sys_id": record.get("sys_id"),
             "contract": _format_contract(record),
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error creating asset contract: {e}")
         return {
             "success": False,
@@ -349,7 +351,7 @@ def create_asset_contract(
         }
 
 
-def update_asset_contract(
+async def update_asset_contract(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -374,7 +376,7 @@ def update_asset_contract(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
@@ -388,13 +390,13 @@ def update_asset_contract(
 
     url = f"{instance_url}/api/now/table/{CONTRACT_TABLE}/{validated.sys_id}"
     try:
-        response = _make_request("PATCH", url, headers=headers, json=body)
+        response = await _make_request_async("PATCH", url, headers=headers, json=body)
         if response.status_code == 404:
             return {"success": False, "message": f"Contract not found: {validated.sys_id}"}
         response.raise_for_status()
         record = response.json().get("result", {})
         return {"success": True, "contract": _format_contract(record)}
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error updating asset contract: {e}")
         return {
             "success": False,

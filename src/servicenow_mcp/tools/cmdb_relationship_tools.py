@@ -9,7 +9,7 @@ cmdb_rel_type.
 import logging
 from typing import Any, Dict, List, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
@@ -17,10 +17,10 @@ from servicenow_mcp.utils.config import ServerConfig
 from servicenow_mcp.utils.helpers import (
     _build_sysparm_params,
     _format_http_error,
-    _get_headers,
+    _get_headers_async,
     _get_instance_url,
     _join_query_parts,
-    _make_request,
+    _make_request_async,
     _paginated_list_response,
     _unwrap_and_validate_params,
 )
@@ -143,7 +143,7 @@ def _format_rel_type(record: Dict) -> Dict:
 # ---------------------------------------------------------------------------
 
 
-def list_ci_relationships(
+async def list_ci_relationships(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -162,7 +162,7 @@ def list_ci_relationships(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
@@ -186,11 +186,11 @@ def list_ci_relationships(
 
     url = f"{instance_url}/api/now/table/{CMDB_REL_CI_TABLE}"
     try:
-        response = _make_request("GET", url, headers=headers, params=query_params)
+        response = await _make_request_async("GET", url, headers=headers, params=query_params)
         response.raise_for_status()
         rels = [_format_relationship(r) for r in response.json().get("result", [])]
         return _paginated_list_response(rels, validated.limit, validated.offset, "relationships")
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error listing CI relationships: {e}")
         return {
             "success": False,
@@ -198,7 +198,7 @@ def list_ci_relationships(
         }
 
 
-def get_ci_relationship(
+async def get_ci_relationship(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -216,7 +216,7 @@ def get_ci_relationship(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
@@ -227,7 +227,7 @@ def get_ci_relationship(
         "sysparm_fields": ",".join(_REL_CI_FIELDS),
     }
     try:
-        response = _make_request("GET", url, headers=headers, params=query_params)
+        response = await _make_request_async("GET", url, headers=headers, params=query_params)
         if response.status_code == 404:
             return {
                 "success": False,
@@ -241,7 +241,7 @@ def get_ci_relationship(
                 "message": f"CI relationship not found: {validated.sys_id}",
             }
         return {"success": True, "relationship": _format_relationship(record)}
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error retrieving CI relationship: {e}")
         return {
             "success": False,
@@ -249,7 +249,7 @@ def get_ci_relationship(
         }
 
 
-def create_ci_relationship(
+async def create_ci_relationship(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -271,7 +271,7 @@ def create_ci_relationship(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
@@ -283,7 +283,7 @@ def create_ci_relationship(
 
     url = f"{instance_url}/api/now/table/{CMDB_REL_CI_TABLE}"
     try:
-        response = _make_request("POST", url, headers=headers, json=body)
+        response = await _make_request_async("POST", url, headers=headers, json=body)
         response.raise_for_status()
         record = response.json().get("result", {})
         return {
@@ -291,7 +291,7 @@ def create_ci_relationship(
             "sys_id": record.get("sys_id"),
             "relationship": _format_relationship(record),
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error creating CI relationship: {e}")
         return {
             "success": False,
@@ -299,7 +299,7 @@ def create_ci_relationship(
         }
 
 
-def delete_ci_relationship(
+async def delete_ci_relationship(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -319,13 +319,13 @@ def delete_ci_relationship(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
     url = f"{instance_url}/api/now/table/{CMDB_REL_CI_TABLE}/{validated.sys_id}"
     try:
-        response = _make_request("DELETE", url, headers=headers)
+        response = await _make_request_async("DELETE", url, headers=headers)
         if response.status_code == 404:
             return {
                 "success": False,
@@ -341,7 +341,7 @@ def delete_ci_relationship(
             "success": True,
             "message": f"CI relationship {validated.sys_id} deleted successfully",
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error deleting CI relationship: {e}")
         return {
             "success": False,
@@ -349,7 +349,7 @@ def delete_ci_relationship(
         }
 
 
-def list_ci_relationship_types(
+async def list_ci_relationship_types(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -368,7 +368,7 @@ def list_ci_relationship_types(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
@@ -386,13 +386,13 @@ def list_ci_relationship_types(
 
     url = f"{instance_url}/api/now/table/{CMDB_REL_TYPE_TABLE}"
     try:
-        response = _make_request("GET", url, headers=headers, params=query_params)
+        response = await _make_request_async("GET", url, headers=headers, params=query_params)
         response.raise_for_status()
         types = [_format_rel_type(r) for r in response.json().get("result", [])]
         return _paginated_list_response(
             types, validated.limit, validated.offset, "relationship_types"
         )
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error listing CI relationship types: {e}")
         return {
             "success": False,
