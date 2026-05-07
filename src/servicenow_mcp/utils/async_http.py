@@ -109,14 +109,23 @@ async def aclose_async_client() -> None:
 
 
 def reset_async_client() -> None:
-    """Drop the shared client without closing it.
+    """Drop the shared client and lock without closing them.
 
     Test-only: pytest fixtures use this to reset between tests so
-    respx mocks attach to a fresh client instance.  Production code
-    should call :func:`aclose_async_client` instead.
+    respx mocks attach to a fresh client instance, and so that fixtures
+    spanning multiple asyncio loops (e.g. session-scoped fixtures using
+    ``asyncio.run``) leave behind a clean singleton state for the next
+    per-test loop.  Production code should call :func:`aclose_async_client`
+    instead.
+
+    Resets both the client and the lock --- the lock is bound to the
+    asyncio loop that first created it, so leaving a stale lock around
+    raises "Event loop is closed" the next time ``async with _lock`` is
+    awaited from a different loop.
     """
-    global _client
+    global _client, _lock
     _client = None
+    _lock = None
 
 
 def _atexit_close() -> None:

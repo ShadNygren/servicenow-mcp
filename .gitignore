@@ -189,3 +189,7 @@ cython_debug/
 !.claude/settings.json
 !.claude/hooks/
 !.claude/hooks/**
+
+# E2E test reports (generated; per-run; results dir is .gitkept)
+tests/integration/results/RESULTS_*.md
+tests/integration/results/junit.xml

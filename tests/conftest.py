@@ -7,6 +7,10 @@ from typing import List
 
 import pytest
 
+# Phase E2E.1: register the integration test report plugin so it's loaded
+# whenever pytest runs. The plugin is a no-op unless SN_INTEGRATION_TESTS=1.
+pytest_plugins = ["tests.integration._report_plugin"]
+
 
 # Test files inherited from echelon-ai-labs/servicenow-mcp that fail to import
 # because they reference modules (servicenow_mcp.resources.catalogs,
