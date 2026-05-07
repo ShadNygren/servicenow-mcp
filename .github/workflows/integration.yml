@@ -1,0 +1,102 @@
+# Phase E2E.7: Gated integration test workflow.
+#
+# Runs the live-PDI integration suite (tests/integration/) when:
+#   1. A PR has the `run-integration` label (maintainer adds it intentionally)
+#   2. Or the workflow is triggered manually via workflow_dispatch
+#
+# Self-skips when the SERVICENOW_INSTANCE_URL secret is unset --- contributors
+# can fork the repo without provisioning their own PDI just to pass CI.
+#
+# The unit-test suite in ci.yml (964 tests, no PDI required) continues to
+# run on every push/PR; this workflow is the optional second tier.
+
+name: Integration (live PDI)
+
+on:
+  pull_request:
+    types: [labeled, synchronize]
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: 'Test tier to run (foundation|smoke|crud|lifecycle|edge|all)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - foundation
+          - smoke
+          - crud
+          - lifecycle
+          - edge
+          - all
+
+jobs:
+  integration:
+    name: Integration tests against live PDI
+    runs-on: ubuntu-latest
+    # Only fire on PRs when the `run-integration` label is added/present.
+    # workflow_dispatch always runs.
+    if: |
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'pull_request'
+          && contains(github.event.pull_request.labels.*.name, 'run-integration'))
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install package
+        run: pip install -e ".[dev]"
+
+      - name: Verify PDI secrets are present
+        id: secret-check
+        env:
+          INSTANCE_URL: ${{ secrets.SERVICENOW_INSTANCE_URL }}
+          USERNAME: ${{ secrets.SERVICENOW_USERNAME }}
+          PASSWORD: ${{ secrets.SERVICENOW_PASSWORD }}
+        run: |
+          if [ -z "$INSTANCE_URL" ] || [ -z "$USERNAME" ] || [ -z "$PASSWORD" ]; then
+            echo "::warning::PDI secrets not configured; skipping integration tests."
+            echo "PDI secrets are required: SERVICENOW_INSTANCE_URL, SERVICENOW_USERNAME, SERVICENOW_PASSWORD."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve test selection
+        id: select
+        if: steps.secret-check.outputs.skip != 'true'
+        run: |
+          tier="${{ inputs.tier || 'all' }}"
+          case "$tier" in
+            foundation) path="tests/integration/test_foundation.py" ;;
+            smoke)      path="tests/integration/test_smoke_all_domains.py" ;;
+            crud)       path="tests/integration/test_crud_roundtrips.py" ;;
+            lifecycle)  path="tests/integration/test_lifecycle_flows.py" ;;
+            edge)       path="tests/integration/test_edge_cases.py" ;;
+            *)          path="tests/integration/" ;;
+          esac
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+
+      - name: Run integration tests
+        if: steps.secret-check.outputs.skip != 'true'
+        env:
+          SN_INTEGRATION_TESTS: '1'
+          SERVICENOW_INSTANCE_URL: ${{ secrets.SERVICENOW_INSTANCE_URL }}
+          SERVICENOW_USERNAME: ${{ secrets.SERVICENOW_USERNAME }}
+          SERVICENOW_PASSWORD: ${{ secrets.SERVICENOW_PASSWORD }}
+          SERVICENOW_AUTH_TYPE: basic
+        run: |
+          pytest "${{ steps.select.outputs.path }}" -v --tb=short
+
+      - name: Upload E2E report artefact
+        if: always() && steps.secret-check.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report-${{ github.run_id }}
+          path: tests/integration/results/RESULTS_*.md
+          if-no-files-found: warn
+          retention-days: 30
