@@ -1,0 +1,23 @@
+{
+  "$schema": "https://code.claude.com/schemas/mcp.json",
+  "mcpServers": {
+    "servicenow-stdio": {
+      "type": "stdio",
+      "command": "${SERVICENOW_MCP_BIN:-./.venv/bin/servicenow-mcp}",
+      "env": {
+        "MCP_TOOL_PACKAGE": "${MCP_TOOL_PACKAGE:-full}",
+        "SERVICENOW_INSTANCE_URL": "${SERVICENOW_INSTANCE_URL}",
+        "SERVICENOW_USERNAME": "${SERVICENOW_USERNAME}",
+        "SERVICENOW_PASSWORD": "${SERVICENOW_PASSWORD}",
+        "SERVICENOW_AUTH_TYPE": "${SERVICENOW_AUTH_TYPE:-basic}"
+      }
+    },
+    "servicenow-http": {
+      "type": "http",
+      "url": "${SERVICENOW_MCP_HTTP_URL:-http://127.0.0.1:8080/mcp}",
+      "headers": {
+        "Authorization": "Bearer ${MCP_AUTH_TOKEN}"
+      }
+    }
+  }
+}

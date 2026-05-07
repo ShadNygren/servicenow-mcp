@@ -113,6 +113,19 @@ Or with environment variables:
 SERVICENOW_INSTANCE_URL=https://your-instance.service-now.com SERVICENOW_USERNAME=your-username SERVICENOW_PASSWORD=your-password SERVICENOW_AUTH_TYPE=basic python -m servicenow_mcp.cli
 ```
 
+### Using with Claude Code (built-in MCP client)
+
+A project-scoped [`.mcp.json`](.mcp.json) at the repo root registers the server with Claude Code's built-in MCP client. To use it, set the env vars from your `.env` in the shell, then launch Claude Code from the project root:
+
+```bash
+set -a && source .env && set +a
+claude
+```
+
+`claude mcp list` should show `servicenow-stdio: ✓ Connected`. Inside Claude Code, the `/mcp` panel reports the tool count (~211 for the `full` package). To run the HTTP transport instead, start `servicenow-mcp-http` in a second terminal with `MCP_AUTH_TOKEN` set; the same `.mcp.json` registers `servicenow-http` against `127.0.0.1:8080/mcp` with bearer auth.
+
+The full manual verification flow (server registration, read-only tool calls, mutating-call permission gates, tool-package filtering, HTTP transport, auto-reconnect) is in [`tests/integration/MCP_CLIENT_CHECKLIST.md`](tests/integration/MCP_CLIENT_CHECKLIST.md).
+
 ### Streamable HTTP Mode
 
 The ServiceNow MCP server can run as a network server using **Streamable HTTP** — the MCP spec's HTTP transport. A single endpoint at `/mcp` handles both request/response and server-pushed streaming over chunked HTTP.
