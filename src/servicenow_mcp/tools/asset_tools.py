@@ -7,7 +7,7 @@ Provides tools for managing hardware and software assets via the alm_asset table
 import logging
 from typing import Any, Dict, List, Optional
 
-import requests
+import httpx
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
@@ -15,10 +15,10 @@ from servicenow_mcp.utils.config import ServerConfig
 from servicenow_mcp.utils.helpers import (
     _build_sysparm_params,
     _format_http_error,
-    _get_headers,
+    _get_headers_async,
     _get_instance_url,
     _join_query_parts,
-    _make_request,
+    _make_request_async,
     _paginated_list_response,
     _unwrap_and_validate_params,
 )
@@ -263,7 +263,7 @@ class DeleteAssetParams(BaseModel):
     sys_id: str = Field(..., description="sys_id of the asset to delete")
 
 
-def delete_asset(
+async def delete_asset(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -286,13 +286,13 @@ def delete_asset(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
     url = f"{instance_url}/api/now/table/{ASSET_TABLE}/{validated.sys_id}"
     try:
-        response = _make_request("DELETE", url, headers=headers)
+        response = await _make_request_async("DELETE", url, headers=headers)
         if response.status_code == 404:
             return {"success": False, "message": f"Asset not found: {validated.sys_id}"}
         if response.status_code == 204:
@@ -302,12 +302,12 @@ def delete_asset(
             }
         response.raise_for_status()
         return {"success": True, "message": f"Asset {validated.sys_id} deleted successfully"}
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error deleting asset: {e}")
         return {"success": False, "message": f"Error deleting asset: {_format_http_error(e)}"}
 
 
-def create_asset(
+async def create_asset(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -330,7 +330,7 @@ def create_asset(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
@@ -339,7 +339,7 @@ def create_asset(
 
     url = f"{instance_url}/api/now/table/{table}"
     try:
-        response = _make_request("POST", url, headers=headers, json=body)
+        response = await _make_request_async("POST", url, headers=headers, json=body)
         response.raise_for_status()
         record = response.json().get("result", {})
         return {
@@ -347,12 +347,12 @@ def create_asset(
             "sys_id": record.get("sys_id"),
             "asset": _format_asset(record),
         }
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error creating asset: {e}")
         return {"success": False, "message": f"Error creating asset: {_format_http_error(e)}"}
 
 
-def list_assets(
+async def list_assets(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -375,7 +375,7 @@ def list_assets(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
@@ -403,16 +403,16 @@ def list_assets(
 
     url = f"{instance_url}/api/now/table/{ASSET_TABLE}"
     try:
-        response = _make_request("GET", url, headers=headers, params=query_params)
+        response = await _make_request_async("GET", url, headers=headers, params=query_params)
         response.raise_for_status()
         assets = [_format_asset(r) for r in response.json().get("result", [])]
         return _paginated_list_response(assets, validated.limit, validated.offset, "assets")
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error listing assets: {e}")
         return {"success": False, "message": f"Error listing assets: {_format_http_error(e)}"}
 
 
-def get_asset(
+async def get_asset(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -438,7 +438,7 @@ def get_asset(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
@@ -451,7 +451,9 @@ def get_asset(
     try:
         if validated.sys_id:
             url = f"{instance_url}/api/now/table/{ASSET_TABLE}/{validated.sys_id}"
-            response = _make_request("GET", url, headers=headers, params=base_query_params)
+            response = await _make_request_async(
+                "GET", url, headers=headers, params=base_query_params,
+            )
             if response.status_code == 404:
                 return {"success": False, "message": f"Asset not found: {validated.sys_id}"}
             response.raise_for_status()
@@ -463,7 +465,7 @@ def get_asset(
             qp = dict(base_query_params)
             qp["sysparm_query"] = f"asset_tag={validated.asset_tag}"
             qp["sysparm_limit"] = "1"
-            response = _make_request("GET", url, headers=headers, params=qp)
+            response = await _make_request_async("GET", url, headers=headers, params=qp)
             response.raise_for_status()
             results = response.json().get("result", [])
             if not results:
@@ -471,12 +473,12 @@ def get_asset(
             record = results[0]
 
         return {"success": True, "asset": _format_asset(record)}
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error retrieving asset: {e}")
         return {"success": False, "message": f"Error retrieving asset: {_format_http_error(e)}"}
 
 
-def update_asset(
+async def update_asset(
     auth_manager: AuthManager,
     server_config: ServerConfig,
     params: Dict[str, Any],
@@ -499,7 +501,7 @@ def update_asset(
     instance_url = _get_instance_url(auth_manager, server_config)
     if not instance_url:
         return {"success": False, "message": "Cannot find instance_url"}
-    headers = _get_headers(auth_manager, server_config)
+    headers = await _get_headers_async(auth_manager, server_config)
     if not headers:
         return {"success": False, "message": "Cannot find get_headers method"}
 
@@ -509,12 +511,12 @@ def update_asset(
 
     url = f"{instance_url}/api/now/table/{ASSET_TABLE}/{validated.sys_id}"
     try:
-        response = _make_request("PATCH", url, headers=headers, json=body)
+        response = await _make_request_async("PATCH", url, headers=headers, json=body)
         if response.status_code == 404:
             return {"success": False, "message": f"Asset not found: {validated.sys_id}"}
         response.raise_for_status()
         record = response.json().get("result", {})
         return {"success": True, "asset": _format_asset(record)}
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"Error updating asset: {e}")
         return {"success": False, "message": f"Error updating asset: {_format_http_error(e)}"}

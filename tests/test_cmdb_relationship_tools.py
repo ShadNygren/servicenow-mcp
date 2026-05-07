@@ -1,8 +1,12 @@
 """Tests for cmdb_relationship_tools.py."""
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
+
+from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.tools.cmdb_relationship_tools import (
     _format_rel_type,
     _format_relationship,
@@ -12,9 +16,7 @@ from servicenow_mcp.tools.cmdb_relationship_tools import (
     list_ci_relationship_types,
     list_ci_relationships,
 )
-from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.utils.config import AuthConfig, AuthType, BasicAuthConfig, ServerConfig
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -66,7 +68,7 @@ def _make_auth_manager():
 # ---------------------------------------------------------------------------
 
 
-class TestFormatRelationship(unittest.TestCase):
+class TestFormatRelationship(IsolatedAsyncioTestCase):
     def test_string_values(self):
         result = _format_relationship(FAKE_REL)
         self.assertEqual(result["sys_id"], "rel001")
@@ -100,7 +102,7 @@ class TestFormatRelationship(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
-class TestFormatRelType(unittest.TestCase):
+class TestFormatRelType(IsolatedAsyncioTestCase):
     def test_all_fields(self):
         result = _format_rel_type(FAKE_REL_TYPE)
         self.assertEqual(result["sys_id"], "reltype001")
@@ -119,19 +121,25 @@ class TestFormatRelType(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
-class TestListCIRelationships(unittest.TestCase):
+class TestListCIRelationships(IsolatedAsyncioTestCase):
     def setUp(self):
         self.auth_manager = _make_auth_manager()
         self.server_config = _make_config()
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_success_no_filters(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_success_no_filters(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"result": [FAKE_REL]}
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = list_ci_relationships(
+        result = await list_ci_relationships(
             self.auth_manager, self.server_config, {"limit": 10, "offset": 0}
         )
 
@@ -139,148 +147,190 @@ class TestListCIRelationships(unittest.TestCase):
         self.assertEqual(len(result["relationships"]), 1)
         self.assertEqual(result["relationships"][0]["sys_id"], "rel001")
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_filter_by_parent(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_filter_by_parent(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"result": [FAKE_REL]}
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = list_ci_relationships(
+        result = await list_ci_relationships(
             self.auth_manager,
             self.server_config,
             {"parent_ci": "ci001"},
         )
 
         self.assertTrue(result["success"])
-        call_kwargs = mock_req.call_args
+        call_kwargs = mock_make_request.call_args
         query = call_kwargs[1]["params"].get("sysparm_query", "")
         self.assertIn("parent=ci001", query)
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_filter_by_child(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_filter_by_child(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"result": [FAKE_REL]}
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = list_ci_relationships(
+        result = await list_ci_relationships(
             self.auth_manager,
             self.server_config,
             {"child_ci": "ci002"},
         )
 
         self.assertTrue(result["success"])
-        call_kwargs = mock_req.call_args
+        call_kwargs = mock_make_request.call_args
         query = call_kwargs[1]["params"].get("sysparm_query", "")
         self.assertIn("child=ci002", query)
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_filter_by_type(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_filter_by_type(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"result": [FAKE_REL]}
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = list_ci_relationships(
+        result = await list_ci_relationships(
             self.auth_manager,
             self.server_config,
             {"relationship_type": "reltype001"},
         )
 
         self.assertTrue(result["success"])
-        call_kwargs = mock_req.call_args
+        call_kwargs = mock_make_request.call_args
         query = call_kwargs[1]["params"].get("sysparm_query", "")
         self.assertIn("type=reltype001", query)
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_filter_combined(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_filter_combined(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"result": []}
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = list_ci_relationships(
+        result = await list_ci_relationships(
             self.auth_manager,
             self.server_config,
             {"parent_ci": "ci001", "child_ci": "ci002", "relationship_type": "reltype001"},
         )
 
         self.assertTrue(result["success"])
-        call_kwargs = mock_req.call_args
+        call_kwargs = mock_make_request.call_args
         query = call_kwargs[1]["params"].get("sysparm_query", "")
         self.assertIn("parent=ci001", query)
         self.assertIn("child=ci002", query)
         self.assertIn("type=reltype001", query)
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_raw_query_appended(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_raw_query_appended(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"result": []}
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = list_ci_relationships(
+        result = await list_ci_relationships(
             self.auth_manager,
             self.server_config,
             {"query": "sys_created_on>2026-01-01"},
         )
 
         self.assertTrue(result["success"])
-        call_kwargs = mock_req.call_args
+        call_kwargs = mock_make_request.call_args
         query = call_kwargs[1]["params"].get("sysparm_query", "")
         self.assertIn("sys_created_on>2026-01-01", query)
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_pagination_keys(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_pagination_keys(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"result": [FAKE_REL] * 5}
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = list_ci_relationships(
+        result = await list_ci_relationships(
             self.auth_manager, self.server_config, {"limit": 5, "offset": 0}
         )
 
         self.assertIn("has_more", result)
         self.assertIn("count", result)
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_request_exception(self, mock_req):
-        import requests
+    @patch(
 
-        mock_req.side_effect = requests.exceptions.ConnectionError("network error")
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
 
-        result = list_ci_relationships(self.auth_manager, self.server_config, {})
+        new_callable=AsyncMock,
+
+    )
+    async def test_request_exception(self, mock_make_request):
+
+        mock_make_request.side_effect = httpx.ConnectError("network error")
+
+        result = await list_ci_relationships(self.auth_manager, self.server_config, {})
 
         self.assertFalse(result["success"])
         self.assertIn("Error listing CI relationships", result["message"])
 
-    def test_invalid_params(self):
-        result = list_ci_relationships(
+    async def test_invalid_params(self):
+        result = await list_ci_relationships(
             self.auth_manager, self.server_config, {"limit": "not-a-number"}
         )
         self.assertFalse(result["success"])
 
-    def test_no_instance_url(self):
+    async def test_no_instance_url(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_headers.return_value = {"Authorization": "Bearer X"}
         auth.instance_url = None
         config = MagicMock()
         config.instance_url = None
 
-        result = list_ci_relationships(auth, config, {})
+        result = await list_ci_relationships(auth, config, {})
         self.assertFalse(result["success"])
         self.assertIn("instance_url", result["message"])
 
-    def test_no_headers(self):
+    async def test_no_headers(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_headers.return_value = None
+        auth.get_headers_async = AsyncMock(return_value=None)
         auth.instance_url = "https://dev.service-now.com"
         config = MagicMock()
         config.instance_url = "https://dev.service-now.com"
 
-        result = list_ci_relationships(auth, config, {})
+        result = await list_ci_relationships(auth, config, {})
         self.assertFalse(result["success"])
         self.assertIn("get_headers", result["message"])
 
@@ -290,63 +340,86 @@ class TestListCIRelationships(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
-class TestGetCIRelationship(unittest.TestCase):
+class TestGetCIRelationship(IsolatedAsyncioTestCase):
     def setUp(self):
         self.auth_manager = _make_auth_manager()
         self.server_config = _make_config()
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_success(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_success(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"result": FAKE_REL}
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = get_ci_relationship(
+        result = await get_ci_relationship(
             self.auth_manager, self.server_config, {"sys_id": "rel001"}
         )
 
         self.assertTrue(result["success"])
         self.assertEqual(result["relationship"]["sys_id"], "rel001")
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_not_found_404(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_not_found_404(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 404
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = get_ci_relationship(
+        result = await get_ci_relationship(
             self.auth_manager, self.server_config, {"sys_id": "nope"}
         )
 
         self.assertFalse(result["success"])
         self.assertIn("not found", result["message"])
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_empty_result(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_empty_result(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"result": {}}
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = get_ci_relationship(
+        result = await get_ci_relationship(
             self.auth_manager, self.server_config, {"sys_id": "rel001"}
         )
 
         self.assertFalse(result["success"])
         self.assertIn("not found", result["message"])
 
-    def test_missing_sys_id(self):
-        result = get_ci_relationship(self.auth_manager, self.server_config, {})
+    async def test_missing_sys_id(self):
+        result = await get_ci_relationship(self.auth_manager, self.server_config, {})
         self.assertFalse(result["success"])
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_request_exception(self, mock_req):
-        import requests
+    @patch(
 
-        mock_req.side_effect = requests.exceptions.Timeout("timed out")
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
 
-        result = get_ci_relationship(
+        new_callable=AsyncMock,
+
+    )
+    async def test_request_exception(self, mock_make_request):
+
+        mock_make_request.side_effect = httpx.TimeoutException("timed out")
+
+        result = await get_ci_relationship(
             self.auth_manager, self.server_config, {"sys_id": "rel001"}
         )
 
@@ -359,19 +432,25 @@ class TestGetCIRelationship(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
-class TestCreateCIRelationship(unittest.TestCase):
+class TestCreateCIRelationship(IsolatedAsyncioTestCase):
     def setUp(self):
         self.auth_manager = _make_auth_manager()
         self.server_config = _make_config()
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_success(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_success(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 201
         mock_resp.json.return_value = {"result": FAKE_REL}
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = create_ci_relationship(
+        result = await create_ci_relationship(
             self.auth_manager,
             self.server_config,
             {
@@ -385,14 +464,20 @@ class TestCreateCIRelationship(unittest.TestCase):
         self.assertEqual(result["sys_id"], "rel001")
         self.assertIn("relationship", result)
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_body_sent_correctly(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_body_sent_correctly(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 201
         mock_resp.json.return_value = {"result": FAKE_REL}
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        create_ci_relationship(
+        await create_ci_relationship(
             self.auth_manager,
             self.server_config,
             {
@@ -402,27 +487,32 @@ class TestCreateCIRelationship(unittest.TestCase):
             },
         )
 
-        call_kwargs = mock_req.call_args
+        call_kwargs = mock_make_request.call_args
         body = call_kwargs[1]["json"]
         self.assertEqual(body["parent"], "PARENT")
         self.assertEqual(body["child"], "CHILD")
         self.assertEqual(body["type"], "RELTYPE")
 
-    def test_missing_required_fields(self):
-        result = create_ci_relationship(
+    async def test_missing_required_fields(self):
+        result = await create_ci_relationship(
             self.auth_manager,
             self.server_config,
             {"parent_ci": "ci001"},
         )
         self.assertFalse(result["success"])
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_request_exception(self, mock_req):
-        import requests
+    @patch(
 
-        mock_req.side_effect = requests.exceptions.HTTPError("403 Forbidden")
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
 
-        result = create_ci_relationship(
+        new_callable=AsyncMock,
+
+    )
+    async def test_request_exception(self, mock_make_request):
+
+        mock_make_request.side_effect = httpx.HTTPError("403 Forbidden")
+
+        result = await create_ci_relationship(
             self.auth_manager,
             self.server_config,
             {
@@ -435,28 +525,29 @@ class TestCreateCIRelationship(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertIn("Error creating CI relationship", result["message"])
 
-    def test_no_instance_url(self):
+    async def test_no_instance_url(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_headers.return_value = {"Authorization": "Bearer X"}
         auth.instance_url = None
         config = MagicMock()
         config.instance_url = None
 
-        result = create_ci_relationship(
+        result = await create_ci_relationship(
             auth,
             config,
             {"parent_ci": "ci001", "child_ci": "ci002", "relationship_type": "rt"},
         )
         self.assertFalse(result["success"])
 
-    def test_no_headers(self):
+    async def test_no_headers(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_headers.return_value = None
+        auth.get_headers_async = AsyncMock(return_value=None)
         auth.instance_url = "https://dev.service-now.com"
         config = MagicMock()
         config.instance_url = "https://dev.service-now.com"
 
-        result = create_ci_relationship(
+        result = await create_ci_relationship(
             auth,
             config,
             {"parent_ci": "ci001", "child_ci": "ci002", "relationship_type": "rt"},
@@ -469,84 +560,108 @@ class TestCreateCIRelationship(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
-class TestDeleteCIRelationship(unittest.TestCase):
+class TestDeleteCIRelationship(IsolatedAsyncioTestCase):
     def setUp(self):
         self.auth_manager = _make_auth_manager()
         self.server_config = _make_config()
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_success_204(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_success_204(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 204
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = delete_ci_relationship(
+        result = await delete_ci_relationship(
             self.auth_manager, self.server_config, {"sys_id": "rel001"}
         )
 
         self.assertTrue(result["success"])
         self.assertIn("deleted successfully", result["message"])
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_success_200(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_success_200(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = delete_ci_relationship(
+        result = await delete_ci_relationship(
             self.auth_manager, self.server_config, {"sys_id": "rel001"}
         )
 
         self.assertTrue(result["success"])
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_not_found_404(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_not_found_404(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 404
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = delete_ci_relationship(
+        result = await delete_ci_relationship(
             self.auth_manager, self.server_config, {"sys_id": "nope"}
         )
 
         self.assertFalse(result["success"])
         self.assertIn("not found", result["message"])
 
-    def test_missing_sys_id(self):
-        result = delete_ci_relationship(self.auth_manager, self.server_config, {})
+    async def test_missing_sys_id(self):
+        result = await delete_ci_relationship(self.auth_manager, self.server_config, {})
         self.assertFalse(result["success"])
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_request_exception(self, mock_req):
-        import requests
+    @patch(
 
-        mock_req.side_effect = requests.exceptions.ConnectionError("down")
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
 
-        result = delete_ci_relationship(
+        new_callable=AsyncMock,
+
+    )
+    async def test_request_exception(self, mock_make_request):
+
+        mock_make_request.side_effect = httpx.ConnectError("down")
+
+        result = await delete_ci_relationship(
             self.auth_manager, self.server_config, {"sys_id": "rel001"}
         )
 
         self.assertFalse(result["success"])
         self.assertIn("Error deleting CI relationship", result["message"])
 
-    def test_no_instance_url(self):
+    async def test_no_instance_url(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_headers.return_value = {"Authorization": "Bearer X"}
         auth.instance_url = None
         config = MagicMock()
         config.instance_url = None
 
-        result = delete_ci_relationship(auth, config, {"sys_id": "rel001"})
+        result = await delete_ci_relationship(auth, config, {"sys_id": "rel001"})
         self.assertFalse(result["success"])
 
-    def test_no_headers(self):
+    async def test_no_headers(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_headers.return_value = None
+        auth.get_headers_async = AsyncMock(return_value=None)
         auth.instance_url = "https://dev.service-now.com"
         config = MagicMock()
         config.instance_url = "https://dev.service-now.com"
 
-        result = delete_ci_relationship(auth, config, {"sys_id": "rel001"})
+        result = await delete_ci_relationship(auth, config, {"sys_id": "rel001"})
         self.assertFalse(result["success"])
 
 
@@ -555,60 +670,84 @@ class TestDeleteCIRelationship(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
-class TestListCIRelationshipTypes(unittest.TestCase):
+class TestListCIRelationshipTypes(IsolatedAsyncioTestCase):
     def setUp(self):
         self.auth_manager = _make_auth_manager()
         self.server_config = _make_config()
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_success(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_success(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"result": [FAKE_REL_TYPE]}
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = list_ci_relationship_types(self.auth_manager, self.server_config, {})
+        result = await list_ci_relationship_types(self.auth_manager, self.server_config, {})
 
         self.assertTrue(result["success"])
         self.assertEqual(len(result["relationship_types"]), 1)
         self.assertEqual(result["relationship_types"][0]["name"], "Depends on::Used by")
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_filter_by_name(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_filter_by_name(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"result": [FAKE_REL_TYPE]}
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = list_ci_relationship_types(
+        result = await list_ci_relationship_types(
             self.auth_manager, self.server_config, {"name": "Depends"}
         )
 
         self.assertTrue(result["success"])
-        call_kwargs = mock_req.call_args
+        call_kwargs = mock_make_request.call_args
         query = call_kwargs[1]["params"].get("sysparm_query", "")
         self.assertIn("nameLIKEDepends", query)
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_empty_result(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_empty_result(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"result": []}
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = list_ci_relationship_types(self.auth_manager, self.server_config, {})
+        result = await list_ci_relationship_types(self.auth_manager, self.server_config, {})
 
         self.assertTrue(result["success"])
         self.assertEqual(result["count"], 0)
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_pagination(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_pagination(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"result": [FAKE_REL_TYPE] * 10}
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = list_ci_relationship_types(
+        result = await list_ci_relationship_types(
             self.auth_manager, self.server_config, {"limit": 10, "offset": 5}
         )
 
@@ -616,35 +755,41 @@ class TestListCIRelationshipTypes(unittest.TestCase):
         self.assertIn("has_more", result)
         self.assertIn("next_offset", result)
 
-    @patch("servicenow_mcp.tools.cmdb_relationship_tools._make_request")
-    def test_request_exception(self, mock_req):
-        import requests
+    @patch(
 
-        mock_req.side_effect = requests.exceptions.ConnectionError("no network")
+        "servicenow_mcp.tools.cmdb_relationship_tools._make_request_async",
 
-        result = list_ci_relationship_types(self.auth_manager, self.server_config, {})
+        new_callable=AsyncMock,
+
+    )
+    async def test_request_exception(self, mock_make_request):
+
+        mock_make_request.side_effect = httpx.ConnectError("no network")
+
+        result = await list_ci_relationship_types(self.auth_manager, self.server_config, {})
 
         self.assertFalse(result["success"])
         self.assertIn("Error listing CI relationship types", result["message"])
 
-    def test_no_instance_url(self):
+    async def test_no_instance_url(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_headers.return_value = {"Authorization": "Bearer X"}
         auth.instance_url = None
         config = MagicMock()
         config.instance_url = None
 
-        result = list_ci_relationship_types(auth, config, {})
+        result = await list_ci_relationship_types(auth, config, {})
         self.assertFalse(result["success"])
 
-    def test_no_headers(self):
+    async def test_no_headers(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_headers.return_value = None
+        auth.get_headers_async = AsyncMock(return_value=None)
         auth.instance_url = "https://dev.service-now.com"
         config = MagicMock()
         config.instance_url = "https://dev.service-now.com"
 
-        result = list_ci_relationship_types(auth, config, {})
+        result = await list_ci_relationship_types(auth, config, {})
         self.assertFalse(result["success"])
 
 

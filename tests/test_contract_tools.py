@@ -1,10 +1,12 @@
 """Tests for contract_tools.py."""
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import requests
+import httpx
 
+from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.tools.contract_tools import (
     _format_contract,
     create_asset_contract,
@@ -12,9 +14,7 @@ from servicenow_mcp.tools.contract_tools import (
     list_asset_contracts,
     update_asset_contract,
 )
-from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.utils.config import AuthConfig, AuthType, BasicAuthConfig, ServerConfig
-
 
 FAKE_CONTRACT = {
     "sys_id": "con001",
@@ -52,7 +52,7 @@ def _make_auth_manager():
     return auth_manager
 
 
-class TestFormatContract(unittest.TestCase):
+class TestFormatContract(IsolatedAsyncioTestCase):
     def test_all_fields_mapped(self):
         result = _format_contract(FAKE_CONTRACT)
         self.assertEqual(result["sys_id"], "con001")
@@ -96,7 +96,7 @@ class TestFormatContract(unittest.TestCase):
         self.assertEqual(result["vendor"], "raw_vendor_id")
 
 
-class TestListAssetContracts(unittest.TestCase):
+class TestListAssetContracts(IsolatedAsyncioTestCase):
     def setUp(self):
         self.auth = _make_auth_manager()
         self.config = _make_config()
@@ -108,147 +108,232 @@ class TestListAssetContracts(unittest.TestCase):
         resp.raise_for_status.return_value = None
         return resp
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_list_returns_contracts(self, mock_req):
-        mock_req.return_value = self._mock_response([FAKE_CONTRACT])
-        result = list_asset_contracts(self.auth, self.config, {})
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_returns_contracts(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response([FAKE_CONTRACT])
+        result = await list_asset_contracts(self.auth, self.config, {})
         self.assertTrue(result["success"])
         self.assertEqual(len(result["contracts"]), 1)
         self.assertEqual(result["contracts"][0]["number"], "CON0001234")
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_list_empty_result(self, mock_req):
-        mock_req.return_value = self._mock_response([])
-        result = list_asset_contracts(self.auth, self.config, {})
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_empty_result(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response([])
+        result = await list_asset_contracts(self.auth, self.config, {})
         self.assertTrue(result["success"])
         self.assertEqual(result["contracts"], [])
         self.assertEqual(result["count"], 0)
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_list_vendor_filter_applied(self, mock_req):
-        mock_req.return_value = self._mock_response([FAKE_CONTRACT])
-        list_asset_contracts(self.auth, self.config, {"vendor": "Dell"})
-        call_kwargs = mock_req.call_args
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_vendor_filter_applied(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response([FAKE_CONTRACT])
+        await list_asset_contracts(self.auth, self.config, {"vendor": "Dell"})
+        call_kwargs = mock_make_request.call_args
         query = call_kwargs[1]["params"].get("sysparm_query", "")
         self.assertIn("vendor.nameLIKEDell", query)
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_list_state_filter_applied(self, mock_req):
-        mock_req.return_value = self._mock_response([FAKE_CONTRACT])
-        list_asset_contracts(self.auth, self.config, {"state": "active"})
-        call_kwargs = mock_req.call_args
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_state_filter_applied(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response([FAKE_CONTRACT])
+        await list_asset_contracts(self.auth, self.config, {"state": "active"})
+        call_kwargs = mock_make_request.call_args
         query = call_kwargs[1]["params"].get("sysparm_query", "")
         self.assertIn("state=active", query)
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_list_contract_type_filter(self, mock_req):
-        mock_req.return_value = self._mock_response([FAKE_CONTRACT])
-        list_asset_contracts(self.auth, self.config, {"contract_type": "Maintenance"})
-        call_kwargs = mock_req.call_args
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_contract_type_filter(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response([FAKE_CONTRACT])
+        await list_asset_contracts(self.auth, self.config, {"contract_type": "Maintenance"})
+        call_kwargs = mock_make_request.call_args
         query = call_kwargs[1]["params"].get("sysparm_query", "")
         self.assertIn("contract_type.nameLIKEMaintenance", query)
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_list_short_description_filter(self, mock_req):
-        mock_req.return_value = self._mock_response([FAKE_CONTRACT])
-        list_asset_contracts(self.auth, self.config, {"short_description": "hardware"})
-        call_kwargs = mock_req.call_args
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_short_description_filter(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response([FAKE_CONTRACT])
+        await list_asset_contracts(self.auth, self.config, {"short_description": "hardware"})
+        call_kwargs = mock_make_request.call_args
         query = call_kwargs[1]["params"].get("sysparm_query", "")
         self.assertIn("short_descriptionLIKEhardware", query)
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_list_start_date_from_filter(self, mock_req):
-        mock_req.return_value = self._mock_response([FAKE_CONTRACT])
-        list_asset_contracts(self.auth, self.config, {"start_date_from": "2025-01-01"})
-        call_kwargs = mock_req.call_args
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_start_date_from_filter(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response([FAKE_CONTRACT])
+        await list_asset_contracts(self.auth, self.config, {"start_date_from": "2025-01-01"})
+        call_kwargs = mock_make_request.call_args
         query = call_kwargs[1]["params"].get("sysparm_query", "")
         self.assertIn("start_date>=2025-01-01", query)
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_list_end_date_before_filter(self, mock_req):
-        mock_req.return_value = self._mock_response([FAKE_CONTRACT])
-        list_asset_contracts(self.auth, self.config, {"end_date_before": "2026-12-31"})
-        call_kwargs = mock_req.call_args
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_end_date_before_filter(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response([FAKE_CONTRACT])
+        await list_asset_contracts(self.auth, self.config, {"end_date_before": "2026-12-31"})
+        call_kwargs = mock_make_request.call_args
         query = call_kwargs[1]["params"].get("sysparm_query", "")
         self.assertIn("end_date<=2026-12-31", query)
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_list_raw_query_filter(self, mock_req):
-        mock_req.return_value = self._mock_response([FAKE_CONTRACT])
-        list_asset_contracts(self.auth, self.config, {"query": "active=true"})
-        call_kwargs = mock_req.call_args
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_raw_query_filter(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response([FAKE_CONTRACT])
+        await list_asset_contracts(self.auth, self.config, {"query": "active=true"})
+        call_kwargs = mock_make_request.call_args
         query = call_kwargs[1]["params"].get("sysparm_query", "")
         self.assertIn("active=true", query)
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_list_pagination_params(self, mock_req):
-        mock_req.return_value = self._mock_response([FAKE_CONTRACT])
-        list_asset_contracts(self.auth, self.config, {"limit": 5, "offset": 10})
-        call_kwargs = mock_req.call_args
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_pagination_params(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response([FAKE_CONTRACT])
+        await list_asset_contracts(self.auth, self.config, {"limit": 5, "offset": 10})
+        call_kwargs = mock_make_request.call_args
         qp = call_kwargs[1]["params"]
         self.assertEqual(qp["sysparm_limit"], 5)
         self.assertEqual(qp["sysparm_offset"], 10)
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_list_http_error(self, mock_req):
-        mock_req.return_value = self._mock_response([], 500)
-        mock_req.return_value.raise_for_status.side_effect = requests.exceptions.HTTPError(
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_http_error(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response([], 500)
+        mock_make_request.return_value.raise_for_status.side_effect = httpx.HTTPError(
             "Server Error"
         )
-        result = list_asset_contracts(self.auth, self.config, {})
+        result = await list_asset_contracts(self.auth, self.config, {})
         self.assertFalse(result["success"])
         self.assertIn("Error listing asset contracts", result["message"])
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_list_connection_error(self, mock_req):
-        mock_req.side_effect = requests.exceptions.ConnectionError("timeout")
-        result = list_asset_contracts(self.auth, self.config, {})
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_connection_error(self, mock_make_request):
+        mock_make_request.side_effect = httpx.ConnectError("timeout")
+        result = await list_asset_contracts(self.auth, self.config, {})
         self.assertFalse(result["success"])
         self.assertIn("Error listing asset contracts", result["message"])
 
-    def test_list_no_instance_url(self):
+    async def test_list_no_instance_url(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_instance_url = MagicMock(return_value=None)
         auth.instance_url = None
         config = MagicMock(spec=ServerConfig)
         config.instance_url = None
-        result = list_asset_contracts(auth, config, {})
+        result = await list_asset_contracts(auth, config, {})
         self.assertFalse(result["success"])
 
-    def test_list_no_headers(self):
+    async def test_list_no_headers(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_instance_url = MagicMock(return_value="https://dev.service-now.com")
         auth.instance_url = "https://dev.service-now.com"
         auth.get_headers = MagicMock(return_value=None)
+        auth.get_headers_async = AsyncMock(return_value=None)
         config = MagicMock(spec=ServerConfig)
         config.instance_url = "https://dev.service-now.com"
-        result = list_asset_contracts(auth, config, {})
+        result = await list_asset_contracts(auth, config, {})
         self.assertFalse(result["success"])
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_list_has_more_pagination(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_has_more_pagination(self, mock_make_request):
         contracts = [dict(FAKE_CONTRACT)] * 5
-        mock_req.return_value = self._mock_response(contracts)
-        result = list_asset_contracts(self.auth, self.config, {"limit": 5, "offset": 0})
+        mock_make_request.return_value = self._mock_response(contracts)
+        result = await list_asset_contracts(self.auth, self.config, {"limit": 5, "offset": 0})
         self.assertTrue(result["success"])
         self.assertIn("has_more", result)
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_list_multiple_filters_combined(self, mock_req):
-        mock_req.return_value = self._mock_response([FAKE_CONTRACT])
-        list_asset_contracts(
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_multiple_filters_combined(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response([FAKE_CONTRACT])
+        await list_asset_contracts(
             self.auth,
             self.config,
             {"vendor": "Dell", "state": "active", "start_date_from": "2025-01-01"},
         )
-        call_kwargs = mock_req.call_args
+        call_kwargs = mock_make_request.call_args
         query = call_kwargs[1]["params"].get("sysparm_query", "")
         self.assertIn("vendor.nameLIKEDell", query)
         self.assertIn("state=active", query)
         self.assertIn("start_date>=2025-01-01", query)
 
 
-class TestGetAssetContract(unittest.TestCase):
+class TestGetAssetContract(IsolatedAsyncioTestCase):
     def setUp(self):
         self.auth = _make_auth_manager()
         self.config = _make_config()
@@ -260,96 +345,145 @@ class TestGetAssetContract(unittest.TestCase):
         resp.raise_for_status.return_value = None
         return resp
 
-    def test_no_identifier_returns_error(self):
-        result = get_asset_contract(self.auth, self.config, {})
+    async def test_no_identifier_returns_error(self):
+        result = await get_asset_contract(self.auth, self.config, {})
         self.assertFalse(result["success"])
         self.assertIn("required", result["message"])
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_get_by_sys_id_success(self, mock_req):
-        mock_req.return_value = self._mock_response(FAKE_CONTRACT)
-        result = get_asset_contract(self.auth, self.config, {"sys_id": "con001"})
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_get_by_sys_id_success(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response(FAKE_CONTRACT)
+        result = await get_asset_contract(self.auth, self.config, {"sys_id": "con001"})
         self.assertTrue(result["success"])
         self.assertEqual(result["contract"]["number"], "CON0001234")
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_get_by_sys_id_404(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_get_by_sys_id_404(self, mock_make_request):
         resp = MagicMock()
         resp.status_code = 404
-        mock_req.return_value = resp
-        result = get_asset_contract(self.auth, self.config, {"sys_id": "missing001"})
+        mock_make_request.return_value = resp
+        result = await get_asset_contract(self.auth, self.config, {"sys_id": "missing001"})
         self.assertFalse(result["success"])
         self.assertIn("not found", result["message"])
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_get_by_sys_id_empty_result(self, mock_req):
-        mock_req.return_value = self._mock_response({})
-        result = get_asset_contract(self.auth, self.config, {"sys_id": "con001"})
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_get_by_sys_id_empty_result(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response({})
+        result = await get_asset_contract(self.auth, self.config, {"sys_id": "con001"})
         self.assertFalse(result["success"])
         self.assertIn("not found", result["message"])
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_get_by_number_success(self, mock_req):
-        mock_req.return_value = self._mock_response([FAKE_CONTRACT])
-        result = get_asset_contract(self.auth, self.config, {"number": "CON0001234"})
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_get_by_number_success(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response([FAKE_CONTRACT])
+        result = await get_asset_contract(self.auth, self.config, {"number": "CON0001234"})
         self.assertTrue(result["success"])
         self.assertEqual(result["contract"]["number"], "CON0001234")
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_get_by_number_not_found(self, mock_req):
-        mock_req.return_value = self._mock_response([])
-        result = get_asset_contract(self.auth, self.config, {"number": "CON9999"})
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_get_by_number_not_found(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response([])
+        result = await get_asset_contract(self.auth, self.config, {"number": "CON9999"})
         self.assertFalse(result["success"])
         self.assertIn("not found", result["message"])
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_get_by_number_query_includes_number(self, mock_req):
-        mock_req.return_value = self._mock_response([FAKE_CONTRACT])
-        get_asset_contract(self.auth, self.config, {"number": "CON0001234"})
-        call_kwargs = mock_req.call_args
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_get_by_number_query_includes_number(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response([FAKE_CONTRACT])
+        await get_asset_contract(self.auth, self.config, {"number": "CON0001234"})
+        call_kwargs = mock_make_request.call_args
         qp = call_kwargs[1]["params"]
         self.assertIn("number=CON0001234", qp.get("sysparm_query", ""))
         self.assertEqual(qp.get("sysparm_limit"), "1")
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_get_http_error(self, mock_req):
-        mock_req.return_value = self._mock_response({}, 500)
-        mock_req.return_value.status_code = 500
-        mock_req.return_value.raise_for_status.side_effect = requests.exceptions.HTTPError(
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_get_http_error(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response({}, 500)
+        mock_make_request.return_value.status_code = 500
+        mock_make_request.return_value.raise_for_status.side_effect = httpx.HTTPError(
             "Server Error"
         )
-        result = get_asset_contract(self.auth, self.config, {"sys_id": "con001"})
+        result = await get_asset_contract(self.auth, self.config, {"sys_id": "con001"})
         self.assertFalse(result["success"])
         self.assertIn("Error retrieving asset contract", result["message"])
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_get_connection_error(self, mock_req):
-        mock_req.side_effect = requests.exceptions.ConnectionError("timeout")
-        result = get_asset_contract(self.auth, self.config, {"sys_id": "con001"})
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_get_connection_error(self, mock_make_request):
+        mock_make_request.side_effect = httpx.ConnectError("timeout")
+        result = await get_asset_contract(self.auth, self.config, {"sys_id": "con001"})
         self.assertFalse(result["success"])
         self.assertIn("Error retrieving asset contract", result["message"])
 
-    def test_get_no_instance_url(self):
+    async def test_get_no_instance_url(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_instance_url = MagicMock(return_value=None)
         auth.instance_url = None
         config = MagicMock(spec=ServerConfig)
         config.instance_url = None
-        result = get_asset_contract(auth, config, {"sys_id": "con001"})
+        result = await get_asset_contract(auth, config, {"sys_id": "con001"})
         self.assertFalse(result["success"])
 
-    def test_get_no_headers(self):
+    async def test_get_no_headers(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_instance_url = MagicMock(return_value="https://dev.service-now.com")
         auth.instance_url = "https://dev.service-now.com"
         auth.get_headers = MagicMock(return_value=None)
+        auth.get_headers_async = AsyncMock(return_value=None)
         config = MagicMock(spec=ServerConfig)
         config.instance_url = "https://dev.service-now.com"
-        result = get_asset_contract(auth, config, {"sys_id": "con001"})
+        result = await get_asset_contract(auth, config, {"sys_id": "con001"})
         self.assertFalse(result["success"])
 
 
-class TestCreateAssetContract(unittest.TestCase):
+class TestCreateAssetContract(IsolatedAsyncioTestCase):
     def setUp(self):
         self.auth = _make_auth_manager()
         self.config = _make_config()
@@ -361,34 +495,52 @@ class TestCreateAssetContract(unittest.TestCase):
         resp.raise_for_status.return_value = None
         return resp
 
-    def test_missing_short_description_returns_error(self):
-        result = create_asset_contract(self.auth, self.config, {})
+    async def test_missing_short_description_returns_error(self):
+        result = await create_asset_contract(self.auth, self.config, {})
         self.assertFalse(result["success"])
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_create_success_returns_sys_id_and_contract(self, mock_req):
-        mock_req.return_value = self._mock_response(FAKE_CONTRACT)
-        result = create_asset_contract(
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_create_success_returns_sys_id_and_contract(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response(FAKE_CONTRACT)
+        result = await create_asset_contract(
             self.auth, self.config, {"short_description": "Annual maintenance"}
         )
         self.assertTrue(result["success"])
         self.assertEqual(result["sys_id"], "con001")
         self.assertIn("contract", result)
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_create_posts_to_contract_table(self, mock_req):
-        mock_req.return_value = self._mock_response(FAKE_CONTRACT)
-        create_asset_contract(
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_create_posts_to_contract_table(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response(FAKE_CONTRACT)
+        await create_asset_contract(
             self.auth, self.config, {"short_description": "Test contract"}
         )
-        call_args = mock_req.call_args
+        call_args = mock_make_request.call_args
         self.assertEqual(call_args[0][0], "POST")
         self.assertIn("alm_contract", call_args[0][1])
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_create_includes_optional_fields_in_body(self, mock_req):
-        mock_req.return_value = self._mock_response(FAKE_CONTRACT)
-        create_asset_contract(
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_create_includes_optional_fields_in_body(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response(FAKE_CONTRACT)
+        await create_asset_contract(
             self.auth,
             self.config,
             {
@@ -401,7 +553,7 @@ class TestCreateAssetContract(unittest.TestCase):
                 "state": "draft",
             },
         )
-        body = mock_req.call_args[1]["json"]
+        body = mock_make_request.call_args[1]["json"]
         self.assertEqual(body["vendor"], "vendor001")
         self.assertEqual(body["start_date"], "2026-01-01")
         self.assertEqual(body["end_date"], "2027-01-01")
@@ -409,56 +561,75 @@ class TestCreateAssetContract(unittest.TestCase):
         self.assertEqual(body["currency"], "USD")
         self.assertEqual(body["state"], "draft")
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_create_omits_none_fields_from_body(self, mock_req):
-        mock_req.return_value = self._mock_response(FAKE_CONTRACT)
-        create_asset_contract(
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_create_omits_none_fields_from_body(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response(FAKE_CONTRACT)
+        await create_asset_contract(
             self.auth, self.config, {"short_description": "Minimal contract"}
         )
-        body = mock_req.call_args[1]["json"]
+        body = mock_make_request.call_args[1]["json"]
         self.assertNotIn("vendor", body)
         self.assertNotIn("start_date", body)
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_create_http_error(self, mock_req):
-        mock_req.return_value = self._mock_response({}, 400)
-        mock_req.return_value.raise_for_status.side_effect = requests.exceptions.HTTPError(
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_create_http_error(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response({}, 400)
+        mock_make_request.return_value.raise_for_status.side_effect = httpx.HTTPError(
             "Bad Request"
         )
-        result = create_asset_contract(
+        result = await create_asset_contract(
             self.auth, self.config, {"short_description": "Test"}
         )
         self.assertFalse(result["success"])
         self.assertIn("Error creating asset contract", result["message"])
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_create_connection_error(self, mock_req):
-        mock_req.side_effect = requests.exceptions.ConnectionError("timeout")
-        result = create_asset_contract(
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_create_connection_error(self, mock_make_request):
+        mock_make_request.side_effect = httpx.ConnectError("timeout")
+        result = await create_asset_contract(
             self.auth, self.config, {"short_description": "Test"}
         )
         self.assertFalse(result["success"])
         self.assertIn("Error creating asset contract", result["message"])
 
-    def test_create_no_instance_url(self):
+    async def test_create_no_instance_url(self):
         auth = MagicMock(spec=AuthManager)
         auth.instance_url = None
         config = MagicMock(spec=ServerConfig)
         config.instance_url = None
-        result = create_asset_contract(auth, config, {"short_description": "Test"})
+        result = await create_asset_contract(auth, config, {"short_description": "Test"})
         self.assertFalse(result["success"])
 
-    def test_create_no_headers(self):
+    async def test_create_no_headers(self):
         auth = MagicMock(spec=AuthManager)
         auth.instance_url = "https://dev.service-now.com"
         auth.get_headers = MagicMock(return_value=None)
+        auth.get_headers_async = AsyncMock(return_value=None)
         config = MagicMock(spec=ServerConfig)
         config.instance_url = "https://dev.service-now.com"
-        result = create_asset_contract(auth, config, {"short_description": "Test"})
+        result = await create_asset_contract(auth, config, {"short_description": "Test"})
         self.assertFalse(result["success"])
 
 
-class TestUpdateAssetContract(unittest.TestCase):
+class TestUpdateAssetContract(IsolatedAsyncioTestCase):
     def setUp(self):
         self.auth = _make_auth_manager()
         self.config = _make_config()
@@ -470,98 +641,135 @@ class TestUpdateAssetContract(unittest.TestCase):
         resp.raise_for_status.return_value = None
         return resp
 
-    def test_missing_sys_id_returns_error(self):
-        result = update_asset_contract(
+    async def test_missing_sys_id_returns_error(self):
+        result = await update_asset_contract(
             self.auth, self.config, {"short_description": "Updated"}
         )
         self.assertFalse(result["success"])
 
-    def test_no_update_fields_returns_error(self):
-        result = update_asset_contract(self.auth, self.config, {"sys_id": "con001"})
+    async def test_no_update_fields_returns_error(self):
+        result = await update_asset_contract(self.auth, self.config, {"sys_id": "con001"})
         self.assertFalse(result["success"])
         self.assertIn("No fields", result["message"])
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_update_success(self, mock_req):
-        mock_req.return_value = self._mock_response(FAKE_CONTRACT)
-        result = update_asset_contract(
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_update_success(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response(FAKE_CONTRACT)
+        result = await update_asset_contract(
             self.auth, self.config, {"sys_id": "con001", "state": "active"}
         )
         self.assertTrue(result["success"])
         self.assertIn("contract", result)
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_update_patches_correct_url(self, mock_req):
-        mock_req.return_value = self._mock_response(FAKE_CONTRACT)
-        update_asset_contract(
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_update_patches_correct_url(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response(FAKE_CONTRACT)
+        await update_asset_contract(
             self.auth, self.config, {"sys_id": "con001", "value": "12000"}
         )
-        call_args = mock_req.call_args
+        call_args = mock_make_request.call_args
         self.assertEqual(call_args[0][0], "PATCH")
         self.assertIn("con001", call_args[0][1])
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_update_sends_only_provided_fields(self, mock_req):
-        mock_req.return_value = self._mock_response(FAKE_CONTRACT)
-        update_asset_contract(
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_update_sends_only_provided_fields(self, mock_make_request):
+        mock_make_request.return_value = self._mock_response(FAKE_CONTRACT)
+        await update_asset_contract(
             self.auth,
             self.config,
             {"sys_id": "con001", "short_description": "Revised", "currency": "EUR"},
         )
-        body = mock_req.call_args[1]["json"]
+        body = mock_make_request.call_args[1]["json"]
         self.assertEqual(body["short_description"], "Revised")
         self.assertEqual(body["currency"], "EUR")
         self.assertNotIn("vendor", body)
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_update_404_returns_not_found(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_update_404_returns_not_found(self, mock_make_request):
         resp = MagicMock()
         resp.status_code = 404
-        mock_req.return_value = resp
-        result = update_asset_contract(
+        mock_make_request.return_value = resp
+        result = await update_asset_contract(
             self.auth, self.config, {"sys_id": "missing001", "state": "expired"}
         )
         self.assertFalse(result["success"])
         self.assertIn("not found", result["message"])
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_update_http_error(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_update_http_error(self, mock_make_request):
         resp = MagicMock()
         resp.status_code = 500
-        resp.raise_for_status.side_effect = requests.exceptions.HTTPError("Server Error")
-        mock_req.return_value = resp
-        result = update_asset_contract(
+        resp.raise_for_status.side_effect = httpx.HTTPError("Server Error")
+        mock_make_request.return_value = resp
+        result = await update_asset_contract(
             self.auth, self.config, {"sys_id": "con001", "state": "active"}
         )
         self.assertFalse(result["success"])
         self.assertIn("Error updating asset contract", result["message"])
 
-    @patch("servicenow_mcp.tools.contract_tools._make_request")
-    def test_update_connection_error(self, mock_req):
-        mock_req.side_effect = requests.exceptions.ConnectionError("timeout")
-        result = update_asset_contract(
+    @patch(
+
+        "servicenow_mcp.tools.contract_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_update_connection_error(self, mock_make_request):
+        mock_make_request.side_effect = httpx.ConnectError("timeout")
+        result = await update_asset_contract(
             self.auth, self.config, {"sys_id": "con001", "state": "active"}
         )
         self.assertFalse(result["success"])
         self.assertIn("Error updating asset contract", result["message"])
 
-    def test_update_no_instance_url(self):
+    async def test_update_no_instance_url(self):
         auth = MagicMock(spec=AuthManager)
         auth.instance_url = None
         config = MagicMock(spec=ServerConfig)
         config.instance_url = None
-        result = update_asset_contract(
+        result = await update_asset_contract(
             auth, config, {"sys_id": "con001", "state": "active"}
         )
         self.assertFalse(result["success"])
 
-    def test_update_no_headers(self):
+    async def test_update_no_headers(self):
         auth = MagicMock(spec=AuthManager)
         auth.instance_url = "https://dev.service-now.com"
         auth.get_headers = MagicMock(return_value=None)
+        auth.get_headers_async = AsyncMock(return_value=None)
         config = MagicMock(spec=ServerConfig)
         config.instance_url = "https://dev.service-now.com"
-        result = update_asset_contract(
+        result = await update_asset_contract(
             auth, config, {"sys_id": "con001", "state": "active"}
         )
         self.assertFalse(result["success"])

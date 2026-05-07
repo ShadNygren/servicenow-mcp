@@ -1,10 +1,12 @@
 """Tests for asset_tools.py."""
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import requests
+import httpx
 
+from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.tools.asset_tools import (
     CreateAssetParams,
     DeleteAssetParams,
@@ -18,9 +20,7 @@ from servicenow_mcp.tools.asset_tools import (
     list_assets,
     update_asset,
 )
-from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.utils.config import AuthConfig, AuthType, BasicAuthConfig, ServerConfig
-
 
 FAKE_ASSET = {
     "sys_id": "asset001",
@@ -65,7 +65,7 @@ def _make_auth_manager():
     return auth_manager
 
 
-class TestFormatAsset(unittest.TestCase):
+class TestFormatAsset(IsolatedAsyncioTestCase):
     def test_all_fields_mapped(self):
         result = _format_asset(FAKE_ASSET)
         self.assertEqual(result["sys_id"], "asset001")
@@ -116,301 +116,417 @@ class TestFormatAsset(unittest.TestCase):
         self.assertEqual(result["vendor"], "vendor002")
 
 
-class TestListAssets(unittest.TestCase):
+class TestListAssets(IsolatedAsyncioTestCase):
     def setUp(self):
         self.config = _make_config()
         self.auth_manager = _make_auth_manager()
 
-    @patch("requests.get")
-    def test_list_returns_assets(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_returns_assets(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [FAKE_ASSET]}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = list_assets(self.auth_manager, self.config, {"limit": 10, "offset": 0})
+        result = await list_assets(self.auth_manager, self.config, {"limit": 10, "offset": 0})
         self.assertTrue(result["success"])
         self.assertEqual(len(result["assets"]), 1)
         self.assertEqual(result["assets"][0]["asset_tag"], "P1000123")
 
-    @patch("requests.get")
-    def test_list_with_asset_tag_filter(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_with_asset_tag_filter(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [FAKE_ASSET]}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = list_assets(
+        result = await list_assets(
             self.auth_manager, self.config, {"asset_tag": "P1000123"}
         )
         self.assertTrue(result["success"])
-        call_kwargs = mock_get.call_args
+        call_kwargs = mock_make_request.call_args
         params_used = call_kwargs[1].get("params") or call_kwargs[0][1]
         self.assertIn("asset_tag=P1000123", params_used.get("sysparm_query", ""))
 
-    @patch("requests.get")
-    def test_list_with_display_name_filter(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_with_display_name_filter(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [FAKE_ASSET]}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = list_assets(
+        result = await list_assets(
             self.auth_manager, self.config, {"display_name": "Dell"}
         )
         self.assertTrue(result["success"])
-        call_kwargs = mock_get.call_args
+        call_kwargs = mock_make_request.call_args
         params_used = call_kwargs[1].get("params") or call_kwargs[0][1]
         self.assertIn("display_nameLIKEDell", params_used.get("sysparm_query", ""))
 
-    @patch("requests.get")
-    def test_list_with_install_status_filter(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_with_install_status_filter(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [FAKE_ASSET]}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = list_assets(
+        result = await list_assets(
             self.auth_manager, self.config, {"install_status": "1"}
         )
         self.assertTrue(result["success"])
-        call_kwargs = mock_get.call_args
+        call_kwargs = mock_make_request.call_args
         params_used = call_kwargs[1].get("params") or call_kwargs[0][1]
         self.assertIn("install_status=1", params_used.get("sysparm_query", ""))
 
-    @patch("requests.get")
-    def test_list_with_assigned_to_filter(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_with_assigned_to_filter(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [FAKE_ASSET]}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = list_assets(
+        result = await list_assets(
             self.auth_manager, self.config, {"assigned_to": "John"}
         )
         self.assertTrue(result["success"])
-        call_kwargs = mock_get.call_args
+        call_kwargs = mock_make_request.call_args
         params_used = call_kwargs[1].get("params") or call_kwargs[0][1]
         self.assertIn("assigned_to.nameLIKEJohn", params_used.get("sysparm_query", ""))
 
-    @patch("requests.get")
-    def test_list_with_model_category_filter(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_with_model_category_filter(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [FAKE_ASSET]}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = list_assets(
+        result = await list_assets(
             self.auth_manager, self.config, {"model_category": "Computer"}
         )
         self.assertTrue(result["success"])
-        call_kwargs = mock_get.call_args
+        call_kwargs = mock_make_request.call_args
         params_used = call_kwargs[1].get("params") or call_kwargs[0][1]
         self.assertIn("model_category.nameLIKEComputer", params_used.get("sysparm_query", ""))
 
-    @patch("requests.get")
-    def test_list_with_raw_query(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_with_raw_query(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [FAKE_ASSET]}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = list_assets(
+        result = await list_assets(
             self.auth_manager, self.config, {"query": "company=comp001"}
         )
         self.assertTrue(result["success"])
-        call_kwargs = mock_get.call_args
+        call_kwargs = mock_make_request.call_args
         params_used = call_kwargs[1].get("params") or call_kwargs[0][1]
         self.assertIn("company=comp001", params_used.get("sysparm_query", ""))
 
-    @patch("requests.get")
-    def test_list_pagination(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_pagination(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [FAKE_ASSET] * 20}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = list_assets(
+        result = await list_assets(
             self.auth_manager, self.config, {"limit": 20, "offset": 0}
         )
         self.assertTrue(result["success"])
         self.assertTrue(result["has_more"])
 
-    @patch("requests.get")
-    def test_list_http_error(self, mock_get):
-        mock_get.side_effect = requests.exceptions.ConnectionError("connection refused")
-        result = list_assets(self.auth_manager, self.config, {})
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_list_http_error(self, mock_make_request):
+        mock_make_request.side_effect = httpx.ConnectError("connection refused")
+        result = await list_assets(self.auth_manager, self.config, {})
         self.assertFalse(result["success"])
 
-    def test_list_missing_instance_url(self):
+    async def test_list_missing_instance_url(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_headers.return_value = {"Authorization": "Bearer x"}
         auth.instance_url = None
         config = MagicMock()
         config.instance_url = None
-        result = list_assets(auth, config, {})
+        result = await list_assets(auth, config, {})
         self.assertFalse(result["success"])
 
-    def test_list_missing_headers(self):
+    async def test_list_missing_headers(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_headers.return_value = None
+        auth.get_headers_async = AsyncMock(return_value=None)
         auth.instance_url = "https://dev.service-now.com"
         config = MagicMock()
         config.instance_url = "https://dev.service-now.com"
-        result = list_assets(auth, config, {})
+        result = await list_assets(auth, config, {})
         self.assertFalse(result["success"])
 
 
-class TestGetAsset(unittest.TestCase):
+class TestGetAsset(IsolatedAsyncioTestCase):
     def setUp(self):
         self.config = _make_config()
         self.auth_manager = _make_auth_manager()
 
-    @patch("requests.get")
-    def test_get_by_sys_id_success(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_get_by_sys_id_success(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": FAKE_ASSET}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = get_asset(self.auth_manager, self.config, {"sys_id": "asset001"})
+        result = await get_asset(self.auth_manager, self.config, {"sys_id": "asset001"})
         self.assertTrue(result["success"])
         self.assertEqual(result["asset"]["sys_id"], "asset001")
 
-    @patch("requests.get")
-    def test_get_by_asset_tag_success(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_get_by_asset_tag_success(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": [FAKE_ASSET]}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = get_asset(self.auth_manager, self.config, {"asset_tag": "P1000123"})
+        result = await get_asset(self.auth_manager, self.config, {"asset_tag": "P1000123"})
         self.assertTrue(result["success"])
         self.assertEqual(result["asset"]["asset_tag"], "P1000123")
 
-    @patch("requests.get")
-    def test_get_by_asset_tag_not_found(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_get_by_asset_tag_not_found(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": []}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = get_asset(self.auth_manager, self.config, {"asset_tag": "MISSING"})
+        result = await get_asset(self.auth_manager, self.config, {"asset_tag": "MISSING"})
         self.assertFalse(result["success"])
         self.assertIn("MISSING", result["message"])
 
-    @patch("requests.get")
-    def test_get_by_sys_id_404(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_get_by_sys_id_404(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 404
         mock_response.json.return_value = {}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = get_asset(self.auth_manager, self.config, {"sys_id": "badid"})
+        result = await get_asset(self.auth_manager, self.config, {"sys_id": "badid"})
         self.assertFalse(result["success"])
         self.assertIn("badid", result["message"])
 
-    @patch("requests.get")
-    def test_get_by_sys_id_empty_result(self, mock_get):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_get_by_sys_id_empty_result(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": {}}
-        mock_get.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = get_asset(self.auth_manager, self.config, {"sys_id": "ghost"})
+        result = await get_asset(self.auth_manager, self.config, {"sys_id": "ghost"})
         self.assertFalse(result["success"])
 
-    def test_get_requires_sys_id_or_asset_tag(self):
-        result = get_asset(self.auth_manager, self.config, {})
+    async def test_get_requires_sys_id_or_asset_tag(self):
+        result = await get_asset(self.auth_manager, self.config, {})
         self.assertFalse(result["success"])
         self.assertIn("sys_id or asset_tag", result["message"])
 
-    @patch("requests.get")
-    def test_get_http_error(self, mock_get):
-        mock_get.side_effect = requests.exceptions.Timeout("timeout")
-        result = get_asset(self.auth_manager, self.config, {"sys_id": "asset001"})
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_get_http_error(self, mock_make_request):
+        mock_make_request.side_effect = httpx.TimeoutException("timeout")
+        result = await get_asset(self.auth_manager, self.config, {"sys_id": "asset001"})
         self.assertFalse(result["success"])
 
-    def test_get_missing_instance_url(self):
+    async def test_get_missing_instance_url(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_headers.return_value = {"Authorization": "Bearer x"}
         auth.instance_url = None
         config = MagicMock()
         config.instance_url = None
-        result = get_asset(auth, config, {"sys_id": "x"})
+        result = await get_asset(auth, config, {"sys_id": "x"})
         self.assertFalse(result["success"])
 
-    def test_get_missing_headers(self):
+    async def test_get_missing_headers(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_headers.return_value = None
+        auth.get_headers_async = AsyncMock(return_value=None)
         auth.instance_url = "https://dev.service-now.com"
         config = MagicMock()
         config.instance_url = "https://dev.service-now.com"
-        result = get_asset(auth, config, {"sys_id": "x"})
+        result = await get_asset(auth, config, {"sys_id": "x"})
         self.assertFalse(result["success"])
 
 
-class TestUpdateAsset(unittest.TestCase):
+class TestUpdateAsset(IsolatedAsyncioTestCase):
     def setUp(self):
         self.config = _make_config()
         self.auth_manager = _make_auth_manager()
 
-    @patch("requests.patch")
-    def test_update_success(self, mock_patch):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_update_success(self, mock_make_request):
         updated = dict(FAKE_ASSET)
         updated["install_status"] = "3"
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": updated}
-        mock_patch.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = update_asset(
+        result = await update_asset(
             self.auth_manager, self.config,
             {"sys_id": "asset001", "install_status": "3"}
         )
         self.assertTrue(result["success"])
         self.assertEqual(result["asset"]["install_status"], "3")
 
-    @patch("requests.patch")
-    def test_update_404(self, mock_patch):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_update_404(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 404
         mock_response.json.return_value = {}
-        mock_patch.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = update_asset(
+        result = await update_asset(
             self.auth_manager, self.config,
             {"sys_id": "badid", "display_name": "New Name"}
         )
         self.assertFalse(result["success"])
         self.assertIn("badid", result["message"])
 
-    def test_update_no_fields(self):
-        result = update_asset(self.auth_manager, self.config, {"sys_id": "asset001"})
+    async def test_update_no_fields(self):
+        result = await update_asset(self.auth_manager, self.config, {"sys_id": "asset001"})
         self.assertFalse(result["success"])
         self.assertIn("No fields", result["message"])
 
-    def test_update_missing_sys_id(self):
-        result = update_asset(self.auth_manager, self.config, {"display_name": "X"})
+    async def test_update_missing_sys_id(self):
+        result = await update_asset(self.auth_manager, self.config, {"display_name": "X"})
         self.assertFalse(result["success"])
 
-    @patch("requests.patch")
-    def test_update_http_error(self, mock_patch):
-        mock_patch.side_effect = requests.exceptions.ConnectionError("network error")
-        result = update_asset(
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_update_http_error(self, mock_make_request):
+        mock_make_request.side_effect = httpx.ConnectError("network error")
+        result = await update_asset(
             self.auth_manager, self.config,
             {"sys_id": "asset001", "display_name": "New"}
         )
         self.assertFalse(result["success"])
 
-    @patch("requests.patch")
-    def test_update_all_optional_fields(self, mock_patch):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_update_all_optional_fields(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": FAKE_ASSET}
-        mock_patch.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = update_asset(
+        result = await update_asset(
             self.auth_manager, self.config,
             {
                 "sys_id": "asset001",
@@ -435,28 +551,29 @@ class TestUpdateAsset(unittest.TestCase):
             }
         )
         self.assertTrue(result["success"])
-        call_kwargs = mock_patch.call_args
+        call_kwargs = mock_make_request.call_args
         body = call_kwargs[1].get("json") or call_kwargs[0][1]
         self.assertEqual(body["display_name"], "Updated")
         self.assertEqual(body["install_status"], "4")
         self.assertEqual(body["acquisition_method"], "lease")
 
-    def test_update_missing_instance_url(self):
+    async def test_update_missing_instance_url(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_headers.return_value = {"Authorization": "Bearer x"}
         auth.instance_url = None
         config = MagicMock()
         config.instance_url = None
-        result = update_asset(auth, config, {"sys_id": "x", "display_name": "Y"})
+        result = await update_asset(auth, config, {"sys_id": "x", "display_name": "Y"})
         self.assertFalse(result["success"])
 
-    def test_update_missing_headers(self):
+    async def test_update_missing_headers(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_headers.return_value = None
+        auth.get_headers_async = AsyncMock(return_value=None)
         auth.instance_url = "https://dev.service-now.com"
         config = MagicMock()
         config.instance_url = "https://dev.service-now.com"
-        result = update_asset(auth, config, {"sys_id": "x", "display_name": "Y"})
+        result = await update_asset(auth, config, {"sys_id": "x", "display_name": "Y"})
         self.assertFalse(result["success"])
 
 
@@ -501,19 +618,25 @@ FAKE_HARDWARE_ASSET = {
 }
 
 
-class TestCreateAsset(unittest.TestCase):
+class TestCreateAsset(IsolatedAsyncioTestCase):
     def setUp(self):
         self.config = _make_config()
         self.auth_manager = _make_auth_manager()
 
-    @patch("requests.post")
-    def test_create_basic_asset_success(self, mock_post):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_create_basic_asset_success(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 201
         mock_response.json.return_value = {"result": FAKE_ASSET}
-        mock_post.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = create_asset(
+        result = await create_asset(
             self.auth_manager, self.config,
             {"display_name": "Dell Laptop 001", "asset_tag": "P1000123"}
         )
@@ -521,14 +644,20 @@ class TestCreateAsset(unittest.TestCase):
         self.assertEqual(result["asset"]["display_name"], "Dell Laptop 001")
         self.assertIn("sys_id", result)
 
-    @patch("requests.post")
-    def test_create_hardware_asset_uses_alm_hardware_table(self, mock_post):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_create_hardware_asset_uses_alm_hardware_table(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 201
         mock_response.json.return_value = {"result": FAKE_HARDWARE_ASSET}
-        mock_post.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = create_asset(
+        result = await create_asset(
             self.auth_manager, self.config,
             {
                 "display_name": "Dell PowerEdge R740",
@@ -539,17 +668,23 @@ class TestCreateAsset(unittest.TestCase):
             }
         )
         self.assertTrue(result["success"])
-        call_url = mock_post.call_args[0][0]
+        call_url = mock_make_request.call_args[0][1]
         self.assertIn("alm_hardware", call_url)
 
-    @patch("requests.post")
-    def test_create_hardware_asset_fields_in_body(self, mock_post):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_create_hardware_asset_fields_in_body(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 201
         mock_response.json.return_value = {"result": FAKE_HARDWARE_ASSET}
-        mock_post.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        create_asset(
+        await create_asset(
             self.auth_manager, self.config,
             {
                 "display_name": "Server",
@@ -569,7 +704,7 @@ class TestCreateAsset(unittest.TestCase):
                 "ip_address": "192.168.1.10",
             }
         )
-        body = mock_post.call_args[1].get("json") or mock_post.call_args[0][1]
+        body = mock_make_request.call_args[1].get("json") or mock_make_request.call_args[0][1]
         self.assertEqual(body["cpu_count"], 4)
         self.assertEqual(body["ram"], 131072)
         self.assertEqual(body["os"], "RHEL")
@@ -577,57 +712,76 @@ class TestCreateAsset(unittest.TestCase):
         self.assertEqual(body["ip_address"], "192.168.1.10")
         self.assertNotIn("asset_class", body)
 
-    @patch("requests.post")
-    def test_create_defaults_to_alm_asset_table(self, mock_post):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_create_defaults_to_alm_asset_table(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 201
         mock_response.json.return_value = {"result": FAKE_ASSET}
-        mock_post.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        create_asset(self.auth_manager, self.config, {"display_name": "Generic Asset"})
-        call_url = mock_post.call_args[0][0]
+        await create_asset(self.auth_manager, self.config, {"display_name": "Generic Asset"})
+        call_url = mock_make_request.call_args[0][1]
         self.assertIn("alm_asset", call_url)
         self.assertNotIn("alm_hardware", call_url)
 
-    def test_create_missing_display_name(self):
-        result = create_asset(self.auth_manager, self.config, {})
+    async def test_create_missing_display_name(self):
+        result = await create_asset(self.auth_manager, self.config, {})
         self.assertFalse(result["success"])
 
-    @patch("requests.post")
-    def test_create_http_error(self, mock_post):
-        mock_post.side_effect = requests.exceptions.ConnectionError("refused")
-        result = create_asset(
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_create_http_error(self, mock_make_request):
+        mock_make_request.side_effect = httpx.ConnectError("refused")
+        result = await create_asset(
             self.auth_manager, self.config, {"display_name": "Asset X"}
         )
         self.assertFalse(result["success"])
         self.assertIn("Error creating asset", result["message"])
 
-    def test_create_missing_instance_url(self):
+    async def test_create_missing_instance_url(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_headers.return_value = {"Authorization": "Bearer x"}
         auth.instance_url = None
         config = MagicMock()
         config.instance_url = None
-        result = create_asset(auth, config, {"display_name": "X"})
+        result = await create_asset(auth, config, {"display_name": "X"})
         self.assertFalse(result["success"])
 
-    def test_create_missing_headers(self):
+    async def test_create_missing_headers(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_headers.return_value = None
+        auth.get_headers_async = AsyncMock(return_value=None)
         auth.instance_url = "https://dev.service-now.com"
         config = MagicMock()
         config.instance_url = "https://dev.service-now.com"
-        result = create_asset(auth, config, {"display_name": "X"})
+        result = await create_asset(auth, config, {"display_name": "X"})
         self.assertFalse(result["success"])
 
-    @patch("requests.post")
-    def test_create_all_base_fields(self, mock_post):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_create_all_base_fields(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 201
         mock_response.json.return_value = {"result": FAKE_ASSET}
-        mock_post.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = create_asset(
+        result = await create_asset(
             self.auth_manager, self.config,
             {
                 "display_name": "Test Asset",
@@ -653,24 +807,30 @@ class TestCreateAsset(unittest.TestCase):
             }
         )
         self.assertTrue(result["success"])
-        body = mock_post.call_args[1].get("json") or mock_post.call_args[0][1]
+        body = mock_make_request.call_args[1].get("json") or mock_make_request.call_args[0][1]
         self.assertEqual(body["display_name"], "Test Asset")
         self.assertEqual(body["asset_tag"], "TAG-001")
         self.assertEqual(body["install_status"], "4")
         self.assertNotIn("asset_class", body)
 
-    @patch("requests.post")
-    def test_create_response_includes_sys_id(self, mock_post):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_create_response_includes_sys_id(self, mock_make_request):
         mock_response = MagicMock()
         mock_response.status_code = 201
         mock_response.json.return_value = {"result": FAKE_ASSET}
-        mock_post.return_value = mock_response
+        mock_make_request.return_value = mock_response
 
-        result = create_asset(self.auth_manager, self.config, {"display_name": "Asset"})
+        result = await create_asset(self.auth_manager, self.config, {"display_name": "Asset"})
         self.assertEqual(result["sys_id"], "asset001")
 
 
-class TestFormatAssetHardware(unittest.TestCase):
+class TestFormatAssetHardware(IsolatedAsyncioTestCase):
     def test_hardware_fields_included_when_present(self):
         result = _format_asset(FAKE_HARDWARE_ASSET)
         self.assertEqual(result["cpu_count"], "2")
@@ -686,7 +846,7 @@ class TestFormatAssetHardware(unittest.TestCase):
         self.assertNotIn("os", result)
 
 
-class TestParamModels(unittest.TestCase):
+class TestParamModels(IsolatedAsyncioTestCase):
     def test_list_assets_defaults(self):
         p = ListAssetsParams()
         self.assertEqual(p.limit, 20)
@@ -728,81 +888,106 @@ class TestParamModels(unittest.TestCase):
         self.assertEqual(p.os, "Linux")
 
 
-class TestDeleteAsset(unittest.TestCase):
+class TestDeleteAsset(IsolatedAsyncioTestCase):
     def setUp(self):
         self.config = _make_config()
         self.auth_manager = _make_auth_manager()
 
-    @patch("servicenow_mcp.tools.asset_tools._make_request")
-    def test_delete_asset_success_204(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_delete_asset_success_204(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 204
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = delete_asset(self.auth_manager, self.config, {"sys_id": "asset001"})
+        result = await delete_asset(self.auth_manager, self.config, {"sys_id": "asset001"})
 
         self.assertTrue(result["success"])
         self.assertIn("asset001", result["message"])
         self.assertIn("deleted", result["message"])
-        mock_req.assert_called_once()
-        call_args = mock_req.call_args
+        mock_make_request.assert_called_once()
+        call_args = mock_make_request.call_args
         self.assertEqual(call_args[0][0], "DELETE")
         self.assertIn("alm_asset/asset001", call_args[0][1])
 
-    @patch("servicenow_mcp.tools.asset_tools._make_request")
-    def test_delete_asset_success_200(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_delete_asset_success_200(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.raise_for_status.return_value = None
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = delete_asset(self.auth_manager, self.config, {"sys_id": "asset002"})
+        result = await delete_asset(self.auth_manager, self.config, {"sys_id": "asset002"})
 
         self.assertTrue(result["success"])
         self.assertIn("deleted", result["message"])
 
-    @patch("servicenow_mcp.tools.asset_tools._make_request")
-    def test_delete_asset_not_found(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_delete_asset_not_found(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 404
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = delete_asset(self.auth_manager, self.config, {"sys_id": "badid"})
+        result = await delete_asset(self.auth_manager, self.config, {"sys_id": "badid"})
 
         self.assertFalse(result["success"])
         self.assertIn("badid", result["message"])
 
-    @patch("servicenow_mcp.tools.asset_tools._make_request")
-    def test_delete_asset_request_exception(self, mock_req):
-        mock_req.side_effect = requests.exceptions.ConnectionError("conn refused")
+    @patch(
 
-        result = delete_asset(self.auth_manager, self.config, {"sys_id": "asset003"})
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_delete_asset_request_exception(self, mock_make_request):
+        mock_make_request.side_effect = httpx.ConnectError("conn refused")
+
+        result = await delete_asset(self.auth_manager, self.config, {"sys_id": "asset003"})
 
         self.assertFalse(result["success"])
         self.assertIn("Error deleting asset", result["message"])
 
-    def test_delete_asset_missing_sys_id(self):
-        result = delete_asset(self.auth_manager, self.config, {})
+    async def test_delete_asset_missing_sys_id(self):
+        result = await delete_asset(self.auth_manager, self.config, {})
         self.assertFalse(result["success"])
 
-    def test_delete_asset_no_instance_url(self):
+    async def test_delete_asset_no_instance_url(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_headers.return_value = {"Authorization": "Bearer X"}
         auth.instance_url = None
         config = MagicMock(spec=ServerConfig)
         config.instance_url = None
 
-        result = delete_asset(auth, config, {"sys_id": "asset001"})
+        result = await delete_asset(auth, config, {"sys_id": "asset001"})
         self.assertFalse(result["success"])
 
-    def test_delete_asset_no_headers(self):
+    async def test_delete_asset_no_headers(self):
         auth = MagicMock(spec=AuthManager)
         auth.get_headers.return_value = None
+        auth.get_headers_async = AsyncMock(return_value=None)
         auth.instance_url = "https://dev99999.service-now.com"
         config = MagicMock(spec=ServerConfig)
         config.instance_url = None
 
-        result = delete_asset(auth, config, {"sys_id": "asset001"})
+        result = await delete_asset(auth, config, {"sys_id": "asset001"})
         self.assertFalse(result["success"])
 
     def test_delete_asset_params_requires_sys_id(self):
@@ -814,13 +999,19 @@ class TestDeleteAsset(unittest.TestCase):
         p = DeleteAssetParams(sys_id="abc123")
         self.assertEqual(p.sys_id, "abc123")
 
-    @patch("servicenow_mcp.tools.asset_tools._make_request")
-    def test_delete_asset_nested_params(self, mock_req):
+    @patch(
+
+        "servicenow_mcp.tools.asset_tools._make_request_async",
+
+        new_callable=AsyncMock,
+
+    )
+    async def test_delete_asset_nested_params(self, mock_make_request):
         mock_resp = MagicMock()
         mock_resp.status_code = 204
-        mock_req.return_value = mock_resp
+        mock_make_request.return_value = mock_resp
 
-        result = delete_asset(
+        result = await delete_asset(
             self.auth_manager, self.config, {"params": {"sys_id": "asset999"}}
         )
 
