@@ -104,6 +104,9 @@ python_classes = "Test*"
 python_functions = "test_*"
 addopts = "--ignore=examples"
 asyncio_mode = "auto"
+markers = [
+    "integration: requires SN_INTEGRATION_TESTS=1 and a live PDI (Phase E2E)",
+]
 
 # Include config files in the package for uvx/pip installations
 [tool.hatch.build.targets.wheel.force-include]
