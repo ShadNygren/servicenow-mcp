@@ -1,5 +1,26 @@
 {
   "$schema": "https://code.claude.com/schemas/settings.json",
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./**/*.pem)",
+      "Read(./**/*.key)",
+      "Read(./**/id_rsa*)",
+      "Read(./**/secrets/**)",
+      "Bash(rm -rf *)",
+      "Bash(sudo *)",
+      "Bash(chmod 777 *)",
+      "Bash(ssh *)",
+      "Bash(* > /dev/*)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "WebFetch"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {
@@ -10,6 +31,31 @@
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-compact-rehydrate.sh",
             "timeout": 10,
             "statusMessage": "Rehydrating CLAUDE.md + memory + planning docs..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pretooluse-guard.sh",
+            "timeout": 10,
+            "statusMessage": "Screening command for destructive patterns..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-checks.sh",
+            "timeout": 15,
+            "statusMessage": "Session-end security checks..."
           }
         ]
       }
